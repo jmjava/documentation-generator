@@ -7,6 +7,7 @@
 #   docgen validate           # check recordings
 
 repo_root: ../..
+env_file: ../../.env
 
 dirs:
   narration: narration
@@ -90,6 +91,32 @@ validation:
       - "intended length"
       - "visual:"
       - "edit for voice"
+
+pages:
+  title: "docgen — Demo Videos"
+  subtitle: "Markdown → polished narrated demo videos, fully automated"
+  repo_url: "https://github.com/jmjava/documentation-generator"
+  docs_dir: docs
+  demos_subdir: demos
+  segments:
+    "01":
+      title: "Architecture Overview"
+      description: "Animated walkthrough of the docgen pipeline: narration → TTS → Manim/VHS → compose → validate."
+    "02":
+      title: "Project Scaffolding"
+      description: "Run docgen init to generate a complete project structure in seconds."
+    "03":
+      title: "Wizard GUI"
+      description: "The local web wizard for authoring and editing narration scripts."
+    "04":
+      title: "TTS Pipeline"
+      description: "Generate audio from narration with OpenAI TTS and preview with dry-run."
+    "05":
+      title: "Compose & Validate"
+      description: "Compose audio + video segments and run quality validation checks."
+    "06":
+      title: "CI Integration"
+      description: "Pre-push hooks and GitHub Actions for continuous validation."
 
 wizard:
   llm_model: gpt-4o

@@ -1,0 +1,6649 @@
+{
+  "01-overview": {
+    "text": "DocGen is a Python library and CLI that turns markdown narration scripts into polished demo videos automatically. Most developer tools need recorded demos, but keeping them in sync with the codebase is tedious. Every time you refactor an API or change a UI flow, the old recording is stale. DocGen solves this by making demo production reproducible. You write narration in plain markdown. DocGen strips the formatting, sends the text to OpenAI Text-to-Speech, and produces an mp3. Terminal demos are recorded with VHS tape files, animations are rendered with Manim, and FFmpeg composites everything into final segment videos. The entire pipeline runs from a single command, docgen generate all. Or you can run each stage independently. TTS, Manim, VHS, Compose, Validate, Concatenate. Validation catches problems before you commit, missing audio or video streams, audiovisual drift beyond a threshold, and narration text that still contains markdown syntax or metadata that should not be read aloud. Everything is configured in one .yaml file, docgen.yaml. Segments, visual source mapping, TTS voice, validation thresholds, and wizard settings all live in a single place.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 6.699999809265137,
+        "text": " DocGen is a Python library and CLI that turns markdown narration scripts into polished demo"
+      },
+      {
+        "start": 6.699999809265137,
+        "end": 12.859999656677246,
+        "text": " videos automatically. Most developer tools need recorded demos, but keeping them in sync"
+      },
+      {
+        "start": 12.859999656677246,
+        "end": 19.68000030517578,
+        "text": " with the codebase is tedious. Every time you refactor an API or change a UI flow, the old"
+      },
+      {
+        "start": 19.68000030517578,
+        "end": 25.799999237060547,
+        "text": " recording is stale. DocGen solves this by making demo production reproducible. You write"
+      },
+      {
+        "start": 26.059999465942383,
+        "end": 32.36000061035156,
+        "text": " narration in plain markdown. DocGen strips the formatting, sends the text to OpenAI Text-to-Speech,"
+      },
+      {
+        "start": 32.70000076293945,
+        "end": 39.0,
+        "text": " and produces an mp3. Terminal demos are recorded with VHS tape files, animations are rendered"
+      },
+      {
+        "start": 39.0,
+        "end": 45.380001068115234,
+        "text": " with Manim, and FFmpeg composites everything into final segment videos. The entire pipeline"
+      },
+      {
+        "start": 45.380001068115234,
+        "end": 50.900001525878906,
+        "text": " runs from a single command, docgen generate all. Or you can run each stage independently."
+      },
+      {
+        "start": 50.900001525878906,
+        "end": 58.939998626708984,
+        "text": " TTS, Manim, VHS, Compose, Validate, Concatenate. Validation catches problems before you commit,"
+      },
+      {
+        "start": 59.79999923706055,
+        "end": 65.36000061035156,
+        "text": " missing audio or video streams, audiovisual drift beyond a threshold, and narration text that still"
+      },
+      {
+        "start": 65.36000061035156,
+        "end": 70.66000366210938,
+        "text": " contains markdown syntax or metadata that should not be read aloud. Everything is configured in"
+      },
+      {
+        "start": 70.66000366210938,
+        "end": 77.81999969482422,
+        "text": " one .yaml file, docgen.yaml. Segments, visual source mapping, TTS voice, validation thresholds,"
+      },
+      {
+        "start": 77.81999969482422,
+        "end": 79.86000061035156,
+        "text": " and wizard settings all live in a single place."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.5799999833106995,
+        "word": "DocGen"
+      },
+      {
+        "start": 0.5799999833106995,
+        "end": 1.0,
+        "word": "is"
+      },
+      {
+        "start": 1.0,
+        "end": 1.2999999523162842,
+        "word": "a"
+      },
+      {
+        "start": 1.2999999523162842,
+        "end": 1.6399999856948853,
+        "word": "Python"
+      },
+      {
+        "start": 1.6399999856948853,
+        "end": 2.1600000858306885,
+        "word": "library"
+      },
+      {
+        "start": 2.1600000858306885,
+        "end": 2.5799999237060547,
+        "word": "and"
+      },
+      {
+        "start": 2.5799999237060547,
+        "end": 3.0799999237060547,
+        "word": "CLI"
+      },
+      {
+        "start": 3.0799999237060547,
+        "end": 3.5799999237060547,
+        "word": "that"
+      },
+      {
+        "start": 3.5799999237060547,
+        "end": 3.9000000953674316,
+        "word": "turns"
+      },
+      {
+        "start": 3.9000000953674316,
+        "end": 4.539999961853027,
+        "word": "markdown"
+      },
+      {
+        "start": 4.539999961853027,
+        "end": 5.099999904632568,
+        "word": "narration"
+      },
+      {
+        "start": 5.099999904632568,
+        "end": 5.440000057220459,
+        "word": "scripts"
+      },
+      {
+        "start": 5.440000057220459,
+        "end": 5.860000133514404,
+        "word": "into"
+      },
+      {
+        "start": 5.860000133514404,
+        "end": 6.340000152587891,
+        "word": "polished"
+      },
+      {
+        "start": 6.340000152587891,
+        "end": 6.699999809265137,
+        "word": "demo"
+      },
+      {
+        "start": 6.699999809265137,
+        "end": 7.099999904632568,
+        "word": "videos"
+      },
+      {
+        "start": 7.099999904632568,
+        "end": 8.140000343322754,
+        "word": "automatically"
+      },
+      {
+        "start": 9.260000228881836,
+        "end": 9.34000015258789,
+        "word": "Most"
+      },
+      {
+        "start": 9.34000015258789,
+        "end": 9.760000228881836,
+        "word": "developer"
+      },
+      {
+        "start": 9.760000228881836,
+        "end": 10.079999923706055,
+        "word": "tools"
+      },
+      {
+        "start": 10.079999923706055,
+        "end": 10.399999618530273,
+        "word": "need"
+      },
+      {
+        "start": 10.399999618530273,
+        "end": 10.859999656677246,
+        "word": "recorded"
+      },
+      {
+        "start": 10.859999656677246,
+        "end": 11.199999809265137,
+        "word": "demos"
+      },
+      {
+        "start": 11.720000267028809,
+        "end": 12.0,
+        "word": "but"
+      },
+      {
+        "start": 12.0,
+        "end": 12.199999809265137,
+        "word": "keeping"
+      },
+      {
+        "start": 12.199999809265137,
+        "end": 12.479999542236328,
+        "word": "them"
+      },
+      {
+        "start": 12.479999542236328,
+        "end": 12.859999656677246,
+        "word": "in"
+      },
+      {
+        "start": 12.859999656677246,
+        "end": 12.859999656677246,
+        "word": "sync"
+      },
+      {
+        "start": 12.859999656677246,
+        "end": 13.039999961853027,
+        "word": "with"
+      },
+      {
+        "start": 13.039999961853027,
+        "end": 13.34000015258789,
+        "word": "the"
+      },
+      {
+        "start": 13.34000015258789,
+        "end": 13.699999809265137,
+        "word": "codebase"
+      },
+      {
+        "start": 13.699999809265137,
+        "end": 14.079999923706055,
+        "word": "is"
+      },
+      {
+        "start": 14.079999923706055,
+        "end": 14.479999542236328,
+        "word": "tedious"
+      },
+      {
+        "start": 15.420000076293945,
+        "end": 15.680000305175781,
+        "word": "Every"
+      },
+      {
+        "start": 15.680000305175781,
+        "end": 15.9399995803833,
+        "word": "time"
+      },
+      {
+        "start": 15.9399995803833,
+        "end": 16.1200008392334,
+        "word": "you"
+      },
+      {
+        "start": 16.1200008392334,
+        "end": 16.559999465942383,
+        "word": "refactor"
+      },
+      {
+        "start": 16.559999465942383,
+        "end": 16.959999084472656,
+        "word": "an"
+      },
+      {
+        "start": 16.959999084472656,
+        "end": 17.260000228881836,
+        "word": "API"
+      },
+      {
+        "start": 17.260000228881836,
+        "end": 17.559999465942383,
+        "word": "or"
+      },
+      {
+        "start": 17.559999465942383,
+        "end": 17.860000610351562,
+        "word": "change"
+      },
+      {
+        "start": 17.860000610351562,
+        "end": 18.079999923706055,
+        "word": "a"
+      },
+      {
+        "start": 18.079999923706055,
+        "end": 18.31999969482422,
+        "word": "UI"
+      },
+      {
+        "start": 18.31999969482422,
+        "end": 18.6200008392334,
+        "word": "flow"
+      },
+      {
+        "start": 19.100000381469727,
+        "end": 19.260000228881836,
+        "word": "the"
+      },
+      {
+        "start": 19.260000228881836,
+        "end": 19.68000030517578,
+        "word": "old"
+      },
+      {
+        "start": 19.68000030517578,
+        "end": 20.020000457763672,
+        "word": "recording"
+      },
+      {
+        "start": 20.020000457763672,
+        "end": 20.579999923706055,
+        "word": "is"
+      },
+      {
+        "start": 20.579999923706055,
+        "end": 20.579999923706055,
+        "word": "stale"
+      },
+      {
+        "start": 21.540000915527344,
+        "end": 21.81999969482422,
+        "word": "DocGen"
+      },
+      {
+        "start": 21.81999969482422,
+        "end": 22.239999771118164,
+        "word": "solves"
+      },
+      {
+        "start": 22.239999771118164,
+        "end": 22.420000076293945,
+        "word": "this"
+      },
+      {
+        "start": 22.420000076293945,
+        "end": 22.6200008392334,
+        "word": "by"
+      },
+      {
+        "start": 22.6200008392334,
+        "end": 22.920000076293945,
+        "word": "making"
+      },
+      {
+        "start": 22.920000076293945,
+        "end": 23.31999969482422,
+        "word": "demo"
+      },
+      {
+        "start": 23.31999969482422,
+        "end": 23.799999237060547,
+        "word": "production"
+      },
+      {
+        "start": 23.799999237060547,
+        "end": 24.600000381469727,
+        "word": "reproducible"
+      },
+      {
+        "start": 24.920000076293945,
+        "end": 25.68000030517578,
+        "word": "You"
+      },
+      {
+        "start": 25.68000030517578,
+        "end": 26.059999465942383,
+        "word": "write"
+      },
+      {
+        "start": 26.059999465942383,
+        "end": 26.3799991607666,
+        "word": "narration"
+      },
+      {
+        "start": 26.3799991607666,
+        "end": 26.719999313354492,
+        "word": "in"
+      },
+      {
+        "start": 26.719999313354492,
+        "end": 27.079999923706055,
+        "word": "plain"
+      },
+      {
+        "start": 27.079999923706055,
+        "end": 27.559999465942383,
+        "word": "markdown"
+      },
+      {
+        "start": 28.579999923706055,
+        "end": 28.600000381469727,
+        "word": "DocGen"
+      },
+      {
+        "start": 28.600000381469727,
+        "end": 29.059999465942383,
+        "word": "strips"
+      },
+      {
+        "start": 29.059999465942383,
+        "end": 29.68000030517578,
+        "word": "the"
+      },
+      {
+        "start": 29.68000030517578,
+        "end": 29.68000030517578,
+        "word": "formatting"
+      },
+      {
+        "start": 30.420000076293945,
+        "end": 30.420000076293945,
+        "word": "sends"
+      },
+      {
+        "start": 30.420000076293945,
+        "end": 30.600000381469727,
+        "word": "the"
+      },
+      {
+        "start": 30.600000381469727,
+        "end": 30.860000610351562,
+        "word": "text"
+      },
+      {
+        "start": 30.860000610351562,
+        "end": 31.059999465942383,
+        "word": "to"
+      },
+      {
+        "start": 31.059999465942383,
+        "end": 31.559999465942383,
+        "word": "OpenAI"
+      },
+      {
+        "start": 31.559999465942383,
+        "end": 31.979999542236328,
+        "word": "Text"
+      },
+      {
+        "start": 31.979999542236328,
+        "end": 32.099998474121094,
+        "word": "to"
+      },
+      {
+        "start": 32.099998474121094,
+        "end": 32.36000061035156,
+        "word": "Speech"
+      },
+      {
+        "start": 32.70000076293945,
+        "end": 33.36000061035156,
+        "word": "and"
+      },
+      {
+        "start": 33.36000061035156,
+        "end": 33.36000061035156,
+        "word": "produces"
+      },
+      {
+        "start": 33.36000061035156,
+        "end": 33.63999938964844,
+        "word": "an"
+      },
+      {
+        "start": 33.63999938964844,
+        "end": 34.20000076293945,
+        "word": "mp3"
+      },
+      {
+        "start": 35.040000915527344,
+        "end": 35.400001525878906,
+        "word": "Terminal"
+      },
+      {
+        "start": 35.400001525878906,
+        "end": 35.619998931884766,
+        "word": "demos"
+      },
+      {
+        "start": 35.619998931884766,
+        "end": 35.939998626708984,
+        "word": "are"
+      },
+      {
+        "start": 35.939998626708984,
+        "end": 36.18000030517578,
+        "word": "recorded"
+      },
+      {
+        "start": 36.18000030517578,
+        "end": 36.619998931884766,
+        "word": "with"
+      },
+      {
+        "start": 36.619998931884766,
+        "end": 36.97999954223633,
+        "word": "VHS"
+      },
+      {
+        "start": 36.97999954223633,
+        "end": 37.2599983215332,
+        "word": "tape"
+      },
+      {
+        "start": 37.2599983215332,
+        "end": 37.619998931884766,
+        "word": "files"
+      },
+      {
+        "start": 38.5,
+        "end": 38.5,
+        "word": "animations"
+      },
+      {
+        "start": 38.5,
+        "end": 39.0,
+        "word": "are"
+      },
+      {
+        "start": 39.0,
+        "end": 39.0,
+        "word": "rendered"
+      },
+      {
+        "start": 39.0,
+        "end": 39.58000183105469,
+        "word": "with"
+      },
+      {
+        "start": 39.58000183105469,
+        "end": 39.58000183105469,
+        "word": "Manim"
+      },
+      {
+        "start": 39.900001525878906,
+        "end": 40.41999816894531,
+        "word": "and"
+      },
+      {
+        "start": 40.41999816894531,
+        "end": 41.0,
+        "word": "FFmpeg"
+      },
+      {
+        "start": 41.0,
+        "end": 41.58000183105469,
+        "word": "composites"
+      },
+      {
+        "start": 41.58000183105469,
+        "end": 42.099998474121094,
+        "word": "everything"
+      },
+      {
+        "start": 42.099998474121094,
+        "end": 42.29999923706055,
+        "word": "into"
+      },
+      {
+        "start": 42.29999923706055,
+        "end": 42.779998779296875,
+        "word": "final"
+      },
+      {
+        "start": 42.779998779296875,
+        "end": 43.099998474121094,
+        "word": "segment"
+      },
+      {
+        "start": 43.099998474121094,
+        "end": 43.58000183105469,
+        "word": "videos"
+      },
+      {
+        "start": 44.279998779296875,
+        "end": 44.5,
+        "word": "The"
+      },
+      {
+        "start": 44.5,
+        "end": 45.02000045776367,
+        "word": "entire"
+      },
+      {
+        "start": 45.02000045776367,
+        "end": 45.380001068115234,
+        "word": "pipeline"
+      },
+      {
+        "start": 45.380001068115234,
+        "end": 45.70000076293945,
+        "word": "runs"
+      },
+      {
+        "start": 45.70000076293945,
+        "end": 45.91999816894531,
+        "word": "from"
+      },
+      {
+        "start": 45.91999816894531,
+        "end": 46.18000030517578,
+        "word": "a"
+      },
+      {
+        "start": 46.18000030517578,
+        "end": 46.41999816894531,
+        "word": "single"
+      },
+      {
+        "start": 46.41999816894531,
+        "end": 46.7400016784668,
+        "word": "command"
+      },
+      {
+        "start": 47.29999923706055,
+        "end": 47.65999984741211,
+        "word": "docgen"
+      },
+      {
+        "start": 47.65999984741211,
+        "end": 48.08000183105469,
+        "word": "generate"
+      },
+      {
+        "start": 48.08000183105469,
+        "end": 48.31999969482422,
+        "word": "all"
+      },
+      {
+        "start": 48.900001525878906,
+        "end": 49.13999938964844,
+        "word": "Or"
+      },
+      {
+        "start": 49.13999938964844,
+        "end": 49.2599983215332,
+        "word": "you"
+      },
+      {
+        "start": 49.2599983215332,
+        "end": 49.47999954223633,
+        "word": "can"
+      },
+      {
+        "start": 49.47999954223633,
+        "end": 49.599998474121094,
+        "word": "run"
+      },
+      {
+        "start": 49.599998474121094,
+        "end": 49.959999084472656,
+        "word": "each"
+      },
+      {
+        "start": 49.959999084472656,
+        "end": 50.2599983215332,
+        "word": "stage"
+      },
+      {
+        "start": 50.2599983215332,
+        "end": 50.900001525878906,
+        "word": "independently"
+      },
+      {
+        "start": 50.900001525878906,
+        "end": 52.2400016784668,
+        "word": "TTS"
+      },
+      {
+        "start": 52.900001525878906,
+        "end": 52.900001525878906,
+        "word": "Manim"
+      },
+      {
+        "start": 53.36000061035156,
+        "end": 53.779998779296875,
+        "word": "VHS"
+      },
+      {
+        "start": 54.36000061035156,
+        "end": 54.380001068115234,
+        "word": "Compose"
+      },
+      {
+        "start": 54.97999954223633,
+        "end": 55.119998931884766,
+        "word": "Validate"
+      },
+      {
+        "start": 55.560001373291016,
+        "end": 55.880001068115234,
+        "word": "Concatenate"
+      },
+      {
+        "start": 56.959999084472656,
+        "end": 57.2599983215332,
+        "word": "Validation"
+      },
+      {
+        "start": 57.2599983215332,
+        "end": 57.58000183105469,
+        "word": "catches"
+      },
+      {
+        "start": 57.58000183105469,
+        "end": 58.08000183105469,
+        "word": "problems"
+      },
+      {
+        "start": 58.08000183105469,
+        "end": 58.47999954223633,
+        "word": "before"
+      },
+      {
+        "start": 58.47999954223633,
+        "end": 58.7400016784668,
+        "word": "you"
+      },
+      {
+        "start": 58.7400016784668,
+        "end": 58.939998626708984,
+        "word": "commit"
+      },
+      {
+        "start": 59.79999923706055,
+        "end": 59.79999923706055,
+        "word": "missing"
+      },
+      {
+        "start": 59.79999923706055,
+        "end": 60.279998779296875,
+        "word": "audio"
+      },
+      {
+        "start": 60.279998779296875,
+        "end": 60.52000045776367,
+        "word": "or"
+      },
+      {
+        "start": 60.52000045776367,
+        "end": 60.880001068115234,
+        "word": "video"
+      },
+      {
+        "start": 60.880001068115234,
+        "end": 61.220001220703125,
+        "word": "streams"
+      },
+      {
+        "start": 61.880001068115234,
+        "end": 62.34000015258789,
+        "word": "audiovisual"
+      },
+      {
+        "start": 62.34000015258789,
+        "end": 62.63999938964844,
+        "word": "drift"
+      },
+      {
+        "start": 62.63999938964844,
+        "end": 62.91999816894531,
+        "word": "beyond"
+      },
+      {
+        "start": 62.91999816894531,
+        "end": 63.47999954223633,
+        "word": "a"
+      },
+      {
+        "start": 63.47999954223633,
+        "end": 63.47999954223633,
+        "word": "threshold"
+      },
+      {
+        "start": 63.939998626708984,
+        "end": 64.13999938964844,
+        "word": "and"
+      },
+      {
+        "start": 64.13999938964844,
+        "end": 64.45999908447266,
+        "word": "narration"
+      },
+      {
+        "start": 64.45999908447266,
+        "end": 64.77999877929688,
+        "word": "text"
+      },
+      {
+        "start": 64.77999877929688,
+        "end": 65.0199966430664,
+        "word": "that"
+      },
+      {
+        "start": 65.0199966430664,
+        "end": 65.36000061035156,
+        "word": "still"
+      },
+      {
+        "start": 65.36000061035156,
+        "end": 65.68000030517578,
+        "word": "contains"
+      },
+      {
+        "start": 65.68000030517578,
+        "end": 66.19999694824219,
+        "word": "markdown"
+      },
+      {
+        "start": 66.19999694824219,
+        "end": 66.5999984741211,
+        "word": "syntax"
+      },
+      {
+        "start": 66.5999984741211,
+        "end": 66.86000061035156,
+        "word": "or"
+      },
+      {
+        "start": 66.86000061035156,
+        "end": 67.19999694824219,
+        "word": "metadata"
+      },
+      {
+        "start": 67.19999694824219,
+        "end": 67.45999908447266,
+        "word": "that"
+      },
+      {
+        "start": 67.45999908447266,
+        "end": 67.66000366210938,
+        "word": "should"
+      },
+      {
+        "start": 67.66000366210938,
+        "end": 67.83999633789062,
+        "word": "not"
+      },
+      {
+        "start": 67.83999633789062,
+        "end": 68.0999984741211,
+        "word": "be"
+      },
+      {
+        "start": 68.0999984741211,
+        "end": 68.18000030517578,
+        "word": "read"
+      },
+      {
+        "start": 68.18000030517578,
+        "end": 68.5,
+        "word": "aloud"
+      },
+      {
+        "start": 69.36000061035156,
+        "end": 69.72000122070312,
+        "word": "Everything"
+      },
+      {
+        "start": 69.72000122070312,
+        "end": 70.05999755859375,
+        "word": "is"
+      },
+      {
+        "start": 70.05999755859375,
+        "end": 70.30000305175781,
+        "word": "configured"
+      },
+      {
+        "start": 70.30000305175781,
+        "end": 70.66000366210938,
+        "word": "in"
+      },
+      {
+        "start": 70.66000366210938,
+        "end": 70.87999725341797,
+        "word": "one"
+      },
+      {
+        "start": 70.87999725341797,
+        "end": 71.41999816894531,
+        "word": "yaml"
+      },
+      {
+        "start": 71.41999816894531,
+        "end": 71.73999786376953,
+        "word": "file"
+      },
+      {
+        "start": 72.30000305175781,
+        "end": 72.55999755859375,
+        "word": "docgen"
+      },
+      {
+        "start": 72.55999755859375,
+        "end": 73.23999786376953,
+        "word": "yaml"
+      },
+      {
+        "start": 74.04000091552734,
+        "end": 74.04000091552734,
+        "word": "Segments"
+      },
+      {
+        "start": 74.4000015258789,
+        "end": 74.68000030517578,
+        "word": "visual"
+      },
+      {
+        "start": 74.68000030517578,
+        "end": 75.0,
+        "word": "source"
+      },
+      {
+        "start": 75.0,
+        "end": 75.23999786376953,
+        "word": "mapping"
+      },
+      {
+        "start": 75.77999877929688,
+        "end": 76.04000091552734,
+        "word": "TTS"
+      },
+      {
+        "start": 76.04000091552734,
+        "end": 76.41999816894531,
+        "word": "voice"
+      },
+      {
+        "start": 76.9000015258789,
+        "end": 77.19999694824219,
+        "word": "validation"
+      },
+      {
+        "start": 77.19999694824219,
+        "end": 77.81999969482422,
+        "word": "thresholds"
+      },
+      {
+        "start": 77.81999969482422,
+        "end": 77.9800033569336,
+        "word": "and"
+      },
+      {
+        "start": 77.9800033569336,
+        "end": 78.23999786376953,
+        "word": "wizard"
+      },
+      {
+        "start": 78.23999786376953,
+        "end": 78.54000091552734,
+        "word": "settings"
+      },
+      {
+        "start": 78.54000091552734,
+        "end": 78.9000015258789,
+        "word": "all"
+      },
+      {
+        "start": 78.9000015258789,
+        "end": 79.05999755859375,
+        "word": "live"
+      },
+      {
+        "start": 79.05999755859375,
+        "end": 79.16000366210938,
+        "word": "in"
+      },
+      {
+        "start": 79.16000366210938,
+        "end": 79.36000061035156,
+        "word": "a"
+      },
+      {
+        "start": 79.36000061035156,
+        "end": 79.5199966430664,
+        "word": "single"
+      },
+      {
+        "start": 79.5199966430664,
+        "end": 79.86000061035156,
+        "word": "place"
+      }
+    ]
+  },
+  "02-init-scaffold": {
+    "text": "Getting started with DockGen takes about 30 seconds. Run DockGen init from any project directory, and the interactive wizard does the rest. It detects your Git root, asks for a project name, and where demo assets should live. If you already have narration files, it scans them and auto-populates the segment list. Otherwise, it prompts you for segment names. The wizard generates a complete DockGen.yaml with your project name wired into the TTS instructions and wizard prompts. It creates wrapper shell scripts so existing team workflows still work, and it scaffolds the full directory structure, narration, audio, animations, terminal, and recordings. If you say yes to the pre-push hook, it adds a validation entry to your pre-commit config. Every push then checks that recordings have both audio and video streams, that drift is within tolerance, and that narration scripts are clean for TTS. After init, your project is immediately ready. DockGen TTS dry run previews the stripped text. DockGen lint checks narration quality. DockGen wizard launches the GUI. No manual setup required.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 3.2200000286102295,
+        "text": " Getting started with DockGen takes about 30 seconds."
+      },
+      {
+        "start": 4.139999866485596,
+        "end": 6.619999885559082,
+        "text": " Run DockGen init from any project directory,"
+      },
+      {
+        "start": 6.880000114440918,
+        "end": 9.319999694824219,
+        "text": " and the interactive wizard does the rest."
+      },
+      {
+        "start": 10.039999961853027,
+        "end": 12.979999542236328,
+        "text": " It detects your Git root, asks for a project name,"
+      },
+      {
+        "start": 13.119999885559082,
+        "end": 14.859999656677246,
+        "text": " and where demo assets should live."
+      },
+      {
+        "start": 14.979999542236328,
+        "end": 17.15999984741211,
+        "text": " If you already have narration files,"
+      },
+      {
+        "start": 17.559999465942383,
+        "end": 20.440000534057617,
+        "text": " it scans them and auto-populates the segment list."
+      },
+      {
+        "start": 21.18000030517578,
+        "end": 23.200000762939453,
+        "text": " Otherwise, it prompts you for segment names."
+      },
+      {
+        "start": 24.0,
+        "end": 26.420000076293945,
+        "text": " The wizard generates a complete DockGen.yaml"
+      },
+      {
+        "start": 26.420000076293945,
+        "end": 29.920000076293945,
+        "text": " with your project name wired into the TTS instructions"
+      },
+      {
+        "start": 29.920000076293945,
+        "end": 31.1200008392334,
+        "text": " and wizard prompts."
+      },
+      {
+        "start": 32.18000030517578,
+        "end": 33.380001068115234,
+        "text": " It creates wrapper shell scripts"
+      },
+      {
+        "start": 33.380001068115234,
+        "end": 35.7400016784668,
+        "text": " so existing team workflows still work,"
+      },
+      {
+        "start": 36.540000915527344,
+        "end": 38.599998474121094,
+        "text": " and it scaffolds the full directory structure,"
+      },
+      {
+        "start": 39.779998779296875,
+        "end": 42.97999954223633,
+        "text": " narration, audio, animations, terminal, and recordings."
+      },
+      {
+        "start": 43.36000061035156,
+        "end": 45.5,
+        "text": " If you say yes to the pre-push hook,"
+      },
+      {
+        "start": 46.08000183105469,
+        "end": 48.47999954223633,
+        "text": " it adds a validation entry to your pre-commit config."
+      },
+      {
+        "start": 49.29999923706055,
+        "end": 51.0,
+        "text": " Every push then checks that recordings"
+      },
+      {
+        "start": 51.0,
+        "end": 52.84000015258789,
+        "text": " have both audio and video streams,"
+      },
+      {
+        "start": 53.560001373291016,
+        "end": 54.91999816894531,
+        "text": " that drift is within tolerance,"
+      },
+      {
+        "start": 55.560001373291016,
+        "end": 58.0,
+        "text": " and that narration scripts are clean for TTS."
+      },
+      {
+        "start": 58.7400016784668,
+        "end": 61.7400016784668,
+        "text": " After init, your project is immediately ready."
+      },
+      {
+        "start": 62.560001373291016,
+        "end": 65.36000061035156,
+        "text": " DockGen TTS dry run previews the stripped text."
+      },
+      {
+        "start": 66.62000274658203,
+        "end": 68.16000366210938,
+        "text": " DockGen lint checks narration quality."
+      },
+      {
+        "start": 69.04000091552734,
+        "end": 70.76000213623047,
+        "text": " DockGen wizard launches the GUI."
+      },
+      {
+        "start": 71.19999694824219,
+        "end": 72.62000274658203,
+        "text": " No manual setup required."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.47999998927116394,
+        "word": "Getting"
+      },
+      {
+        "start": 0.47999998927116394,
+        "end": 0.9800000190734863,
+        "word": "started"
+      },
+      {
+        "start": 0.9800000190734863,
+        "end": 1.5199999809265137,
+        "word": "with"
+      },
+      {
+        "start": 1.5199999809265137,
+        "end": 1.6200000047683716,
+        "word": "DockGen"
+      },
+      {
+        "start": 1.6200000047683716,
+        "end": 2.059999942779541,
+        "word": "takes"
+      },
+      {
+        "start": 2.059999942779541,
+        "end": 2.380000114440918,
+        "word": "about"
+      },
+      {
+        "start": 2.380000114440918,
+        "end": 2.819999933242798,
+        "word": "30"
+      },
+      {
+        "start": 2.819999933242798,
+        "end": 3.2200000286102295,
+        "word": "seconds"
+      },
+      {
+        "start": 4.139999866485596,
+        "end": 4.159999847412109,
+        "word": "Run"
+      },
+      {
+        "start": 4.159999847412109,
+        "end": 4.639999866485596,
+        "word": "DockGen"
+      },
+      {
+        "start": 4.639999866485596,
+        "end": 4.980000019073486,
+        "word": "init"
+      },
+      {
+        "start": 4.980000019073486,
+        "end": 5.460000038146973,
+        "word": "from"
+      },
+      {
+        "start": 5.460000038146973,
+        "end": 5.840000152587891,
+        "word": "any"
+      },
+      {
+        "start": 5.840000152587891,
+        "end": 6.239999771118164,
+        "word": "project"
+      },
+      {
+        "start": 6.239999771118164,
+        "end": 6.619999885559082,
+        "word": "directory"
+      },
+      {
+        "start": 6.880000114440918,
+        "end": 7.21999979019165,
+        "word": "and"
+      },
+      {
+        "start": 7.21999979019165,
+        "end": 7.519999980926514,
+        "word": "the"
+      },
+      {
+        "start": 7.519999980926514,
+        "end": 7.980000019073486,
+        "word": "interactive"
+      },
+      {
+        "start": 7.980000019073486,
+        "end": 8.279999732971191,
+        "word": "wizard"
+      },
+      {
+        "start": 8.279999732971191,
+        "end": 8.84000015258789,
+        "word": "does"
+      },
+      {
+        "start": 8.84000015258789,
+        "end": 9.239999771118164,
+        "word": "the"
+      },
+      {
+        "start": 9.239999771118164,
+        "end": 9.319999694824219,
+        "word": "rest"
+      },
+      {
+        "start": 10.039999961853027,
+        "end": 10.180000305175781,
+        "word": "It"
+      },
+      {
+        "start": 10.180000305175781,
+        "end": 10.619999885559082,
+        "word": "detects"
+      },
+      {
+        "start": 10.619999885559082,
+        "end": 10.779999732971191,
+        "word": "your"
+      },
+      {
+        "start": 10.779999732971191,
+        "end": 11.0,
+        "word": "Git"
+      },
+      {
+        "start": 11.0,
+        "end": 11.180000305175781,
+        "word": "root"
+      },
+      {
+        "start": 11.960000038146973,
+        "end": 11.960000038146973,
+        "word": "asks"
+      },
+      {
+        "start": 11.960000038146973,
+        "end": 12.180000305175781,
+        "word": "for"
+      },
+      {
+        "start": 12.180000305175781,
+        "end": 12.4399995803833,
+        "word": "a"
+      },
+      {
+        "start": 12.4399995803833,
+        "end": 12.65999984741211,
+        "word": "project"
+      },
+      {
+        "start": 12.65999984741211,
+        "end": 12.979999542236328,
+        "word": "name"
+      },
+      {
+        "start": 13.119999885559082,
+        "end": 13.460000038146973,
+        "word": "and"
+      },
+      {
+        "start": 13.460000038146973,
+        "end": 13.680000305175781,
+        "word": "where"
+      },
+      {
+        "start": 13.680000305175781,
+        "end": 14.020000457763672,
+        "word": "demo"
+      },
+      {
+        "start": 14.020000457763672,
+        "end": 14.319999694824219,
+        "word": "assets"
+      },
+      {
+        "start": 14.319999694824219,
+        "end": 14.619999885559082,
+        "word": "should"
+      },
+      {
+        "start": 14.619999885559082,
+        "end": 14.859999656677246,
+        "word": "live"
+      },
+      {
+        "start": 14.979999542236328,
+        "end": 15.619999885559082,
+        "word": "If"
+      },
+      {
+        "start": 15.619999885559082,
+        "end": 15.819999694824219,
+        "word": "you"
+      },
+      {
+        "start": 15.819999694824219,
+        "end": 16.18000030517578,
+        "word": "already"
+      },
+      {
+        "start": 16.18000030517578,
+        "end": 16.399999618530273,
+        "word": "have"
+      },
+      {
+        "start": 16.399999618530273,
+        "end": 16.81999969482422,
+        "word": "narration"
+      },
+      {
+        "start": 16.81999969482422,
+        "end": 17.15999984741211,
+        "word": "files"
+      },
+      {
+        "start": 17.559999465942383,
+        "end": 18.079999923706055,
+        "word": "it"
+      },
+      {
+        "start": 18.079999923706055,
+        "end": 18.079999923706055,
+        "word": "scans"
+      },
+      {
+        "start": 18.079999923706055,
+        "end": 18.3799991607666,
+        "word": "them"
+      },
+      {
+        "start": 18.3799991607666,
+        "end": 18.860000610351562,
+        "word": "and"
+      },
+      {
+        "start": 18.860000610351562,
+        "end": 19.239999771118164,
+        "word": "auto"
+      },
+      {
+        "start": 19.239999771118164,
+        "end": 19.600000381469727,
+        "word": "populates"
+      },
+      {
+        "start": 19.600000381469727,
+        "end": 19.979999542236328,
+        "word": "the"
+      },
+      {
+        "start": 19.979999542236328,
+        "end": 20.079999923706055,
+        "word": "segment"
+      },
+      {
+        "start": 20.079999923706055,
+        "end": 20.440000534057617,
+        "word": "list"
+      },
+      {
+        "start": 21.18000030517578,
+        "end": 21.559999465942383,
+        "word": "Otherwise"
+      },
+      {
+        "start": 21.65999984741211,
+        "end": 21.940000534057617,
+        "word": "it"
+      },
+      {
+        "start": 21.940000534057617,
+        "end": 22.139999389648438,
+        "word": "prompts"
+      },
+      {
+        "start": 22.139999389648438,
+        "end": 22.360000610351562,
+        "word": "you"
+      },
+      {
+        "start": 22.360000610351562,
+        "end": 22.65999984741211,
+        "word": "for"
+      },
+      {
+        "start": 22.65999984741211,
+        "end": 22.84000015258789,
+        "word": "segment"
+      },
+      {
+        "start": 22.84000015258789,
+        "end": 23.200000762939453,
+        "word": "names"
+      },
+      {
+        "start": 24.0,
+        "end": 24.239999771118164,
+        "word": "The"
+      },
+      {
+        "start": 24.239999771118164,
+        "end": 24.399999618530273,
+        "word": "wizard"
+      },
+      {
+        "start": 24.399999618530273,
+        "end": 24.8799991607666,
+        "word": "generates"
+      },
+      {
+        "start": 24.8799991607666,
+        "end": 25.18000030517578,
+        "word": "a"
+      },
+      {
+        "start": 25.18000030517578,
+        "end": 25.5,
+        "word": "complete"
+      },
+      {
+        "start": 25.5,
+        "end": 25.920000076293945,
+        "word": "DockGen"
+      },
+      {
+        "start": 25.920000076293945,
+        "end": 26.420000076293945,
+        "word": "yaml"
+      },
+      {
+        "start": 26.420000076293945,
+        "end": 26.65999984741211,
+        "word": "with"
+      },
+      {
+        "start": 26.65999984741211,
+        "end": 27.1200008392334,
+        "word": "your"
+      },
+      {
+        "start": 27.1200008392334,
+        "end": 27.559999465942383,
+        "word": "project"
+      },
+      {
+        "start": 27.559999465942383,
+        "end": 27.899999618530273,
+        "word": "name"
+      },
+      {
+        "start": 27.899999618530273,
+        "end": 28.420000076293945,
+        "word": "wired"
+      },
+      {
+        "start": 28.420000076293945,
+        "end": 28.700000762939453,
+        "word": "into"
+      },
+      {
+        "start": 28.700000762939453,
+        "end": 29.020000457763672,
+        "word": "the"
+      },
+      {
+        "start": 29.020000457763672,
+        "end": 29.360000610351562,
+        "word": "TTS"
+      },
+      {
+        "start": 29.360000610351562,
+        "end": 29.920000076293945,
+        "word": "instructions"
+      },
+      {
+        "start": 29.920000076293945,
+        "end": 30.520000457763672,
+        "word": "and"
+      },
+      {
+        "start": 30.520000457763672,
+        "end": 30.799999237060547,
+        "word": "wizard"
+      },
+      {
+        "start": 30.799999237060547,
+        "end": 31.1200008392334,
+        "word": "prompts"
+      },
+      {
+        "start": 32.18000030517578,
+        "end": 32.18000030517578,
+        "word": "It"
+      },
+      {
+        "start": 32.18000030517578,
+        "end": 32.5,
+        "word": "creates"
+      },
+      {
+        "start": 32.5,
+        "end": 32.959999084472656,
+        "word": "wrapper"
+      },
+      {
+        "start": 32.959999084472656,
+        "end": 33.20000076293945,
+        "word": "shell"
+      },
+      {
+        "start": 33.20000076293945,
+        "end": 33.380001068115234,
+        "word": "scripts"
+      },
+      {
+        "start": 33.380001068115234,
+        "end": 33.68000030517578,
+        "word": "so"
+      },
+      {
+        "start": 33.68000030517578,
+        "end": 34.08000183105469,
+        "word": "existing"
+      },
+      {
+        "start": 34.08000183105469,
+        "end": 34.400001525878906,
+        "word": "team"
+      },
+      {
+        "start": 34.400001525878906,
+        "end": 34.79999923706055,
+        "word": "workflows"
+      },
+      {
+        "start": 34.79999923706055,
+        "end": 35.5,
+        "word": "still"
+      },
+      {
+        "start": 35.5,
+        "end": 35.7400016784668,
+        "word": "work"
+      },
+      {
+        "start": 36.540000915527344,
+        "end": 36.560001373291016,
+        "word": "and"
+      },
+      {
+        "start": 36.560001373291016,
+        "end": 37.13999938964844,
+        "word": "it"
+      },
+      {
+        "start": 37.13999938964844,
+        "end": 37.13999938964844,
+        "word": "scaffolds"
+      },
+      {
+        "start": 37.13999938964844,
+        "end": 37.439998626708984,
+        "word": "the"
+      },
+      {
+        "start": 37.439998626708984,
+        "end": 37.7599983215332,
+        "word": "full"
+      },
+      {
+        "start": 37.7599983215332,
+        "end": 38.08000183105469,
+        "word": "directory"
+      },
+      {
+        "start": 38.08000183105469,
+        "end": 38.599998474121094,
+        "word": "structure"
+      },
+      {
+        "start": 39.779998779296875,
+        "end": 39.779998779296875,
+        "word": "narration"
+      },
+      {
+        "start": 40.540000915527344,
+        "end": 40.619998931884766,
+        "word": "audio"
+      },
+      {
+        "start": 41.36000061035156,
+        "end": 41.36000061035156,
+        "word": "animations"
+      },
+      {
+        "start": 41.97999954223633,
+        "end": 42.0,
+        "word": "terminal"
+      },
+      {
+        "start": 42.099998474121094,
+        "end": 42.68000030517578,
+        "word": "and"
+      },
+      {
+        "start": 42.68000030517578,
+        "end": 42.97999954223633,
+        "word": "recordings"
+      },
+      {
+        "start": 43.36000061035156,
+        "end": 44.0,
+        "word": "If"
+      },
+      {
+        "start": 44.0,
+        "end": 44.15999984741211,
+        "word": "you"
+      },
+      {
+        "start": 44.15999984741211,
+        "end": 44.380001068115234,
+        "word": "say"
+      },
+      {
+        "start": 44.380001068115234,
+        "end": 44.58000183105469,
+        "word": "yes"
+      },
+      {
+        "start": 44.58000183105469,
+        "end": 44.7599983215332,
+        "word": "to"
+      },
+      {
+        "start": 44.7599983215332,
+        "end": 44.91999816894531,
+        "word": "the"
+      },
+      {
+        "start": 44.91999816894531,
+        "end": 45.15999984741211,
+        "word": "pre"
+      },
+      {
+        "start": 45.15999984741211,
+        "end": 45.2599983215332,
+        "word": "push"
+      },
+      {
+        "start": 45.2599983215332,
+        "end": 45.5,
+        "word": "hook"
+      },
+      {
+        "start": 46.08000183105469,
+        "end": 46.220001220703125,
+        "word": "it"
+      },
+      {
+        "start": 46.220001220703125,
+        "end": 46.380001068115234,
+        "word": "adds"
+      },
+      {
+        "start": 46.380001068115234,
+        "end": 46.65999984741211,
+        "word": "a"
+      },
+      {
+        "start": 46.65999984741211,
+        "end": 46.97999954223633,
+        "word": "validation"
+      },
+      {
+        "start": 46.97999954223633,
+        "end": 47.2599983215332,
+        "word": "entry"
+      },
+      {
+        "start": 47.2599983215332,
+        "end": 47.459999084472656,
+        "word": "to"
+      },
+      {
+        "start": 47.459999084472656,
+        "end": 47.65999984741211,
+        "word": "your"
+      },
+      {
+        "start": 47.65999984741211,
+        "end": 47.91999816894531,
+        "word": "pre"
+      },
+      {
+        "start": 47.91999816894531,
+        "end": 48.060001373291016,
+        "word": "commit"
+      },
+      {
+        "start": 48.060001373291016,
+        "end": 48.47999954223633,
+        "word": "config"
+      },
+      {
+        "start": 49.29999923706055,
+        "end": 49.599998474121094,
+        "word": "Every"
+      },
+      {
+        "start": 49.599998474121094,
+        "end": 49.86000061035156,
+        "word": "push"
+      },
+      {
+        "start": 49.86000061035156,
+        "end": 50.2400016784668,
+        "word": "then"
+      },
+      {
+        "start": 50.2400016784668,
+        "end": 50.400001525878906,
+        "word": "checks"
+      },
+      {
+        "start": 50.400001525878906,
+        "end": 50.65999984741211,
+        "word": "that"
+      },
+      {
+        "start": 50.65999984741211,
+        "end": 51.0,
+        "word": "recordings"
+      },
+      {
+        "start": 51.0,
+        "end": 51.2599983215332,
+        "word": "have"
+      },
+      {
+        "start": 51.2599983215332,
+        "end": 51.599998474121094,
+        "word": "both"
+      },
+      {
+        "start": 51.599998474121094,
+        "end": 51.79999923706055,
+        "word": "audio"
+      },
+      {
+        "start": 51.79999923706055,
+        "end": 52.119998931884766,
+        "word": "and"
+      },
+      {
+        "start": 52.119998931884766,
+        "end": 52.380001068115234,
+        "word": "video"
+      },
+      {
+        "start": 52.380001068115234,
+        "end": 52.84000015258789,
+        "word": "streams"
+      },
+      {
+        "start": 53.560001373291016,
+        "end": 54.02000045776367,
+        "word": "that"
+      },
+      {
+        "start": 54.02000045776367,
+        "end": 54.02000045776367,
+        "word": "drift"
+      },
+      {
+        "start": 54.02000045776367,
+        "end": 54.220001220703125,
+        "word": "is"
+      },
+      {
+        "start": 54.220001220703125,
+        "end": 54.5,
+        "word": "within"
+      },
+      {
+        "start": 54.5,
+        "end": 54.91999816894531,
+        "word": "tolerance"
+      },
+      {
+        "start": 55.380001068115234,
+        "end": 55.7599983215332,
+        "word": "and"
+      },
+      {
+        "start": 55.7599983215332,
+        "end": 55.97999954223633,
+        "word": "that"
+      },
+      {
+        "start": 55.97999954223633,
+        "end": 56.41999816894531,
+        "word": "narration"
+      },
+      {
+        "start": 56.41999816894531,
+        "end": 56.68000030517578,
+        "word": "scripts"
+      },
+      {
+        "start": 56.68000030517578,
+        "end": 56.959999084472656,
+        "word": "are"
+      },
+      {
+        "start": 56.959999084472656,
+        "end": 57.279998779296875,
+        "word": "clean"
+      },
+      {
+        "start": 57.279998779296875,
+        "end": 57.58000183105469,
+        "word": "for"
+      },
+      {
+        "start": 57.58000183105469,
+        "end": 58.0,
+        "word": "TTS"
+      },
+      {
+        "start": 58.7400016784668,
+        "end": 59.2599983215332,
+        "word": "After"
+      },
+      {
+        "start": 59.2599983215332,
+        "end": 59.47999954223633,
+        "word": "init"
+      },
+      {
+        "start": 59.86000061035156,
+        "end": 60.02000045776367,
+        "word": "your"
+      },
+      {
+        "start": 60.02000045776367,
+        "end": 60.34000015258789,
+        "word": "project"
+      },
+      {
+        "start": 60.34000015258789,
+        "end": 60.599998474121094,
+        "word": "is"
+      },
+      {
+        "start": 60.599998474121094,
+        "end": 60.959999084472656,
+        "word": "immediately"
+      },
+      {
+        "start": 60.959999084472656,
+        "end": 61.7400016784668,
+        "word": "ready"
+      },
+      {
+        "start": 62.560001373291016,
+        "end": 62.560001373291016,
+        "word": "DockGen"
+      },
+      {
+        "start": 62.560001373291016,
+        "end": 63.119998931884766,
+        "word": "TTS"
+      },
+      {
+        "start": 63.119998931884766,
+        "end": 63.5,
+        "word": "dry"
+      },
+      {
+        "start": 63.5,
+        "end": 63.68000030517578,
+        "word": "run"
+      },
+      {
+        "start": 63.68000030517578,
+        "end": 64.54000091552734,
+        "word": "previews"
+      },
+      {
+        "start": 64.54000091552734,
+        "end": 64.73999786376953,
+        "word": "the"
+      },
+      {
+        "start": 64.73999786376953,
+        "end": 64.94000244140625,
+        "word": "stripped"
+      },
+      {
+        "start": 64.94000244140625,
+        "end": 65.36000061035156,
+        "word": "text"
+      },
+      {
+        "start": 66.62000274658203,
+        "end": 66.62000274658203,
+        "word": "DockGen"
+      },
+      {
+        "start": 66.62000274658203,
+        "end": 66.91999816894531,
+        "word": "lint"
+      },
+      {
+        "start": 66.91999816894531,
+        "end": 67.23999786376953,
+        "word": "checks"
+      },
+      {
+        "start": 67.23999786376953,
+        "end": 67.69999694824219,
+        "word": "narration"
+      },
+      {
+        "start": 67.69999694824219,
+        "end": 68.16000366210938,
+        "word": "quality"
+      },
+      {
+        "start": 69.04000091552734,
+        "end": 69.27999877929688,
+        "word": "DockGen"
+      },
+      {
+        "start": 69.27999877929688,
+        "end": 69.63999938964844,
+        "word": "wizard"
+      },
+      {
+        "start": 69.63999938964844,
+        "end": 69.9800033569336,
+        "word": "launches"
+      },
+      {
+        "start": 69.9800033569336,
+        "end": 70.37999725341797,
+        "word": "the"
+      },
+      {
+        "start": 70.37999725341797,
+        "end": 70.76000213623047,
+        "word": "GUI"
+      },
+      {
+        "start": 71.19999694824219,
+        "end": 71.44000244140625,
+        "word": "No"
+      },
+      {
+        "start": 71.44000244140625,
+        "end": 71.83999633789062,
+        "word": "manual"
+      },
+      {
+        "start": 71.83999633789062,
+        "end": 72.13999938964844,
+        "word": "setup"
+      },
+      {
+        "start": 72.13999938964844,
+        "end": 72.62000274658203,
+        "word": "required"
+      }
+    ]
+  },
+  "03-wizard-gui": {
+    "text": "The Wizard is a local web GUI that helps you draft narration scripts from your existing project documentation. Run DocGen Wizard and it launches a Flask server on localhost. The interface has two main views, Setup and Production. In Setup, you see a file tree of your repository. Select the files that are relevant to your demo. These become context for the LLM when generating narration. The Wizard respects exclude patterns from DocGen.yaml, so node modules, cache directories, and build artifacts are filtered out automatically. Switch to Production and you see every segment listed with its status. Click a segment to load its narration in the editor. You can write narration manually or have the LLM draft it from the selected context files. The editor is a plain text area because narration should be plain spoken English, not formatted markdown. When you save, the text is written back to the narration file on disk. When you click approve, the segment status updates and the progress bar advances. The Wizard stores its state in a .docgenstate.json file. This tracks which segments are approved, which need revision, and any notes. The file is local to the project and excluded from Git by default.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 5.920000076293945,
+        "text": " The Wizard is a local web GUI that helps you draft narration scripts from your existing project documentation."
+      },
+      {
+        "start": 6.880000114440918,
+        "end": 10.640000343322754,
+        "text": " Run DocGen Wizard and it launches a Flask server on localhost."
+      },
+      {
+        "start": 10.9399995803833,
+        "end": 14.859999656677246,
+        "text": " The interface has two main views, Setup and Production."
+      },
+      {
+        "start": 15.279999732971191,
+        "end": 18.15999984741211,
+        "text": " In Setup, you see a file tree of your repository."
+      },
+      {
+        "start": 19.239999771118164,
+        "end": 20.979999542236328,
+        "text": " Select the files that are relevant to your demo."
+      },
+      {
+        "start": 21.760000228881836,
+        "end": 25.200000762939453,
+        "text": " These become context for the LLM when generating narration."
+      },
+      {
+        "start": 25.899999618530273,
+        "end": 29.68000030517578,
+        "text": " The Wizard respects exclude patterns from DocGen.yaml,"
+      },
+      {
+        "start": 30.18000030517578,
+        "end": 35.279998779296875,
+        "text": " so node modules, cache directories, and build artifacts are filtered out automatically."
+      },
+      {
+        "start": 36.18000030517578,
+        "end": 39.86000061035156,
+        "text": " Switch to Production and you see every segment listed with its status."
+      },
+      {
+        "start": 40.7599983215332,
+        "end": 42.7400016784668,
+        "text": " Click a segment to load its narration in the editor."
+      },
+      {
+        "start": 43.18000030517578,
+        "end": 48.31999969482422,
+        "text": " You can write narration manually or have the LLM draft it from the selected context files."
+      },
+      {
+        "start": 48.91999816894531,
+        "end": 54.97999954223633,
+        "text": " The editor is a plain text area because narration should be plain spoken English, not formatted markdown."
+      },
+      {
+        "start": 55.439998626708984,
+        "end": 59.279998779296875,
+        "text": " When you save, the text is written back to the narration file on disk."
+      },
+      {
+        "start": 59.97999954223633,
+        "end": 64.08000183105469,
+        "text": " When you click approve, the segment status updates and the progress bar advances."
+      },
+      {
+        "start": 64.81999969482422,
+        "end": 68.66000366210938,
+        "text": " The Wizard stores its state in a .docgenstate.json file."
+      },
+      {
+        "start": 69.04000091552734,
+        "end": 73.41999816894531,
+        "text": " This tracks which segments are approved, which need revision, and any notes."
+      },
+      {
+        "start": 73.41999816894531,
+        "end": 77.54000091552734,
+        "text": " The file is local to the project and excluded from Git by default."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.4000000059604645,
+        "word": "The"
+      },
+      {
+        "start": 0.4000000059604645,
+        "end": 0.47999998927116394,
+        "word": "Wizard"
+      },
+      {
+        "start": 0.47999998927116394,
+        "end": 0.8399999737739563,
+        "word": "is"
+      },
+      {
+        "start": 0.8399999737739563,
+        "end": 1.100000023841858,
+        "word": "a"
+      },
+      {
+        "start": 1.100000023841858,
+        "end": 1.399999976158142,
+        "word": "local"
+      },
+      {
+        "start": 1.399999976158142,
+        "end": 1.7400000095367432,
+        "word": "web"
+      },
+      {
+        "start": 1.7400000095367432,
+        "end": 1.940000057220459,
+        "word": "GUI"
+      },
+      {
+        "start": 1.940000057220459,
+        "end": 2.319999933242798,
+        "word": "that"
+      },
+      {
+        "start": 2.319999933242798,
+        "end": 2.4600000381469727,
+        "word": "helps"
+      },
+      {
+        "start": 2.4600000381469727,
+        "end": 3.0199999809265137,
+        "word": "you"
+      },
+      {
+        "start": 3.0199999809265137,
+        "end": 3.0199999809265137,
+        "word": "draft"
+      },
+      {
+        "start": 3.0199999809265137,
+        "end": 3.559999942779541,
+        "word": "narration"
+      },
+      {
+        "start": 3.559999942779541,
+        "end": 3.819999933242798,
+        "word": "scripts"
+      },
+      {
+        "start": 3.819999933242798,
+        "end": 4.079999923706055,
+        "word": "from"
+      },
+      {
+        "start": 4.079999923706055,
+        "end": 4.360000133514404,
+        "word": "your"
+      },
+      {
+        "start": 4.360000133514404,
+        "end": 4.739999771118164,
+        "word": "existing"
+      },
+      {
+        "start": 4.739999771118164,
+        "end": 5.260000228881836,
+        "word": "project"
+      },
+      {
+        "start": 5.260000228881836,
+        "end": 5.920000076293945,
+        "word": "documentation"
+      },
+      {
+        "start": 6.880000114440918,
+        "end": 6.980000019073486,
+        "word": "Run"
+      },
+      {
+        "start": 6.980000019073486,
+        "end": 7.519999980926514,
+        "word": "DocGen"
+      },
+      {
+        "start": 7.519999980926514,
+        "end": 7.800000190734863,
+        "word": "Wizard"
+      },
+      {
+        "start": 7.800000190734863,
+        "end": 8.34000015258789,
+        "word": "and"
+      },
+      {
+        "start": 8.34000015258789,
+        "end": 8.859999656677246,
+        "word": "it"
+      },
+      {
+        "start": 8.859999656677246,
+        "end": 8.859999656677246,
+        "word": "launches"
+      },
+      {
+        "start": 8.859999656677246,
+        "end": 9.140000343322754,
+        "word": "a"
+      },
+      {
+        "start": 9.140000343322754,
+        "end": 9.399999618530273,
+        "word": "Flask"
+      },
+      {
+        "start": 9.399999618530273,
+        "end": 9.739999771118164,
+        "word": "server"
+      },
+      {
+        "start": 9.739999771118164,
+        "end": 10.079999923706055,
+        "word": "on"
+      },
+      {
+        "start": 10.079999923706055,
+        "end": 10.640000343322754,
+        "word": "localhost"
+      },
+      {
+        "start": 10.9399995803833,
+        "end": 11.5600004196167,
+        "word": "The"
+      },
+      {
+        "start": 11.5600004196167,
+        "end": 11.920000076293945,
+        "word": "interface"
+      },
+      {
+        "start": 11.920000076293945,
+        "end": 12.220000267028809,
+        "word": "has"
+      },
+      {
+        "start": 12.220000267028809,
+        "end": 12.579999923706055,
+        "word": "two"
+      },
+      {
+        "start": 12.579999923706055,
+        "end": 12.859999656677246,
+        "word": "main"
+      },
+      {
+        "start": 12.859999656677246,
+        "end": 13.199999809265137,
+        "word": "views"
+      },
+      {
+        "start": 13.960000038146973,
+        "end": 14.0,
+        "word": "Setup"
+      },
+      {
+        "start": 14.0,
+        "end": 14.479999542236328,
+        "word": "and"
+      },
+      {
+        "start": 14.479999542236328,
+        "end": 14.859999656677246,
+        "word": "Production"
+      },
+      {
+        "start": 15.279999732971191,
+        "end": 15.859999656677246,
+        "word": "In"
+      },
+      {
+        "start": 15.859999656677246,
+        "end": 16.1200008392334,
+        "word": "Setup"
+      },
+      {
+        "start": 16.299999237060547,
+        "end": 16.559999465942383,
+        "word": "you"
+      },
+      {
+        "start": 16.559999465942383,
+        "end": 16.65999984741211,
+        "word": "see"
+      },
+      {
+        "start": 16.65999984741211,
+        "end": 16.920000076293945,
+        "word": "a"
+      },
+      {
+        "start": 16.920000076293945,
+        "end": 17.219999313354492,
+        "word": "file"
+      },
+      {
+        "start": 17.219999313354492,
+        "end": 17.360000610351562,
+        "word": "tree"
+      },
+      {
+        "start": 17.360000610351562,
+        "end": 17.520000457763672,
+        "word": "of"
+      },
+      {
+        "start": 17.520000457763672,
+        "end": 17.719999313354492,
+        "word": "your"
+      },
+      {
+        "start": 17.719999313354492,
+        "end": 18.15999984741211,
+        "word": "repository"
+      },
+      {
+        "start": 19.239999771118164,
+        "end": 19.239999771118164,
+        "word": "Select"
+      },
+      {
+        "start": 19.239999771118164,
+        "end": 19.780000686645508,
+        "word": "the"
+      },
+      {
+        "start": 19.780000686645508,
+        "end": 19.780000686645508,
+        "word": "files"
+      },
+      {
+        "start": 19.780000686645508,
+        "end": 19.959999084472656,
+        "word": "that"
+      },
+      {
+        "start": 19.959999084472656,
+        "end": 20.3799991607666,
+        "word": "are"
+      },
+      {
+        "start": 20.3799991607666,
+        "end": 20.3799991607666,
+        "word": "relevant"
+      },
+      {
+        "start": 20.3799991607666,
+        "end": 20.6200008392334,
+        "word": "to"
+      },
+      {
+        "start": 20.6200008392334,
+        "end": 20.860000610351562,
+        "word": "your"
+      },
+      {
+        "start": 20.860000610351562,
+        "end": 20.979999542236328,
+        "word": "demo"
+      },
+      {
+        "start": 21.760000228881836,
+        "end": 21.940000534057617,
+        "word": "These"
+      },
+      {
+        "start": 21.940000534057617,
+        "end": 22.280000686645508,
+        "word": "become"
+      },
+      {
+        "start": 22.280000686645508,
+        "end": 22.899999618530273,
+        "word": "context"
+      },
+      {
+        "start": 22.899999618530273,
+        "end": 23.15999984741211,
+        "word": "for"
+      },
+      {
+        "start": 23.15999984741211,
+        "end": 23.559999465942383,
+        "word": "the"
+      },
+      {
+        "start": 23.559999465942383,
+        "end": 23.84000015258789,
+        "word": "LLM"
+      },
+      {
+        "start": 23.84000015258789,
+        "end": 24.299999237060547,
+        "word": "when"
+      },
+      {
+        "start": 24.299999237060547,
+        "end": 24.739999771118164,
+        "word": "generating"
+      },
+      {
+        "start": 24.739999771118164,
+        "end": 25.200000762939453,
+        "word": "narration"
+      },
+      {
+        "start": 25.670000076293945,
+        "end": 26.059999465942383,
+        "word": "The"
+      },
+      {
+        "start": 26.059999465942383,
+        "end": 26.479999542236328,
+        "word": "Wizard"
+      },
+      {
+        "start": 26.479999542236328,
+        "end": 27.0,
+        "word": "respects"
+      },
+      {
+        "start": 27.0,
+        "end": 27.6200008392334,
+        "word": "exclude"
+      },
+      {
+        "start": 27.6200008392334,
+        "end": 27.959999084472656,
+        "word": "patterns"
+      },
+      {
+        "start": 27.959999084472656,
+        "end": 28.579999923706055,
+        "word": "from"
+      },
+      {
+        "start": 28.579999923706055,
+        "end": 29.059999465942383,
+        "word": "DocGen"
+      },
+      {
+        "start": 29.059999465942383,
+        "end": 29.68000030517578,
+        "word": "yaml"
+      },
+      {
+        "start": 30.18000030517578,
+        "end": 30.440000534057617,
+        "word": "so"
+      },
+      {
+        "start": 30.440000534057617,
+        "end": 30.760000228881836,
+        "word": "node"
+      },
+      {
+        "start": 30.760000228881836,
+        "end": 31.18000030517578,
+        "word": "modules"
+      },
+      {
+        "start": 31.84000015258789,
+        "end": 31.940000534057617,
+        "word": "cache"
+      },
+      {
+        "start": 31.940000534057617,
+        "end": 32.5,
+        "word": "directories"
+      },
+      {
+        "start": 32.58000183105469,
+        "end": 33.060001373291016,
+        "word": "and"
+      },
+      {
+        "start": 33.060001373291016,
+        "end": 33.29999923706055,
+        "word": "build"
+      },
+      {
+        "start": 33.29999923706055,
+        "end": 33.7400016784668,
+        "word": "artifacts"
+      },
+      {
+        "start": 33.7400016784668,
+        "end": 34.15999984741211,
+        "word": "are"
+      },
+      {
+        "start": 34.15999984741211,
+        "end": 34.36000061035156,
+        "word": "filtered"
+      },
+      {
+        "start": 34.36000061035156,
+        "end": 34.79999923706055,
+        "word": "out"
+      },
+      {
+        "start": 34.79999923706055,
+        "end": 35.279998779296875,
+        "word": "automatically"
+      },
+      {
+        "start": 36.18000030517578,
+        "end": 36.380001068115234,
+        "word": "Switch"
+      },
+      {
+        "start": 36.380001068115234,
+        "end": 36.63999938964844,
+        "word": "to"
+      },
+      {
+        "start": 36.63999938964844,
+        "end": 36.97999954223633,
+        "word": "Production"
+      },
+      {
+        "start": 36.97999954223633,
+        "end": 37.5,
+        "word": "and"
+      },
+      {
+        "start": 37.5,
+        "end": 37.68000030517578,
+        "word": "you"
+      },
+      {
+        "start": 37.68000030517578,
+        "end": 37.86000061035156,
+        "word": "see"
+      },
+      {
+        "start": 37.86000061035156,
+        "end": 38.380001068115234,
+        "word": "every"
+      },
+      {
+        "start": 38.380001068115234,
+        "end": 38.599998474121094,
+        "word": "segment"
+      },
+      {
+        "start": 38.599998474121094,
+        "end": 39.02000045776367,
+        "word": "listed"
+      },
+      {
+        "start": 39.02000045776367,
+        "end": 39.279998779296875,
+        "word": "with"
+      },
+      {
+        "start": 39.279998779296875,
+        "end": 39.560001373291016,
+        "word": "its"
+      },
+      {
+        "start": 39.560001373291016,
+        "end": 39.86000061035156,
+        "word": "status"
+      },
+      {
+        "start": 40.7599983215332,
+        "end": 40.7599983215332,
+        "word": "Click"
+      },
+      {
+        "start": 40.7599983215332,
+        "end": 41.18000030517578,
+        "word": "a"
+      },
+      {
+        "start": 41.18000030517578,
+        "end": 41.18000030517578,
+        "word": "segment"
+      },
+      {
+        "start": 41.18000030517578,
+        "end": 41.47999954223633,
+        "word": "to"
+      },
+      {
+        "start": 41.47999954223633,
+        "end": 41.619998931884766,
+        "word": "load"
+      },
+      {
+        "start": 41.619998931884766,
+        "end": 42.15999984741211,
+        "word": "its"
+      },
+      {
+        "start": 42.15999984741211,
+        "end": 42.15999984741211,
+        "word": "narration"
+      },
+      {
+        "start": 42.15999984741211,
+        "end": 42.47999954223633,
+        "word": "in"
+      },
+      {
+        "start": 42.47999954223633,
+        "end": 42.7400016784668,
+        "word": "the"
+      },
+      {
+        "start": 42.7400016784668,
+        "end": 42.7400016784668,
+        "word": "editor"
+      },
+      {
+        "start": 43.18000030517578,
+        "end": 43.5,
+        "word": "You"
+      },
+      {
+        "start": 43.5,
+        "end": 43.720001220703125,
+        "word": "can"
+      },
+      {
+        "start": 43.720001220703125,
+        "end": 43.91999816894531,
+        "word": "write"
+      },
+      {
+        "start": 43.91999816894531,
+        "end": 44.34000015258789,
+        "word": "narration"
+      },
+      {
+        "start": 44.34000015258789,
+        "end": 44.779998779296875,
+        "word": "manually"
+      },
+      {
+        "start": 44.779998779296875,
+        "end": 45.34000015258789,
+        "word": "or"
+      },
+      {
+        "start": 45.34000015258789,
+        "end": 45.560001373291016,
+        "word": "have"
+      },
+      {
+        "start": 45.560001373291016,
+        "end": 45.959999084472656,
+        "word": "the"
+      },
+      {
+        "start": 45.959999084472656,
+        "end": 46.220001220703125,
+        "word": "LLM"
+      },
+      {
+        "start": 46.220001220703125,
+        "end": 46.540000915527344,
+        "word": "draft"
+      },
+      {
+        "start": 46.540000915527344,
+        "end": 46.79999923706055,
+        "word": "it"
+      },
+      {
+        "start": 46.79999923706055,
+        "end": 46.900001525878906,
+        "word": "from"
+      },
+      {
+        "start": 46.900001525878906,
+        "end": 47.439998626708984,
+        "word": "the"
+      },
+      {
+        "start": 47.439998626708984,
+        "end": 47.439998626708984,
+        "word": "selected"
+      },
+      {
+        "start": 47.439998626708984,
+        "end": 47.939998626708984,
+        "word": "context"
+      },
+      {
+        "start": 47.939998626708984,
+        "end": 48.31999969482422,
+        "word": "files"
+      },
+      {
+        "start": 48.84000015258789,
+        "end": 49.13999938964844,
+        "word": "The"
+      },
+      {
+        "start": 49.13999938964844,
+        "end": 49.439998626708984,
+        "word": "editor"
+      },
+      {
+        "start": 49.439998626708984,
+        "end": 49.70000076293945,
+        "word": "is"
+      },
+      {
+        "start": 49.70000076293945,
+        "end": 49.959999084472656,
+        "word": "a"
+      },
+      {
+        "start": 49.959999084472656,
+        "end": 50.18000030517578,
+        "word": "plain"
+      },
+      {
+        "start": 50.18000030517578,
+        "end": 50.540000915527344,
+        "word": "text"
+      },
+      {
+        "start": 50.540000915527344,
+        "end": 50.81999969482422,
+        "word": "area"
+      },
+      {
+        "start": 50.81999969482422,
+        "end": 51.5,
+        "word": "because"
+      },
+      {
+        "start": 51.5,
+        "end": 51.91999816894531,
+        "word": "narration"
+      },
+      {
+        "start": 51.91999816894531,
+        "end": 52.220001220703125,
+        "word": "should"
+      },
+      {
+        "start": 52.220001220703125,
+        "end": 52.459999084472656,
+        "word": "be"
+      },
+      {
+        "start": 52.459999084472656,
+        "end": 52.7400016784668,
+        "word": "plain"
+      },
+      {
+        "start": 52.7400016784668,
+        "end": 53.02000045776367,
+        "word": "spoken"
+      },
+      {
+        "start": 53.02000045776367,
+        "end": 53.459999084472656,
+        "word": "English"
+      },
+      {
+        "start": 53.880001068115234,
+        "end": 54.08000183105469,
+        "word": "not"
+      },
+      {
+        "start": 54.08000183105469,
+        "end": 54.459999084472656,
+        "word": "formatted"
+      },
+      {
+        "start": 54.459999084472656,
+        "end": 54.97999954223633,
+        "word": "markdown"
+      },
+      {
+        "start": 55.439998626708984,
+        "end": 55.7400016784668,
+        "word": "When"
+      },
+      {
+        "start": 55.7400016784668,
+        "end": 55.97999954223633,
+        "word": "you"
+      },
+      {
+        "start": 55.97999954223633,
+        "end": 56.279998779296875,
+        "word": "save"
+      },
+      {
+        "start": 56.619998931884766,
+        "end": 56.97999954223633,
+        "word": "the"
+      },
+      {
+        "start": 56.97999954223633,
+        "end": 56.97999954223633,
+        "word": "text"
+      },
+      {
+        "start": 56.97999954223633,
+        "end": 57.279998779296875,
+        "word": "is"
+      },
+      {
+        "start": 57.279998779296875,
+        "end": 57.380001068115234,
+        "word": "written"
+      },
+      {
+        "start": 57.380001068115234,
+        "end": 57.720001220703125,
+        "word": "back"
+      },
+      {
+        "start": 57.720001220703125,
+        "end": 57.84000015258789,
+        "word": "to"
+      },
+      {
+        "start": 57.84000015258789,
+        "end": 58.0,
+        "word": "the"
+      },
+      {
+        "start": 58.0,
+        "end": 58.34000015258789,
+        "word": "narration"
+      },
+      {
+        "start": 58.34000015258789,
+        "end": 58.70000076293945,
+        "word": "file"
+      },
+      {
+        "start": 58.70000076293945,
+        "end": 59.20000076293945,
+        "word": "on"
+      },
+      {
+        "start": 59.20000076293945,
+        "end": 59.279998779296875,
+        "word": "disk"
+      },
+      {
+        "start": 59.97999954223633,
+        "end": 60.08000183105469,
+        "word": "When"
+      },
+      {
+        "start": 60.08000183105469,
+        "end": 60.2599983215332,
+        "word": "you"
+      },
+      {
+        "start": 60.2599983215332,
+        "end": 60.459999084472656,
+        "word": "click"
+      },
+      {
+        "start": 60.459999084472656,
+        "end": 60.81999969482422,
+        "word": "approve"
+      },
+      {
+        "start": 61.29999923706055,
+        "end": 61.439998626708984,
+        "word": "the"
+      },
+      {
+        "start": 61.439998626708984,
+        "end": 61.65999984741211,
+        "word": "segment"
+      },
+      {
+        "start": 61.65999984741211,
+        "end": 62.060001373291016,
+        "word": "status"
+      },
+      {
+        "start": 62.060001373291016,
+        "end": 62.47999954223633,
+        "word": "updates"
+      },
+      {
+        "start": 62.47999954223633,
+        "end": 62.91999816894531,
+        "word": "and"
+      },
+      {
+        "start": 62.91999816894531,
+        "end": 63.119998931884766,
+        "word": "the"
+      },
+      {
+        "start": 63.119998931884766,
+        "end": 63.41999816894531,
+        "word": "progress"
+      },
+      {
+        "start": 63.41999816894531,
+        "end": 63.720001220703125,
+        "word": "bar"
+      },
+      {
+        "start": 63.720001220703125,
+        "end": 64.08000183105469,
+        "word": "advances"
+      },
+      {
+        "start": 64.81999969482422,
+        "end": 65.08000183105469,
+        "word": "The"
+      },
+      {
+        "start": 65.08000183105469,
+        "end": 65.27999877929688,
+        "word": "Wizard"
+      },
+      {
+        "start": 65.27999877929688,
+        "end": 65.66000366210938,
+        "word": "stores"
+      },
+      {
+        "start": 65.66000366210938,
+        "end": 66.0,
+        "word": "its"
+      },
+      {
+        "start": 66.0,
+        "end": 66.16000366210938,
+        "word": "state"
+      },
+      {
+        "start": 66.16000366210938,
+        "end": 66.37999725341797,
+        "word": "in"
+      },
+      {
+        "start": 66.37999725341797,
+        "end": 66.62000274658203,
+        "word": "a"
+      },
+      {
+        "start": 66.62000274658203,
+        "end": 67.66000366210938,
+        "word": "docgenstate"
+      },
+      {
+        "start": 67.66000366210938,
+        "end": 68.33999633789062,
+        "word": "json"
+      },
+      {
+        "start": 68.33999633789062,
+        "end": 68.66000366210938,
+        "word": "file"
+      },
+      {
+        "start": 69.04000091552734,
+        "end": 69.55999755859375,
+        "word": "This"
+      },
+      {
+        "start": 69.55999755859375,
+        "end": 69.81999969482422,
+        "word": "tracks"
+      },
+      {
+        "start": 69.81999969482422,
+        "end": 70.22000122070312,
+        "word": "which"
+      },
+      {
+        "start": 70.22000122070312,
+        "end": 70.45999908447266,
+        "word": "segments"
+      },
+      {
+        "start": 70.45999908447266,
+        "end": 70.80000305175781,
+        "word": "are"
+      },
+      {
+        "start": 70.80000305175781,
+        "end": 71.0999984741211,
+        "word": "approved"
+      },
+      {
+        "start": 71.5999984741211,
+        "end": 71.73999786376953,
+        "word": "which"
+      },
+      {
+        "start": 71.73999786376953,
+        "end": 71.95999908447266,
+        "word": "need"
+      },
+      {
+        "start": 71.95999908447266,
+        "end": 72.26000213623047,
+        "word": "revision"
+      },
+      {
+        "start": 72.4000015258789,
+        "end": 72.83999633789062,
+        "word": "and"
+      },
+      {
+        "start": 72.83999633789062,
+        "end": 73.13999938964844,
+        "word": "any"
+      },
+      {
+        "start": 73.13999938964844,
+        "end": 73.41999816894531,
+        "word": "notes"
+      },
+      {
+        "start": 73.41999816894531,
+        "end": 74.13999938964844,
+        "word": "The"
+      },
+      {
+        "start": 74.13999938964844,
+        "end": 74.4000015258789,
+        "word": "file"
+      },
+      {
+        "start": 74.4000015258789,
+        "end": 74.66000366210938,
+        "word": "is"
+      },
+      {
+        "start": 74.66000366210938,
+        "end": 74.87999725341797,
+        "word": "local"
+      },
+      {
+        "start": 74.87999725341797,
+        "end": 75.05999755859375,
+        "word": "to"
+      },
+      {
+        "start": 75.05999755859375,
+        "end": 75.19999694824219,
+        "word": "the"
+      },
+      {
+        "start": 75.19999694824219,
+        "end": 75.58000183105469,
+        "word": "project"
+      },
+      {
+        "start": 75.58000183105469,
+        "end": 76.04000091552734,
+        "word": "and"
+      },
+      {
+        "start": 76.04000091552734,
+        "end": 76.4800033569336,
+        "word": "excluded"
+      },
+      {
+        "start": 76.4800033569336,
+        "end": 76.81999969482422,
+        "word": "from"
+      },
+      {
+        "start": 76.81999969482422,
+        "end": 76.9800033569336,
+        "word": "Git"
+      },
+      {
+        "start": 76.9800033569336,
+        "end": 77.23999786376953,
+        "word": "by"
+      },
+      {
+        "start": 77.23999786376953,
+        "end": 77.54000091552734,
+        "word": "default"
+      }
+    ]
+  },
+  "04-tts-pipeline": {
+    "text": "Once your narration scripts are ready, DocGen TTS generates audio. The TTS command reads each narration markdown file, scripts all formatting, headings, bold markers, backtick code, links, stage directions, and horizontal rules. What remains is plain spoken text, exactly what the voice model will say. You can preview the stripping without calling the API. DocGen TTS dry run shows the clean text and character count for every segment. This is useful for estimating audio length and catching any metadata that leaked through. When you run it for real, DocGen calls OpenAI GPT 4.0 mini TTS with the voice and instructions from your config. Each segment produces an MP3 in the audio directory. The file name matches the narration stem. So 01overview.md becomes 01overview.mp3. If you change a single segment, use DocGen TTS segment 01 to regenerate just that one. The rest of the pipeline, Manim, VHS, Compose, then picks up the new audio length automatically. Narration lint runs as part of validation. It catches patterns that should never reach TTS, duration metadata, visual descriptions, section markers, and any remaining markdown syntax. Fix those before generating audio to avoid robotic sounding artifacts.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 2.059999942779541,
+        "text": " Once your narration scripts are ready,"
+      },
+      {
+        "start": 2.799999952316284,
+        "end": 4.659999847412109,
+        "text": " DocGen TTS generates audio."
+      },
+      {
+        "start": 5.380000114440918,
+        "end": 8.15999984741211,
+        "text": " The TTS command reads each narration markdown file,"
+      },
+      {
+        "start": 8.760000228881836,
+        "end": 11.020000457763672,
+        "text": " scripts all formatting, headings, bold markers,"
+      },
+      {
+        "start": 11.600000381469727,
+        "end": 13.640000343322754,
+        "text": " backtick code, links, stage directions,"
+      },
+      {
+        "start": 13.9399995803833,
+        "end": 15.020000457763672,
+        "text": " and horizontal rules."
+      },
+      {
+        "start": 15.760000228881836,
+        "end": 17.719999313354492,
+        "text": " What remains is plain spoken text,"
+      },
+      {
+        "start": 18.219999313354492,
+        "end": 19.81999969482422,
+        "text": " exactly what the voice model will say."
+      },
+      {
+        "start": 20.420000076293945,
+        "end": 22.979999542236328,
+        "text": " You can preview the stripping without calling the API."
+      },
+      {
+        "start": 23.739999771118164,
+        "end": 27.3799991607666,
+        "text": " DocGen TTS dry run shows the clean text and character count"
+      },
+      {
+        "start": 27.3799991607666,
+        "end": 28.280000686645508,
+        "text": " for every segment."
+      },
+      {
+        "start": 28.959999084472656,
+        "end": 31.059999465942383,
+        "text": " This is useful for estimating audio length"
+      },
+      {
+        "start": 31.059999465942383,
+        "end": 33.2599983215332,
+        "text": " and catching any metadata that leaked through."
+      },
+      {
+        "start": 34.02000045776367,
+        "end": 34.939998626708984,
+        "text": " When you run it for real,"
+      },
+      {
+        "start": 35.619998931884766,
+        "end": 38.900001525878906,
+        "text": " DocGen calls OpenAI GPT 4.0 mini TTS"
+      },
+      {
+        "start": 38.900001525878906,
+        "end": 41.439998626708984,
+        "text": " with the voice and instructions from your config."
+      },
+      {
+        "start": 42.15999984741211,
+        "end": 44.81999969482422,
+        "text": " Each segment produces an MP3 in the audio directory."
+      },
+      {
+        "start": 45.560001373291016,
+        "end": 47.5,
+        "text": " The file name matches the narration stem."
+      },
+      {
+        "start": 48.060001373291016,
+        "end": 52.68000030517578,
+        "text": " So 01overview.md becomes 01overview.mp3."
+      },
+      {
+        "start": 53.400001525878906,
+        "end": 54.65999984741211,
+        "text": " If you change a single segment,"
+      },
+      {
+        "start": 54.65999984741211,
+        "end": 59.040000915527344,
+        "text": " use DocGen TTS segment 01 to regenerate just that one."
+      },
+      {
+        "start": 59.720001220703125,
+        "end": 62.97999954223633,
+        "text": " The rest of the pipeline, Manim, VHS, Compose,"
+      },
+      {
+        "start": 63.18000030517578,
+        "end": 65.63999938964844,
+        "text": " then picks up the new audio length automatically."
+      },
+      {
+        "start": 66.5999984741211,
+        "end": 68.33999633789062,
+        "text": " Narration lint runs as part of validation."
+      },
+      {
+        "start": 69.19999694824219,
+        "end": 71.44000244140625,
+        "text": " It catches patterns that should never reach TTS,"
+      },
+      {
+        "start": 72.23999786376953,
+        "end": 74.95999908447266,
+        "text": " duration metadata, visual descriptions, section markers,"
+      },
+      {
+        "start": 75.05999755859375,
+        "end": 77.04000091552734,
+        "text": " and any remaining markdown syntax."
+      },
+      {
+        "start": 78.0,
+        "end": 79.5,
+        "text": " Fix those before generating audio"
+      },
+      {
+        "start": 79.5,
+        "end": 81.72000122070312,
+        "text": " to avoid robotic sounding artifacts."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.3799999952316284,
+        "word": "Once"
+      },
+      {
+        "start": 0.3799999952316284,
+        "end": 0.6399999856948853,
+        "word": "your"
+      },
+      {
+        "start": 0.6399999856948853,
+        "end": 1.1200000047683716,
+        "word": "narration"
+      },
+      {
+        "start": 1.1200000047683716,
+        "end": 1.4199999570846558,
+        "word": "scripts"
+      },
+      {
+        "start": 1.4199999570846558,
+        "end": 1.7000000476837158,
+        "word": "are"
+      },
+      {
+        "start": 1.7000000476837158,
+        "end": 2.059999942779541,
+        "word": "ready"
+      },
+      {
+        "start": 2.799999952316284,
+        "end": 2.880000114440918,
+        "word": "DocGen"
+      },
+      {
+        "start": 2.880000114440918,
+        "end": 3.5799999237060547,
+        "word": "TTS"
+      },
+      {
+        "start": 3.5799999237060547,
+        "end": 4.21999979019165,
+        "word": "generates"
+      },
+      {
+        "start": 4.21999979019165,
+        "end": 4.659999847412109,
+        "word": "audio"
+      },
+      {
+        "start": 5.380000114440918,
+        "end": 5.460000038146973,
+        "word": "The"
+      },
+      {
+        "start": 5.460000038146973,
+        "end": 5.900000095367432,
+        "word": "TTS"
+      },
+      {
+        "start": 5.900000095367432,
+        "end": 6.300000190734863,
+        "word": "command"
+      },
+      {
+        "start": 6.300000190734863,
+        "end": 6.559999942779541,
+        "word": "reads"
+      },
+      {
+        "start": 6.559999942779541,
+        "end": 6.940000057220459,
+        "word": "each"
+      },
+      {
+        "start": 6.940000057220459,
+        "end": 7.340000152587891,
+        "word": "narration"
+      },
+      {
+        "start": 7.340000152587891,
+        "end": 7.820000171661377,
+        "word": "markdown"
+      },
+      {
+        "start": 7.820000171661377,
+        "end": 8.15999984741211,
+        "word": "file"
+      },
+      {
+        "start": 8.760000228881836,
+        "end": 8.779999732971191,
+        "word": "scripts"
+      },
+      {
+        "start": 8.779999732971191,
+        "end": 9.199999809265137,
+        "word": "all"
+      },
+      {
+        "start": 9.199999809265137,
+        "end": 9.5,
+        "word": "formatting"
+      },
+      {
+        "start": 9.9399995803833,
+        "end": 10.15999984741211,
+        "word": "headings"
+      },
+      {
+        "start": 10.640000343322754,
+        "end": 10.739999771118164,
+        "word": "bold"
+      },
+      {
+        "start": 10.739999771118164,
+        "end": 11.020000457763672,
+        "word": "markers"
+      },
+      {
+        "start": 11.600000381469727,
+        "end": 11.800000190734863,
+        "word": "backtick"
+      },
+      {
+        "start": 11.800000190734863,
+        "end": 12.119999885559082,
+        "word": "code"
+      },
+      {
+        "start": 12.600000381469727,
+        "end": 12.619999885559082,
+        "word": "links"
+      },
+      {
+        "start": 13.15999984741211,
+        "end": 13.220000267028809,
+        "word": "stage"
+      },
+      {
+        "start": 13.220000267028809,
+        "end": 13.640000343322754,
+        "word": "directions"
+      },
+      {
+        "start": 13.9399995803833,
+        "end": 14.619999885559082,
+        "word": "and"
+      },
+      {
+        "start": 14.619999885559082,
+        "end": 14.619999885559082,
+        "word": "horizontal"
+      },
+      {
+        "start": 14.619999885559082,
+        "end": 15.020000457763672,
+        "word": "rules"
+      },
+      {
+        "start": 15.760000228881836,
+        "end": 16.200000762939453,
+        "word": "What"
+      },
+      {
+        "start": 16.200000762939453,
+        "end": 16.520000457763672,
+        "word": "remains"
+      },
+      {
+        "start": 16.520000457763672,
+        "end": 16.760000228881836,
+        "word": "is"
+      },
+      {
+        "start": 16.760000228881836,
+        "end": 17.040000915527344,
+        "word": "plain"
+      },
+      {
+        "start": 17.040000915527344,
+        "end": 17.34000015258789,
+        "word": "spoken"
+      },
+      {
+        "start": 17.34000015258789,
+        "end": 17.719999313354492,
+        "word": "text"
+      },
+      {
+        "start": 18.219999313354492,
+        "end": 18.520000457763672,
+        "word": "exactly"
+      },
+      {
+        "start": 18.520000457763672,
+        "end": 18.739999771118164,
+        "word": "what"
+      },
+      {
+        "start": 18.739999771118164,
+        "end": 18.899999618530273,
+        "word": "the"
+      },
+      {
+        "start": 18.899999618530273,
+        "end": 19.1200008392334,
+        "word": "voice"
+      },
+      {
+        "start": 19.1200008392334,
+        "end": 19.34000015258789,
+        "word": "model"
+      },
+      {
+        "start": 19.34000015258789,
+        "end": 19.579999923706055,
+        "word": "will"
+      },
+      {
+        "start": 19.579999923706055,
+        "end": 19.81999969482422,
+        "word": "say"
+      },
+      {
+        "start": 20.420000076293945,
+        "end": 20.559999465942383,
+        "word": "You"
+      },
+      {
+        "start": 20.559999465942383,
+        "end": 20.81999969482422,
+        "word": "can"
+      },
+      {
+        "start": 20.81999969482422,
+        "end": 21.100000381469727,
+        "word": "preview"
+      },
+      {
+        "start": 21.100000381469727,
+        "end": 21.540000915527344,
+        "word": "the"
+      },
+      {
+        "start": 21.540000915527344,
+        "end": 21.579999923706055,
+        "word": "stripping"
+      },
+      {
+        "start": 21.579999923706055,
+        "end": 22.0,
+        "word": "without"
+      },
+      {
+        "start": 22.0,
+        "end": 22.34000015258789,
+        "word": "calling"
+      },
+      {
+        "start": 22.34000015258789,
+        "end": 22.719999313354492,
+        "word": "the"
+      },
+      {
+        "start": 22.719999313354492,
+        "end": 22.979999542236328,
+        "word": "API"
+      },
+      {
+        "start": 23.739999771118164,
+        "end": 24.139999389648438,
+        "word": "DocGen"
+      },
+      {
+        "start": 24.139999389648438,
+        "end": 24.68000030517578,
+        "word": "TTS"
+      },
+      {
+        "start": 24.68000030517578,
+        "end": 25.079999923706055,
+        "word": "dry"
+      },
+      {
+        "start": 25.079999923706055,
+        "end": 25.239999771118164,
+        "word": "run"
+      },
+      {
+        "start": 25.239999771118164,
+        "end": 25.760000228881836,
+        "word": "shows"
+      },
+      {
+        "start": 25.760000228881836,
+        "end": 25.979999542236328,
+        "word": "the"
+      },
+      {
+        "start": 25.979999542236328,
+        "end": 26.260000228881836,
+        "word": "clean"
+      },
+      {
+        "start": 26.260000228881836,
+        "end": 26.520000457763672,
+        "word": "text"
+      },
+      {
+        "start": 26.520000457763672,
+        "end": 26.860000610351562,
+        "word": "and"
+      },
+      {
+        "start": 26.860000610351562,
+        "end": 27.100000381469727,
+        "word": "character"
+      },
+      {
+        "start": 27.100000381469727,
+        "end": 27.3799991607666,
+        "word": "count"
+      },
+      {
+        "start": 27.3799991607666,
+        "end": 27.65999984741211,
+        "word": "for"
+      },
+      {
+        "start": 27.65999984741211,
+        "end": 28.020000457763672,
+        "word": "every"
+      },
+      {
+        "start": 28.020000457763672,
+        "end": 28.280000686645508,
+        "word": "segment"
+      },
+      {
+        "start": 28.760000228881836,
+        "end": 29.079999923706055,
+        "word": "This"
+      },
+      {
+        "start": 29.079999923706055,
+        "end": 29.299999237060547,
+        "word": "is"
+      },
+      {
+        "start": 29.299999237060547,
+        "end": 29.6200008392334,
+        "word": "useful"
+      },
+      {
+        "start": 29.6200008392334,
+        "end": 30.020000457763672,
+        "word": "for"
+      },
+      {
+        "start": 30.020000457763672,
+        "end": 30.34000015258789,
+        "word": "estimating"
+      },
+      {
+        "start": 30.34000015258789,
+        "end": 30.81999969482422,
+        "word": "audio"
+      },
+      {
+        "start": 30.81999969482422,
+        "end": 31.059999465942383,
+        "word": "length"
+      },
+      {
+        "start": 31.059999465942383,
+        "end": 31.360000610351562,
+        "word": "and"
+      },
+      {
+        "start": 31.360000610351562,
+        "end": 31.6200008392334,
+        "word": "catching"
+      },
+      {
+        "start": 31.6200008392334,
+        "end": 32.060001373291016,
+        "word": "any"
+      },
+      {
+        "start": 32.060001373291016,
+        "end": 32.400001525878906,
+        "word": "metadata"
+      },
+      {
+        "start": 32.400001525878906,
+        "end": 32.68000030517578,
+        "word": "that"
+      },
+      {
+        "start": 32.68000030517578,
+        "end": 32.86000061035156,
+        "word": "leaked"
+      },
+      {
+        "start": 32.86000061035156,
+        "end": 33.2599983215332,
+        "word": "through"
+      },
+      {
+        "start": 34.02000045776367,
+        "end": 34.040000915527344,
+        "word": "When"
+      },
+      {
+        "start": 34.040000915527344,
+        "end": 34.220001220703125,
+        "word": "you"
+      },
+      {
+        "start": 34.220001220703125,
+        "end": 34.36000061035156,
+        "word": "run"
+      },
+      {
+        "start": 34.36000061035156,
+        "end": 34.47999954223633,
+        "word": "it"
+      },
+      {
+        "start": 34.47999954223633,
+        "end": 34.65999984741211,
+        "word": "for"
+      },
+      {
+        "start": 34.65999984741211,
+        "end": 34.939998626708984,
+        "word": "real"
+      },
+      {
+        "start": 35.619998931884766,
+        "end": 35.68000030517578,
+        "word": "DocGen"
+      },
+      {
+        "start": 35.68000030517578,
+        "end": 36.08000183105469,
+        "word": "calls"
+      },
+      {
+        "start": 36.08000183105469,
+        "end": 36.84000015258789,
+        "word": "OpenAI"
+      },
+      {
+        "start": 36.84000015258789,
+        "end": 37.459999084472656,
+        "word": "GPT"
+      },
+      {
+        "start": 37.459999084472656,
+        "end": 37.70000076293945,
+        "word": "4"
+      },
+      {
+        "start": 37.70000076293945,
+        "end": 38.099998474121094,
+        "word": "0"
+      },
+      {
+        "start": 38.099998474121094,
+        "end": 38.459999084472656,
+        "word": "mini"
+      },
+      {
+        "start": 38.459999084472656,
+        "end": 38.900001525878906,
+        "word": "TTS"
+      },
+      {
+        "start": 38.900001525878906,
+        "end": 39.459999084472656,
+        "word": "with"
+      },
+      {
+        "start": 39.459999084472656,
+        "end": 39.720001220703125,
+        "word": "the"
+      },
+      {
+        "start": 39.720001220703125,
+        "end": 39.91999816894531,
+        "word": "voice"
+      },
+      {
+        "start": 39.91999816894531,
+        "end": 40.29999923706055,
+        "word": "and"
+      },
+      {
+        "start": 40.29999923706055,
+        "end": 40.58000183105469,
+        "word": "instructions"
+      },
+      {
+        "start": 40.58000183105469,
+        "end": 40.880001068115234,
+        "word": "from"
+      },
+      {
+        "start": 40.880001068115234,
+        "end": 41.08000183105469,
+        "word": "your"
+      },
+      {
+        "start": 41.08000183105469,
+        "end": 41.439998626708984,
+        "word": "config"
+      },
+      {
+        "start": 42.15999984741211,
+        "end": 42.41999816894531,
+        "word": "Each"
+      },
+      {
+        "start": 42.41999816894531,
+        "end": 42.68000030517578,
+        "word": "segment"
+      },
+      {
+        "start": 42.68000030517578,
+        "end": 43.119998931884766,
+        "word": "produces"
+      },
+      {
+        "start": 43.119998931884766,
+        "end": 43.47999954223633,
+        "word": "an"
+      },
+      {
+        "start": 43.47999954223633,
+        "end": 43.81999969482422,
+        "word": "MP3"
+      },
+      {
+        "start": 43.81999969482422,
+        "end": 44.0,
+        "word": "in"
+      },
+      {
+        "start": 44.0,
+        "end": 44.13999938964844,
+        "word": "the"
+      },
+      {
+        "start": 44.13999938964844,
+        "end": 44.459999084472656,
+        "word": "audio"
+      },
+      {
+        "start": 44.459999084472656,
+        "end": 44.81999969482422,
+        "word": "directory"
+      },
+      {
+        "start": 45.560001373291016,
+        "end": 45.720001220703125,
+        "word": "The"
+      },
+      {
+        "start": 45.720001220703125,
+        "end": 46.040000915527344,
+        "word": "file"
+      },
+      {
+        "start": 46.040000915527344,
+        "end": 46.29999923706055,
+        "word": "name"
+      },
+      {
+        "start": 46.29999923706055,
+        "end": 46.540000915527344,
+        "word": "matches"
+      },
+      {
+        "start": 46.540000915527344,
+        "end": 47.20000076293945,
+        "word": "the"
+      },
+      {
+        "start": 47.20000076293945,
+        "end": 47.20000076293945,
+        "word": "narration"
+      },
+      {
+        "start": 47.20000076293945,
+        "end": 47.5,
+        "word": "stem"
+      },
+      {
+        "start": 48.060001373291016,
+        "end": 48.380001068115234,
+        "word": "So"
+      },
+      {
+        "start": 48.380001068115234,
+        "end": 49.31999969482422,
+        "word": "01overview"
+      },
+      {
+        "start": 49.31999969482422,
+        "end": 50.0,
+        "word": "md"
+      },
+      {
+        "start": 50.0,
+        "end": 50.779998779296875,
+        "word": "becomes"
+      },
+      {
+        "start": 50.779998779296875,
+        "end": 51.7599983215332,
+        "word": "01overview"
+      },
+      {
+        "start": 51.7599983215332,
+        "end": 52.68000030517578,
+        "word": "mp3"
+      },
+      {
+        "start": 53.18000030517578,
+        "end": 53.5,
+        "word": "If"
+      },
+      {
+        "start": 53.5,
+        "end": 53.68000030517578,
+        "word": "you"
+      },
+      {
+        "start": 53.68000030517578,
+        "end": 53.900001525878906,
+        "word": "change"
+      },
+      {
+        "start": 53.900001525878906,
+        "end": 54.13999938964844,
+        "word": "a"
+      },
+      {
+        "start": 54.13999938964844,
+        "end": 54.36000061035156,
+        "word": "single"
+      },
+      {
+        "start": 54.36000061035156,
+        "end": 54.65999984741211,
+        "word": "segment"
+      },
+      {
+        "start": 54.65999984741211,
+        "end": 55.34000015258789,
+        "word": "use"
+      },
+      {
+        "start": 55.34000015258789,
+        "end": 55.91999816894531,
+        "word": "DocGen"
+      },
+      {
+        "start": 55.91999816894531,
+        "end": 56.41999816894531,
+        "word": "TTS"
+      },
+      {
+        "start": 56.41999816894531,
+        "end": 56.779998779296875,
+        "word": "segment"
+      },
+      {
+        "start": 56.779998779296875,
+        "end": 57.279998779296875,
+        "word": "01"
+      },
+      {
+        "start": 57.279998779296875,
+        "end": 57.880001068115234,
+        "word": "to"
+      },
+      {
+        "start": 57.880001068115234,
+        "end": 58.380001068115234,
+        "word": "regenerate"
+      },
+      {
+        "start": 58.380001068115234,
+        "end": 58.619998931884766,
+        "word": "just"
+      },
+      {
+        "start": 58.619998931884766,
+        "end": 58.84000015258789,
+        "word": "that"
+      },
+      {
+        "start": 58.84000015258789,
+        "end": 59.040000915527344,
+        "word": "one"
+      },
+      {
+        "start": 59.720001220703125,
+        "end": 59.959999084472656,
+        "word": "The"
+      },
+      {
+        "start": 59.959999084472656,
+        "end": 60.15999984741211,
+        "word": "rest"
+      },
+      {
+        "start": 60.15999984741211,
+        "end": 60.31999969482422,
+        "word": "of"
+      },
+      {
+        "start": 60.31999969482422,
+        "end": 60.52000045776367,
+        "word": "the"
+      },
+      {
+        "start": 60.52000045776367,
+        "end": 60.81999969482422,
+        "word": "pipeline"
+      },
+      {
+        "start": 61.5,
+        "end": 61.52000045776367,
+        "word": "Manim"
+      },
+      {
+        "start": 61.84000015258789,
+        "end": 62.31999969482422,
+        "word": "VHS"
+      },
+      {
+        "start": 62.70000076293945,
+        "end": 62.97999954223633,
+        "word": "Compose"
+      },
+      {
+        "start": 63.18000030517578,
+        "end": 63.70000076293945,
+        "word": "then"
+      },
+      {
+        "start": 63.70000076293945,
+        "end": 63.880001068115234,
+        "word": "picks"
+      },
+      {
+        "start": 63.880001068115234,
+        "end": 64.08000183105469,
+        "word": "up"
+      },
+      {
+        "start": 64.08000183105469,
+        "end": 64.19999694824219,
+        "word": "the"
+      },
+      {
+        "start": 64.19999694824219,
+        "end": 64.5199966430664,
+        "word": "new"
+      },
+      {
+        "start": 64.5199966430664,
+        "end": 64.77999877929688,
+        "word": "audio"
+      },
+      {
+        "start": 64.77999877929688,
+        "end": 65.08000183105469,
+        "word": "length"
+      },
+      {
+        "start": 65.08000183105469,
+        "end": 65.63999938964844,
+        "word": "automatically"
+      },
+      {
+        "start": 66.5999984741211,
+        "end": 66.87999725341797,
+        "word": "Narration"
+      },
+      {
+        "start": 66.87999725341797,
+        "end": 67.04000091552734,
+        "word": "lint"
+      },
+      {
+        "start": 67.04000091552734,
+        "end": 67.36000061035156,
+        "word": "runs"
+      },
+      {
+        "start": 67.36000061035156,
+        "end": 67.66000366210938,
+        "word": "as"
+      },
+      {
+        "start": 67.66000366210938,
+        "end": 67.81999969482422,
+        "word": "part"
+      },
+      {
+        "start": 67.81999969482422,
+        "end": 68.33999633789062,
+        "word": "of"
+      },
+      {
+        "start": 68.33999633789062,
+        "end": 68.33999633789062,
+        "word": "validation"
+      },
+      {
+        "start": 69.19999694824219,
+        "end": 69.30000305175781,
+        "word": "It"
+      },
+      {
+        "start": 69.30000305175781,
+        "end": 69.5999984741211,
+        "word": "catches"
+      },
+      {
+        "start": 69.5999984741211,
+        "end": 69.95999908447266,
+        "word": "patterns"
+      },
+      {
+        "start": 69.95999908447266,
+        "end": 70.26000213623047,
+        "word": "that"
+      },
+      {
+        "start": 70.26000213623047,
+        "end": 70.44000244140625,
+        "word": "should"
+      },
+      {
+        "start": 70.44000244140625,
+        "end": 70.68000030517578,
+        "word": "never"
+      },
+      {
+        "start": 70.68000030517578,
+        "end": 70.95999908447266,
+        "word": "reach"
+      },
+      {
+        "start": 70.95999908447266,
+        "end": 71.44000244140625,
+        "word": "TTS"
+      },
+      {
+        "start": 72.23999786376953,
+        "end": 72.30000305175781,
+        "word": "duration"
+      },
+      {
+        "start": 72.30000305175781,
+        "end": 72.73999786376953,
+        "word": "metadata"
+      },
+      {
+        "start": 73.4000015258789,
+        "end": 73.4800033569336,
+        "word": "visual"
+      },
+      {
+        "start": 73.4800033569336,
+        "end": 73.9000015258789,
+        "word": "descriptions"
+      },
+      {
+        "start": 74.5999984741211,
+        "end": 74.63999938964844,
+        "word": "section"
+      },
+      {
+        "start": 74.63999938964844,
+        "end": 74.95999908447266,
+        "word": "markers"
+      },
+      {
+        "start": 75.05999755859375,
+        "end": 75.45999908447266,
+        "word": "and"
+      },
+      {
+        "start": 75.45999908447266,
+        "end": 75.80000305175781,
+        "word": "any"
+      },
+      {
+        "start": 75.80000305175781,
+        "end": 76.0999984741211,
+        "word": "remaining"
+      },
+      {
+        "start": 76.0999984741211,
+        "end": 76.58000183105469,
+        "word": "markdown"
+      },
+      {
+        "start": 76.58000183105469,
+        "end": 77.04000091552734,
+        "word": "syntax"
+      },
+      {
+        "start": 78.0,
+        "end": 78.05999755859375,
+        "word": "Fix"
+      },
+      {
+        "start": 78.05999755859375,
+        "end": 78.30000305175781,
+        "word": "those"
+      },
+      {
+        "start": 78.30000305175781,
+        "end": 78.66000366210938,
+        "word": "before"
+      },
+      {
+        "start": 78.66000366210938,
+        "end": 79.05999755859375,
+        "word": "generating"
+      },
+      {
+        "start": 79.05999755859375,
+        "end": 79.5,
+        "word": "audio"
+      },
+      {
+        "start": 79.5,
+        "end": 79.95999908447266,
+        "word": "to"
+      },
+      {
+        "start": 79.95999908447266,
+        "end": 80.23999786376953,
+        "word": "avoid"
+      },
+      {
+        "start": 80.23999786376953,
+        "end": 80.77999877929688,
+        "word": "robotic"
+      },
+      {
+        "start": 80.77999877929688,
+        "end": 81.16000366210938,
+        "word": "sounding"
+      },
+      {
+        "start": 81.16000366210938,
+        "end": 81.72000122070312,
+        "word": "artifacts"
+      }
+    ]
+  },
+  "05-compose-validate": {
+    "text": "Composition is where audio meets video. DocGen Compose takes the TTS audio and the visual source for each segment and produces a final MP4. The visual map in docgen.yaml tells Compose where to find each segment's video. A segment can be a MANIM animation, a VHS terminal recording, a mix of both, a still image, or a solid color background. When the video is shorter than the audio, Compose freezes the last frame to fill the gap. This looks natural, like a pause on the final visual. When the video is longer, it trims to match the audio length. The result is always a clean mux with synchronized streams. After composing, validation runs automatically. DocGen Validate checks every recording for three things. First, that both audio and video streams are present. Second, that the duration drift between streams is within your configured threshold. Default, 2.75 seconds. Third, that the narration source file passes lint. Use DocGen Validate PrePush for a strict gate. It exits non-zero on any failure, so CI and PrePush hooks can block bad recordings from reaching the repository. Finally, DocGen CONCAT assembles individual segments into a full demo file according to your CONCAT configuration. You can define multiple CONCAT targets, for example, a core demo and an extended version with extra segments.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 3.380000114440918,
+        "text": " Composition is where audio meets video."
+      },
+      {
+        "start": 4.340000152587891,
+        "end": 8.380000114440918,
+        "text": " DocGen Compose takes the TTS audio and the visual source"
+      },
+      {
+        "start": 8.380000114440918,
+        "end": 12.079999923706055,
+        "text": " for each segment and produces a final MP4."
+      },
+      {
+        "start": 12.479999542236328,
+        "end": 15.9399995803833,
+        "text": " The visual map in docgen.yaml tells Compose"
+      },
+      {
+        "start": 15.9399995803833,
+        "end": 17.959999084472656,
+        "text": " where to find each segment's video."
+      },
+      {
+        "start": 18.479999542236328,
+        "end": 20.940000534057617,
+        "text": " A segment can be a MANIM animation,"
+      },
+      {
+        "start": 21.579999923706055,
+        "end": 24.739999771118164,
+        "text": " a VHS terminal recording, a mix of both,"
+      },
+      {
+        "start": 25.219999313354492,
+        "end": 27.940000534057617,
+        "text": " a still image, or a solid color background."
+      },
+      {
+        "start": 28.700000762939453,
+        "end": 30.68000030517578,
+        "text": " When the video is shorter than the audio,"
+      },
+      {
+        "start": 31.65999984741211,
+        "end": 33.900001525878906,
+        "text": " Compose freezes the last frame to fill the gap."
+      },
+      {
+        "start": 34.779998779296875,
+        "end": 37.86000061035156,
+        "text": " This looks natural, like a pause on the final visual."
+      },
+      {
+        "start": 38.68000030517578,
+        "end": 42.34000015258789,
+        "text": " When the video is longer, it trims to match the audio length."
+      },
+      {
+        "start": 43.060001373291016,
+        "end": 46.70000076293945,
+        "text": " The result is always a clean mux with synchronized streams."
+      },
+      {
+        "start": 47.439998626708984,
+        "end": 50.29999923706055,
+        "text": " After composing, validation runs automatically."
+      },
+      {
+        "start": 51.119998931884766,
+        "end": 54.58000183105469,
+        "text": " DocGen Validate checks every recording for three things."
+      },
+      {
+        "start": 55.2599983215332,
+        "end": 58.47999954223633,
+        "text": " First, that both audio and video streams are present."
+      },
+      {
+        "start": 59.560001373291016,
+        "end": 61.63999938964844,
+        "text": " Second, that the duration drift between streams"
+      },
+      {
+        "start": 61.63999938964844,
+        "end": 63.5,
+        "text": " is within your configured threshold."
+      },
+      {
+        "start": 64.41999816894531,
+        "end": 66.16000366210938,
+        "text": " Default, 2.75 seconds."
+      },
+      {
+        "start": 67.19999694824219,
+        "end": 69.58000183105469,
+        "text": " Third, that the narration source file passes lint."
+      },
+      {
+        "start": 70.5,
+        "end": 73.37999725341797,
+        "text": " Use DocGen Validate PrePush for a strict gate."
+      },
+      {
+        "start": 74.04000091552734,
+        "end": 76.12000274658203,
+        "text": " It exits non-zero on any failure,"
+      },
+      {
+        "start": 76.4000015258789,
+        "end": 79.37999725341797,
+        "text": " so CI and PrePush hooks can block bad recordings"
+      },
+      {
+        "start": 79.37999725341797,
+        "end": 80.69999694824219,
+        "text": " from reaching the repository."
+      },
+      {
+        "start": 81.45999908447266,
+        "end": 85.31999969482422,
+        "text": " Finally, DocGen CONCAT assembles individual segments"
+      },
+      {
+        "start": 85.31999969482422,
+        "end": 87.08000183105469,
+        "text": " into a full demo file"
+      },
+      {
+        "start": 87.08000183105469,
+        "end": 89.13999938964844,
+        "text": " according to your CONCAT configuration."
+      },
+      {
+        "start": 89.95999908447266,
+        "end": 91.87999725341797,
+        "text": " You can define multiple CONCAT targets,"
+      },
+      {
+        "start": 92.37999725341797,
+        "end": 93.5,
+        "text": " for example, a core demo"
+      },
+      {
+        "start": 93.5,
+        "end": 95.9800033569336,
+        "text": " and an extended version with extra segments."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.7400000095367432,
+        "word": "Composition"
+      },
+      {
+        "start": 0.7400000095367432,
+        "end": 1.399999976158142,
+        "word": "is"
+      },
+      {
+        "start": 1.399999976158142,
+        "end": 1.6799999475479126,
+        "word": "where"
+      },
+      {
+        "start": 1.6799999475479126,
+        "end": 2.259999990463257,
+        "word": "audio"
+      },
+      {
+        "start": 2.259999990463257,
+        "end": 2.7200000286102295,
+        "word": "meets"
+      },
+      {
+        "start": 2.7200000286102295,
+        "end": 3.380000114440918,
+        "word": "video"
+      },
+      {
+        "start": 4.340000152587891,
+        "end": 4.5,
+        "word": "DocGen"
+      },
+      {
+        "start": 4.5,
+        "end": 5.159999847412109,
+        "word": "Compose"
+      },
+      {
+        "start": 5.159999847412109,
+        "end": 5.619999885559082,
+        "word": "takes"
+      },
+      {
+        "start": 5.619999885559082,
+        "end": 6.039999961853027,
+        "word": "the"
+      },
+      {
+        "start": 6.039999961853027,
+        "end": 6.380000114440918,
+        "word": "TTS"
+      },
+      {
+        "start": 6.380000114440918,
+        "end": 6.880000114440918,
+        "word": "audio"
+      },
+      {
+        "start": 6.880000114440918,
+        "end": 7.460000038146973,
+        "word": "and"
+      },
+      {
+        "start": 7.460000038146973,
+        "end": 7.78000020980835,
+        "word": "the"
+      },
+      {
+        "start": 7.78000020980835,
+        "end": 8.0,
+        "word": "visual"
+      },
+      {
+        "start": 8.0,
+        "end": 8.380000114440918,
+        "word": "source"
+      },
+      {
+        "start": 8.380000114440918,
+        "end": 8.640000343322754,
+        "word": "for"
+      },
+      {
+        "start": 8.640000343322754,
+        "end": 8.979999542236328,
+        "word": "each"
+      },
+      {
+        "start": 8.979999542236328,
+        "end": 9.15999984741211,
+        "word": "segment"
+      },
+      {
+        "start": 9.15999984741211,
+        "end": 10.020000457763672,
+        "word": "and"
+      },
+      {
+        "start": 10.020000457763672,
+        "end": 10.399999618530273,
+        "word": "produces"
+      },
+      {
+        "start": 10.399999618530273,
+        "end": 10.9399995803833,
+        "word": "a"
+      },
+      {
+        "start": 10.9399995803833,
+        "end": 11.260000228881836,
+        "word": "final"
+      },
+      {
+        "start": 11.260000228881836,
+        "end": 12.079999923706055,
+        "word": "MP4"
+      },
+      {
+        "start": 12.479999542236328,
+        "end": 12.920000076293945,
+        "word": "The"
+      },
+      {
+        "start": 12.920000076293945,
+        "end": 13.260000228881836,
+        "word": "visual"
+      },
+      {
+        "start": 13.260000228881836,
+        "end": 13.539999961853027,
+        "word": "map"
+      },
+      {
+        "start": 13.539999961853027,
+        "end": 13.880000114440918,
+        "word": "in"
+      },
+      {
+        "start": 13.880000114440918,
+        "end": 14.180000305175781,
+        "word": "docgen"
+      },
+      {
+        "start": 14.180000305175781,
+        "end": 14.84000015258789,
+        "word": "yaml"
+      },
+      {
+        "start": 14.84000015258789,
+        "end": 15.579999923706055,
+        "word": "tells"
+      },
+      {
+        "start": 15.579999923706055,
+        "end": 15.9399995803833,
+        "word": "Compose"
+      },
+      {
+        "start": 15.9399995803833,
+        "end": 16.360000610351562,
+        "word": "where"
+      },
+      {
+        "start": 16.360000610351562,
+        "end": 16.899999618530273,
+        "word": "to"
+      },
+      {
+        "start": 16.899999618530273,
+        "end": 16.899999618530273,
+        "word": "find"
+      },
+      {
+        "start": 16.899999618530273,
+        "end": 17.239999771118164,
+        "word": "each"
+      },
+      {
+        "start": 17.239999771118164,
+        "end": 17.959999084472656,
+        "word": "segment's"
+      },
+      {
+        "start": 17.959999084472656,
+        "end": 17.959999084472656,
+        "word": "video"
+      },
+      {
+        "start": 18.479999542236328,
+        "end": 19.0,
+        "word": "A"
+      },
+      {
+        "start": 19.0,
+        "end": 19.200000762939453,
+        "word": "segment"
+      },
+      {
+        "start": 19.200000762939453,
+        "end": 19.739999771118164,
+        "word": "can"
+      },
+      {
+        "start": 19.739999771118164,
+        "end": 19.920000076293945,
+        "word": "be"
+      },
+      {
+        "start": 19.920000076293945,
+        "end": 20.280000686645508,
+        "word": "a"
+      },
+      {
+        "start": 20.280000686645508,
+        "end": 20.360000610351562,
+        "word": "MANIM"
+      },
+      {
+        "start": 20.360000610351562,
+        "end": 20.940000534057617,
+        "word": "animation"
+      },
+      {
+        "start": 21.579999923706055,
+        "end": 21.8799991607666,
+        "word": "a"
+      },
+      {
+        "start": 21.8799991607666,
+        "end": 22.34000015258789,
+        "word": "VHS"
+      },
+      {
+        "start": 22.34000015258789,
+        "end": 22.799999237060547,
+        "word": "terminal"
+      },
+      {
+        "start": 22.799999237060547,
+        "end": 23.239999771118164,
+        "word": "recording"
+      },
+      {
+        "start": 23.780000686645508,
+        "end": 24.239999771118164,
+        "word": "a"
+      },
+      {
+        "start": 24.239999771118164,
+        "end": 24.239999771118164,
+        "word": "mix"
+      },
+      {
+        "start": 24.239999771118164,
+        "end": 24.5,
+        "word": "of"
+      },
+      {
+        "start": 24.5,
+        "end": 24.739999771118164,
+        "word": "both"
+      },
+      {
+        "start": 25.219999313354492,
+        "end": 25.639999389648438,
+        "word": "a"
+      },
+      {
+        "start": 25.639999389648438,
+        "end": 25.8799991607666,
+        "word": "still"
+      },
+      {
+        "start": 25.8799991607666,
+        "end": 26.18000030517578,
+        "word": "image"
+      },
+      {
+        "start": 26.479999542236328,
+        "end": 26.700000762939453,
+        "word": "or"
+      },
+      {
+        "start": 26.700000762939453,
+        "end": 27.200000762939453,
+        "word": "a"
+      },
+      {
+        "start": 27.200000762939453,
+        "end": 27.200000762939453,
+        "word": "solid"
+      },
+      {
+        "start": 27.200000762939453,
+        "end": 27.559999465942383,
+        "word": "color"
+      },
+      {
+        "start": 27.559999465942383,
+        "end": 27.940000534057617,
+        "word": "background"
+      },
+      {
+        "start": 28.479999542236328,
+        "end": 28.84000015258789,
+        "word": "When"
+      },
+      {
+        "start": 28.84000015258789,
+        "end": 29.020000457763672,
+        "word": "the"
+      },
+      {
+        "start": 29.020000457763672,
+        "end": 29.360000610351562,
+        "word": "video"
+      },
+      {
+        "start": 29.360000610351562,
+        "end": 29.65999984741211,
+        "word": "is"
+      },
+      {
+        "start": 29.65999984741211,
+        "end": 29.899999618530273,
+        "word": "shorter"
+      },
+      {
+        "start": 29.899999618530273,
+        "end": 30.139999389648438,
+        "word": "than"
+      },
+      {
+        "start": 30.139999389648438,
+        "end": 30.479999542236328,
+        "word": "the"
+      },
+      {
+        "start": 30.479999542236328,
+        "end": 30.68000030517578,
+        "word": "audio"
+      },
+      {
+        "start": 31.65999984741211,
+        "end": 31.68000030517578,
+        "word": "Compose"
+      },
+      {
+        "start": 31.68000030517578,
+        "end": 32.220001220703125,
+        "word": "freezes"
+      },
+      {
+        "start": 32.220001220703125,
+        "end": 32.459999084472656,
+        "word": "the"
+      },
+      {
+        "start": 32.459999084472656,
+        "end": 32.84000015258789,
+        "word": "last"
+      },
+      {
+        "start": 32.84000015258789,
+        "end": 33.08000183105469,
+        "word": "frame"
+      },
+      {
+        "start": 33.08000183105469,
+        "end": 33.34000015258789,
+        "word": "to"
+      },
+      {
+        "start": 33.34000015258789,
+        "end": 33.47999954223633,
+        "word": "fill"
+      },
+      {
+        "start": 33.47999954223633,
+        "end": 33.900001525878906,
+        "word": "the"
+      },
+      {
+        "start": 33.900001525878906,
+        "end": 33.900001525878906,
+        "word": "gap"
+      },
+      {
+        "start": 34.779998779296875,
+        "end": 34.900001525878906,
+        "word": "This"
+      },
+      {
+        "start": 34.900001525878906,
+        "end": 35.15999984741211,
+        "word": "looks"
+      },
+      {
+        "start": 35.15999984741211,
+        "end": 35.68000030517578,
+        "word": "natural"
+      },
+      {
+        "start": 36.040000915527344,
+        "end": 36.20000076293945,
+        "word": "like"
+      },
+      {
+        "start": 36.20000076293945,
+        "end": 36.7400016784668,
+        "word": "a"
+      },
+      {
+        "start": 36.7400016784668,
+        "end": 36.7599983215332,
+        "word": "pause"
+      },
+      {
+        "start": 36.7599983215332,
+        "end": 37.040000915527344,
+        "word": "on"
+      },
+      {
+        "start": 37.040000915527344,
+        "end": 37.18000030517578,
+        "word": "the"
+      },
+      {
+        "start": 37.18000030517578,
+        "end": 37.540000915527344,
+        "word": "final"
+      },
+      {
+        "start": 37.540000915527344,
+        "end": 37.86000061035156,
+        "word": "visual"
+      },
+      {
+        "start": 38.68000030517578,
+        "end": 38.779998779296875,
+        "word": "When"
+      },
+      {
+        "start": 38.779998779296875,
+        "end": 39.18000030517578,
+        "word": "the"
+      },
+      {
+        "start": 39.18000030517578,
+        "end": 39.18000030517578,
+        "word": "video"
+      },
+      {
+        "start": 39.18000030517578,
+        "end": 39.58000183105469,
+        "word": "is"
+      },
+      {
+        "start": 39.58000183105469,
+        "end": 39.720001220703125,
+        "word": "longer"
+      },
+      {
+        "start": 40.279998779296875,
+        "end": 40.5,
+        "word": "it"
+      },
+      {
+        "start": 40.5,
+        "end": 40.900001525878906,
+        "word": "trims"
+      },
+      {
+        "start": 40.900001525878906,
+        "end": 41.15999984741211,
+        "word": "to"
+      },
+      {
+        "start": 41.15999984741211,
+        "end": 41.400001525878906,
+        "word": "match"
+      },
+      {
+        "start": 41.400001525878906,
+        "end": 41.900001525878906,
+        "word": "the"
+      },
+      {
+        "start": 41.900001525878906,
+        "end": 42.0,
+        "word": "audio"
+      },
+      {
+        "start": 42.0,
+        "end": 42.34000015258789,
+        "word": "length"
+      },
+      {
+        "start": 43.060001373291016,
+        "end": 43.13999938964844,
+        "word": "The"
+      },
+      {
+        "start": 43.13999938964844,
+        "end": 43.5,
+        "word": "result"
+      },
+      {
+        "start": 43.5,
+        "end": 43.84000015258789,
+        "word": "is"
+      },
+      {
+        "start": 43.84000015258789,
+        "end": 44.220001220703125,
+        "word": "always"
+      },
+      {
+        "start": 44.220001220703125,
+        "end": 44.439998626708984,
+        "word": "a"
+      },
+      {
+        "start": 44.439998626708984,
+        "end": 44.7599983215332,
+        "word": "clean"
+      },
+      {
+        "start": 44.7599983215332,
+        "end": 45.060001373291016,
+        "word": "mux"
+      },
+      {
+        "start": 45.060001373291016,
+        "end": 45.68000030517578,
+        "word": "with"
+      },
+      {
+        "start": 45.68000030517578,
+        "end": 46.279998779296875,
+        "word": "synchronized"
+      },
+      {
+        "start": 46.279998779296875,
+        "end": 46.70000076293945,
+        "word": "streams"
+      },
+      {
+        "start": 47.439998626708984,
+        "end": 47.7400016784668,
+        "word": "After"
+      },
+      {
+        "start": 47.7400016784668,
+        "end": 48.29999923706055,
+        "word": "composing"
+      },
+      {
+        "start": 49.220001220703125,
+        "end": 49.220001220703125,
+        "word": "validation"
+      },
+      {
+        "start": 49.220001220703125,
+        "end": 49.63999938964844,
+        "word": "runs"
+      },
+      {
+        "start": 49.63999938964844,
+        "end": 50.29999923706055,
+        "word": "automatically"
+      },
+      {
+        "start": 51.119998931884766,
+        "end": 51.540000915527344,
+        "word": "DocGen"
+      },
+      {
+        "start": 51.540000915527344,
+        "end": 52.099998474121094,
+        "word": "Validate"
+      },
+      {
+        "start": 52.099998474121094,
+        "end": 52.599998474121094,
+        "word": "checks"
+      },
+      {
+        "start": 52.599998474121094,
+        "end": 53.13999938964844,
+        "word": "every"
+      },
+      {
+        "start": 53.13999938964844,
+        "end": 53.47999954223633,
+        "word": "recording"
+      },
+      {
+        "start": 53.47999954223633,
+        "end": 53.91999816894531,
+        "word": "for"
+      },
+      {
+        "start": 53.91999816894531,
+        "end": 54.279998779296875,
+        "word": "three"
+      },
+      {
+        "start": 54.279998779296875,
+        "end": 54.58000183105469,
+        "word": "things"
+      },
+      {
+        "start": 55.2599983215332,
+        "end": 55.599998474121094,
+        "word": "First"
+      },
+      {
+        "start": 55.7599983215332,
+        "end": 56.220001220703125,
+        "word": "that"
+      },
+      {
+        "start": 56.220001220703125,
+        "end": 56.52000045776367,
+        "word": "both"
+      },
+      {
+        "start": 56.52000045776367,
+        "end": 56.900001525878906,
+        "word": "audio"
+      },
+      {
+        "start": 56.900001525878906,
+        "end": 57.20000076293945,
+        "word": "and"
+      },
+      {
+        "start": 57.20000076293945,
+        "end": 57.560001373291016,
+        "word": "video"
+      },
+      {
+        "start": 57.560001373291016,
+        "end": 57.81999969482422,
+        "word": "streams"
+      },
+      {
+        "start": 57.81999969482422,
+        "end": 58.13999938964844,
+        "word": "are"
+      },
+      {
+        "start": 58.13999938964844,
+        "end": 58.47999954223633,
+        "word": "present"
+      },
+      {
+        "start": 59.560001373291016,
+        "end": 59.560001373291016,
+        "word": "Second"
+      },
+      {
+        "start": 59.70000076293945,
+        "end": 60.040000915527344,
+        "word": "that"
+      },
+      {
+        "start": 60.040000915527344,
+        "end": 60.58000183105469,
+        "word": "the"
+      },
+      {
+        "start": 60.58000183105469,
+        "end": 60.58000183105469,
+        "word": "duration"
+      },
+      {
+        "start": 60.58000183105469,
+        "end": 60.86000061035156,
+        "word": "drift"
+      },
+      {
+        "start": 60.86000061035156,
+        "end": 61.29999923706055,
+        "word": "between"
+      },
+      {
+        "start": 61.29999923706055,
+        "end": 61.63999938964844,
+        "word": "streams"
+      },
+      {
+        "start": 61.63999938964844,
+        "end": 62.119998931884766,
+        "word": "is"
+      },
+      {
+        "start": 62.119998931884766,
+        "end": 62.34000015258789,
+        "word": "within"
+      },
+      {
+        "start": 62.34000015258789,
+        "end": 62.68000030517578,
+        "word": "your"
+      },
+      {
+        "start": 62.68000030517578,
+        "end": 63.02000045776367,
+        "word": "configured"
+      },
+      {
+        "start": 63.02000045776367,
+        "end": 63.5,
+        "word": "threshold"
+      },
+      {
+        "start": 64.41999816894531,
+        "end": 64.41999816894531,
+        "word": "Default"
+      },
+      {
+        "start": 64.83999633789062,
+        "end": 65.0999984741211,
+        "word": "2"
+      },
+      {
+        "start": 65.0999984741211,
+        "end": 65.81999969482422,
+        "word": "75"
+      },
+      {
+        "start": 65.81999969482422,
+        "end": 66.16000366210938,
+        "word": "seconds"
+      },
+      {
+        "start": 67.19999694824219,
+        "end": 67.19999694824219,
+        "word": "Third"
+      },
+      {
+        "start": 67.31999969482422,
+        "end": 67.69999694824219,
+        "word": "that"
+      },
+      {
+        "start": 67.69999694824219,
+        "end": 67.86000061035156,
+        "word": "the"
+      },
+      {
+        "start": 67.86000061035156,
+        "end": 68.22000122070312,
+        "word": "narration"
+      },
+      {
+        "start": 68.22000122070312,
+        "end": 68.55999755859375,
+        "word": "source"
+      },
+      {
+        "start": 68.55999755859375,
+        "end": 68.87999725341797,
+        "word": "file"
+      },
+      {
+        "start": 68.87999725341797,
+        "end": 69.27999877929688,
+        "word": "passes"
+      },
+      {
+        "start": 69.27999877929688,
+        "end": 69.58000183105469,
+        "word": "lint"
+      },
+      {
+        "start": 70.5,
+        "end": 70.66000366210938,
+        "word": "Use"
+      },
+      {
+        "start": 70.66000366210938,
+        "end": 71.16000366210938,
+        "word": "DocGen"
+      },
+      {
+        "start": 71.16000366210938,
+        "end": 71.73999786376953,
+        "word": "Validate"
+      },
+      {
+        "start": 71.73999786376953,
+        "end": 72.08000183105469,
+        "word": "PrePush"
+      },
+      {
+        "start": 72.08000183105469,
+        "end": 72.63999938964844,
+        "word": "for"
+      },
+      {
+        "start": 72.63999938964844,
+        "end": 73.05999755859375,
+        "word": "a"
+      },
+      {
+        "start": 73.05999755859375,
+        "end": 73.05999755859375,
+        "word": "strict"
+      },
+      {
+        "start": 73.05999755859375,
+        "end": 73.37999725341797,
+        "word": "gate"
+      },
+      {
+        "start": 74.04000091552734,
+        "end": 74.04000091552734,
+        "word": "It"
+      },
+      {
+        "start": 74.04000091552734,
+        "end": 74.36000061035156,
+        "word": "exits"
+      },
+      {
+        "start": 74.36000061035156,
+        "end": 74.91999816894531,
+        "word": "non"
+      },
+      {
+        "start": 74.91999816894531,
+        "end": 74.91999816894531,
+        "word": "zero"
+      },
+      {
+        "start": 74.91999816894531,
+        "end": 75.44000244140625,
+        "word": "on"
+      },
+      {
+        "start": 75.44000244140625,
+        "end": 75.80000305175781,
+        "word": "any"
+      },
+      {
+        "start": 75.80000305175781,
+        "end": 76.12000274658203,
+        "word": "failure"
+      },
+      {
+        "start": 76.4000015258789,
+        "end": 76.66000366210938,
+        "word": "so"
+      },
+      {
+        "start": 76.66000366210938,
+        "end": 77.0,
+        "word": "CI"
+      },
+      {
+        "start": 77.0,
+        "end": 77.26000213623047,
+        "word": "and"
+      },
+      {
+        "start": 77.26000213623047,
+        "end": 77.68000030517578,
+        "word": "PrePush"
+      },
+      {
+        "start": 77.68000030517578,
+        "end": 77.94000244140625,
+        "word": "hooks"
+      },
+      {
+        "start": 77.94000244140625,
+        "end": 78.41999816894531,
+        "word": "can"
+      },
+      {
+        "start": 78.41999816894531,
+        "end": 78.68000030517578,
+        "word": "block"
+      },
+      {
+        "start": 78.68000030517578,
+        "end": 79.05999755859375,
+        "word": "bad"
+      },
+      {
+        "start": 79.05999755859375,
+        "end": 79.37999725341797,
+        "word": "recordings"
+      },
+      {
+        "start": 79.37999725341797,
+        "end": 79.73999786376953,
+        "word": "from"
+      },
+      {
+        "start": 79.73999786376953,
+        "end": 79.95999908447266,
+        "word": "reaching"
+      },
+      {
+        "start": 79.95999908447266,
+        "end": 80.69999694824219,
+        "word": "the"
+      },
+      {
+        "start": 80.69999694824219,
+        "end": 80.69999694824219,
+        "word": "repository"
+      },
+      {
+        "start": 81.45999908447266,
+        "end": 82.12000274658203,
+        "word": "Finally"
+      },
+      {
+        "start": 82.77999877929688,
+        "end": 83.08000183105469,
+        "word": "DocGen"
+      },
+      {
+        "start": 83.08000183105469,
+        "end": 83.55999755859375,
+        "word": "CONCAT"
+      },
+      {
+        "start": 83.55999755859375,
+        "end": 84.33999633789062,
+        "word": "assembles"
+      },
+      {
+        "start": 84.33999633789062,
+        "end": 85.04000091552734,
+        "word": "individual"
+      },
+      {
+        "start": 85.04000091552734,
+        "end": 85.31999969482422,
+        "word": "segments"
+      },
+      {
+        "start": 85.31999969482422,
+        "end": 85.95999908447266,
+        "word": "into"
+      },
+      {
+        "start": 85.95999908447266,
+        "end": 86.26000213623047,
+        "word": "a"
+      },
+      {
+        "start": 86.26000213623047,
+        "end": 86.45999908447266,
+        "word": "full"
+      },
+      {
+        "start": 86.45999908447266,
+        "end": 86.69999694824219,
+        "word": "demo"
+      },
+      {
+        "start": 86.69999694824219,
+        "end": 87.08000183105469,
+        "word": "file"
+      },
+      {
+        "start": 87.08000183105469,
+        "end": 87.68000030517578,
+        "word": "according"
+      },
+      {
+        "start": 87.68000030517578,
+        "end": 87.87999725341797,
+        "word": "to"
+      },
+      {
+        "start": 87.87999725341797,
+        "end": 88.26000213623047,
+        "word": "your"
+      },
+      {
+        "start": 88.26000213623047,
+        "end": 88.4800033569336,
+        "word": "CONCAT"
+      },
+      {
+        "start": 88.4800033569336,
+        "end": 89.13999938964844,
+        "word": "configuration"
+      },
+      {
+        "start": 89.95999908447266,
+        "end": 90.0,
+        "word": "You"
+      },
+      {
+        "start": 90.0,
+        "end": 90.18000030517578,
+        "word": "can"
+      },
+      {
+        "start": 90.18000030517578,
+        "end": 90.54000091552734,
+        "word": "define"
+      },
+      {
+        "start": 90.54000091552734,
+        "end": 91.0199966430664,
+        "word": "multiple"
+      },
+      {
+        "start": 91.0199966430664,
+        "end": 91.4800033569336,
+        "word": "CONCAT"
+      },
+      {
+        "start": 91.4800033569336,
+        "end": 91.87999725341797,
+        "word": "targets"
+      },
+      {
+        "start": 92.37999725341797,
+        "end": 92.5999984741211,
+        "word": "for"
+      },
+      {
+        "start": 92.5999984741211,
+        "end": 92.81999969482422,
+        "word": "example"
+      },
+      {
+        "start": 92.9000015258789,
+        "end": 93.0999984741211,
+        "word": "a"
+      },
+      {
+        "start": 93.0999984741211,
+        "end": 93.26000213623047,
+        "word": "core"
+      },
+      {
+        "start": 93.26000213623047,
+        "end": 93.5,
+        "word": "demo"
+      },
+      {
+        "start": 93.5,
+        "end": 94.12000274658203,
+        "word": "and"
+      },
+      {
+        "start": 94.12000274658203,
+        "end": 94.72000122070312,
+        "word": "an"
+      },
+      {
+        "start": 94.72000122070312,
+        "end": 94.72000122070312,
+        "word": "extended"
+      },
+      {
+        "start": 94.72000122070312,
+        "end": 95.04000091552734,
+        "word": "version"
+      },
+      {
+        "start": 95.04000091552734,
+        "end": 95.36000061035156,
+        "word": "with"
+      },
+      {
+        "start": 95.36000061035156,
+        "end": 95.69999694824219,
+        "word": "extra"
+      },
+      {
+        "start": 95.69999694824219,
+        "end": 95.9800033569336,
+        "word": "segments"
+      }
+    ]
+  },
+  "06-ci-integration": {
+    "text": "DocGen fits into your existing development workflow with minimal setup. The pre-push hook runs docgen-validate-prepush on every git push that touches the demo directory. This catches broken recordings before they reach the remote. Stream presence, drift, and narration lint are all checked in under 3 seconds. For GitHub Actions, the CI workflow runs linting with RUF, unit tests across Python 3.10 through 3.12, and playwright end-to-end tests for the wizard GUI. The E2E tests launch a real Flask server, navigate the setup and production views, edit narration, and verify persistence. The full pipeline, docgen-generate-all, is designed for reproducibility. Given the same narration markdown and visual sources, it produces identical output. This means you can regenerate all demo assets in CI after a code change and diff the results. For teams, the wrapper shell scripts generated by docgen-init mean everyone uses the same commands. Generate-all.sh, compose.sh, and validate.sh all delegate to docgen. New team members install docgen, run the scripts, and everything works. That is the full loop. Write narration and markdown, generate audio with TTS, render visuals with Manim and VHS, compose with FFmpeg, validate before you push, and the wizard helps you write the narration in the first place.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 4.800000190734863,
+        "text": " DocGen fits into your existing development workflow with minimal setup."
+      },
+      {
+        "start": 5.760000228881836,
+        "end": 11.9399995803833,
+        "text": " The pre-push hook runs docgen-validate-prepush on every git push that touches the demo directory."
+      },
+      {
+        "start": 12.819999694824219,
+        "end": 15.880000114440918,
+        "text": " This catches broken recordings before they reach the remote."
+      },
+      {
+        "start": 16.860000610351562,
+        "end": 21.600000381469727,
+        "text": " Stream presence, drift, and narration lint are all checked in under 3 seconds."
+      },
+      {
+        "start": 22.079999923706055,
+        "end": 28.579999923706055,
+        "text": " For GitHub Actions, the CI workflow runs linting with RUF, unit tests across Python 3.10 through"
+      },
+      {
+        "start": 28.579999923706055,
+        "end": 32.2599983215332,
+        "text": " 3.12, and playwright end-to-end tests for the wizard GUI."
+      },
+      {
+        "start": 32.959999084472656,
+        "end": 38.959999084472656,
+        "text": " The E2E tests launch a real Flask server, navigate the setup and production views, edit"
+      },
+      {
+        "start": 38.959999084472656,
+        "end": 41.20000076293945,
+        "text": " narration, and verify persistence."
+      },
+      {
+        "start": 42.060001373291016,
+        "end": 46.68000030517578,
+        "text": " The full pipeline, docgen-generate-all, is designed for reproducibility."
+      },
+      {
+        "start": 47.720001220703125,
+        "end": 52.279998779296875,
+        "text": " Given the same narration markdown and visual sources, it produces identical output."
+      },
+      {
+        "start": 53.20000076293945,
+        "end": 59.040000915527344,
+        "text": " This means you can regenerate all demo assets in CI after a code change and diff the results."
+      },
+      {
+        "start": 60.08000183105469,
+        "end": 65.0,
+        "text": " For teams, the wrapper shell scripts generated by docgen-init mean everyone uses the same"
+      },
+      {
+        "start": 65.0,
+        "end": 65.4000015258789,
+        "text": " commands."
+      },
+      {
+        "start": 66.44000244140625,
+        "end": 72.36000061035156,
+        "text": " Generate-all.sh, compose.sh, and validate.sh all delegate to docgen."
+      },
+      {
+        "start": 72.95999908447266,
+        "end": 77.0,
+        "text": " New team members install docgen, run the scripts, and everything works."
+      },
+      {
+        "start": 77.41999816894531,
+        "end": 78.5999984741211,
+        "text": " That is the full loop."
+      },
+      {
+        "start": 79.31999969482422,
+        "end": 84.58000183105469,
+        "text": " Write narration and markdown, generate audio with TTS, render visuals with Manim and VHS,"
+      },
+      {
+        "start": 85.12000274658203,
+        "end": 90.5999984741211,
+        "text": " compose with FFmpeg, validate before you push, and the wizard helps you write the narration"
+      },
+      {
+        "start": 90.5999984741211,
+        "end": 91.62000274658203,
+        "text": " in the first place."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.8399999737739563,
+        "word": "DocGen"
+      },
+      {
+        "start": 0.8399999737739563,
+        "end": 1.399999976158142,
+        "word": "fits"
+      },
+      {
+        "start": 1.399999976158142,
+        "end": 1.6799999475479126,
+        "word": "into"
+      },
+      {
+        "start": 1.6799999475479126,
+        "end": 1.9199999570846558,
+        "word": "your"
+      },
+      {
+        "start": 1.9199999570846558,
+        "end": 2.5399999618530273,
+        "word": "existing"
+      },
+      {
+        "start": 2.5399999618530273,
+        "end": 3.0399999618530273,
+        "word": "development"
+      },
+      {
+        "start": 3.0399999618530273,
+        "end": 3.5,
+        "word": "workflow"
+      },
+      {
+        "start": 3.5,
+        "end": 4.0,
+        "word": "with"
+      },
+      {
+        "start": 4.0,
+        "end": 4.360000133514404,
+        "word": "minimal"
+      },
+      {
+        "start": 4.360000133514404,
+        "end": 4.800000190734863,
+        "word": "setup"
+      },
+      {
+        "start": 5.760000228881836,
+        "end": 5.800000190734863,
+        "word": "The"
+      },
+      {
+        "start": 5.800000190734863,
+        "end": 6.139999866485596,
+        "word": "pre"
+      },
+      {
+        "start": 6.139999866485596,
+        "end": 6.300000190734863,
+        "word": "push"
+      },
+      {
+        "start": 6.300000190734863,
+        "end": 6.639999866485596,
+        "word": "hook"
+      },
+      {
+        "start": 6.639999866485596,
+        "end": 7.179999828338623,
+        "word": "runs"
+      },
+      {
+        "start": 7.179999828338623,
+        "end": 7.860000133514404,
+        "word": "docgen"
+      },
+      {
+        "start": 7.860000133514404,
+        "end": 8.4399995803833,
+        "word": "validate"
+      },
+      {
+        "start": 8.4399995803833,
+        "end": 8.899999618530273,
+        "word": "prepush"
+      },
+      {
+        "start": 8.899999618530273,
+        "end": 9.4399995803833,
+        "word": "on"
+      },
+      {
+        "start": 9.4399995803833,
+        "end": 9.899999618530273,
+        "word": "every"
+      },
+      {
+        "start": 9.899999618530273,
+        "end": 10.15999984741211,
+        "word": "git"
+      },
+      {
+        "start": 10.15999984741211,
+        "end": 10.420000076293945,
+        "word": "push"
+      },
+      {
+        "start": 10.420000076293945,
+        "end": 10.920000076293945,
+        "word": "that"
+      },
+      {
+        "start": 10.920000076293945,
+        "end": 11.039999961853027,
+        "word": "touches"
+      },
+      {
+        "start": 11.039999961853027,
+        "end": 11.319999694824219,
+        "word": "the"
+      },
+      {
+        "start": 11.319999694824219,
+        "end": 11.539999961853027,
+        "word": "demo"
+      },
+      {
+        "start": 11.539999961853027,
+        "end": 11.9399995803833,
+        "word": "directory"
+      },
+      {
+        "start": 12.819999694824219,
+        "end": 12.979999542236328,
+        "word": "This"
+      },
+      {
+        "start": 12.979999542236328,
+        "end": 13.300000190734863,
+        "word": "catches"
+      },
+      {
+        "start": 13.300000190734863,
+        "end": 13.739999771118164,
+        "word": "broken"
+      },
+      {
+        "start": 13.739999771118164,
+        "end": 14.239999771118164,
+        "word": "recordings"
+      },
+      {
+        "start": 14.239999771118164,
+        "end": 14.880000114440918,
+        "word": "before"
+      },
+      {
+        "start": 14.880000114440918,
+        "end": 15.180000305175781,
+        "word": "they"
+      },
+      {
+        "start": 15.180000305175781,
+        "end": 15.420000076293945,
+        "word": "reach"
+      },
+      {
+        "start": 15.420000076293945,
+        "end": 15.880000114440918,
+        "word": "the"
+      },
+      {
+        "start": 15.880000114440918,
+        "end": 15.880000114440918,
+        "word": "remote"
+      },
+      {
+        "start": 16.860000610351562,
+        "end": 17.1200008392334,
+        "word": "Stream"
+      },
+      {
+        "start": 17.1200008392334,
+        "end": 17.600000381469727,
+        "word": "presence"
+      },
+      {
+        "start": 18.280000686645508,
+        "end": 18.280000686645508,
+        "word": "drift"
+      },
+      {
+        "start": 18.399999618530273,
+        "end": 19.059999465942383,
+        "word": "and"
+      },
+      {
+        "start": 19.059999465942383,
+        "end": 19.059999465942383,
+        "word": "narration"
+      },
+      {
+        "start": 19.059999465942383,
+        "end": 19.239999771118164,
+        "word": "lint"
+      },
+      {
+        "start": 19.239999771118164,
+        "end": 19.780000686645508,
+        "word": "are"
+      },
+      {
+        "start": 19.780000686645508,
+        "end": 20.31999969482422,
+        "word": "all"
+      },
+      {
+        "start": 20.31999969482422,
+        "end": 20.31999969482422,
+        "word": "checked"
+      },
+      {
+        "start": 20.31999969482422,
+        "end": 20.700000762939453,
+        "word": "in"
+      },
+      {
+        "start": 20.700000762939453,
+        "end": 20.899999618530273,
+        "word": "under"
+      },
+      {
+        "start": 20.899999618530273,
+        "end": 21.239999771118164,
+        "word": "3"
+      },
+      {
+        "start": 21.239999771118164,
+        "end": 21.600000381469727,
+        "word": "seconds"
+      },
+      {
+        "start": 22.079999923706055,
+        "end": 22.219999313354492,
+        "word": "For"
+      },
+      {
+        "start": 22.219999313354492,
+        "end": 22.5,
+        "word": "GitHub"
+      },
+      {
+        "start": 22.5,
+        "end": 22.899999618530273,
+        "word": "Actions"
+      },
+      {
+        "start": 23.399999618530273,
+        "end": 23.6200008392334,
+        "word": "the"
+      },
+      {
+        "start": 23.6200008392334,
+        "end": 23.959999084472656,
+        "word": "CI"
+      },
+      {
+        "start": 23.959999084472656,
+        "end": 24.399999618530273,
+        "word": "workflow"
+      },
+      {
+        "start": 24.399999618530273,
+        "end": 24.780000686645508,
+        "word": "runs"
+      },
+      {
+        "start": 24.780000686645508,
+        "end": 25.139999389648438,
+        "word": "linting"
+      },
+      {
+        "start": 25.139999389648438,
+        "end": 25.6200008392334,
+        "word": "with"
+      },
+      {
+        "start": 25.6200008392334,
+        "end": 25.6200008392334,
+        "word": "RUF"
+      },
+      {
+        "start": 26.34000015258789,
+        "end": 26.559999465942383,
+        "word": "unit"
+      },
+      {
+        "start": 26.559999465942383,
+        "end": 26.84000015258789,
+        "word": "tests"
+      },
+      {
+        "start": 26.84000015258789,
+        "end": 27.239999771118164,
+        "word": "across"
+      },
+      {
+        "start": 27.239999771118164,
+        "end": 27.579999923706055,
+        "word": "Python"
+      },
+      {
+        "start": 27.579999923706055,
+        "end": 27.899999618530273,
+        "word": "3"
+      },
+      {
+        "start": 27.899999618530273,
+        "end": 28.15999984741211,
+        "word": "10"
+      },
+      {
+        "start": 28.15999984741211,
+        "end": 28.579999923706055,
+        "word": "through"
+      },
+      {
+        "start": 28.579999923706055,
+        "end": 28.719999313354492,
+        "word": "3"
+      },
+      {
+        "start": 28.719999313354492,
+        "end": 29.18000030517578,
+        "word": "12"
+      },
+      {
+        "start": 29.5,
+        "end": 29.940000534057617,
+        "word": "and"
+      },
+      {
+        "start": 29.940000534057617,
+        "end": 30.420000076293945,
+        "word": "playwright"
+      },
+      {
+        "start": 30.420000076293945,
+        "end": 30.739999771118164,
+        "word": "end"
+      },
+      {
+        "start": 30.739999771118164,
+        "end": 30.799999237060547,
+        "word": "to"
+      },
+      {
+        "start": 30.799999237060547,
+        "end": 31.040000915527344,
+        "word": "end"
+      },
+      {
+        "start": 31.040000915527344,
+        "end": 31.34000015258789,
+        "word": "tests"
+      },
+      {
+        "start": 31.34000015258789,
+        "end": 31.540000915527344,
+        "word": "for"
+      },
+      {
+        "start": 31.540000915527344,
+        "end": 31.719999313354492,
+        "word": "the"
+      },
+      {
+        "start": 31.719999313354492,
+        "end": 31.959999084472656,
+        "word": "wizard"
+      },
+      {
+        "start": 31.959999084472656,
+        "end": 32.2599983215332,
+        "word": "GUI"
+      },
+      {
+        "start": 32.959999084472656,
+        "end": 33.15999984741211,
+        "word": "The"
+      },
+      {
+        "start": 33.15999984741211,
+        "end": 33.63999938964844,
+        "word": "E2E"
+      },
+      {
+        "start": 33.63999938964844,
+        "end": 34.02000045776367,
+        "word": "tests"
+      },
+      {
+        "start": 34.02000045776367,
+        "end": 34.63999938964844,
+        "word": "launch"
+      },
+      {
+        "start": 34.63999938964844,
+        "end": 34.86000061035156,
+        "word": "a"
+      },
+      {
+        "start": 34.86000061035156,
+        "end": 35.18000030517578,
+        "word": "real"
+      },
+      {
+        "start": 35.18000030517578,
+        "end": 35.47999954223633,
+        "word": "Flask"
+      },
+      {
+        "start": 35.47999954223633,
+        "end": 35.84000015258789,
+        "word": "server"
+      },
+      {
+        "start": 36.779998779296875,
+        "end": 36.779998779296875,
+        "word": "navigate"
+      },
+      {
+        "start": 36.779998779296875,
+        "end": 37.08000183105469,
+        "word": "the"
+      },
+      {
+        "start": 37.08000183105469,
+        "end": 37.2400016784668,
+        "word": "setup"
+      },
+      {
+        "start": 37.2400016784668,
+        "end": 37.81999969482422,
+        "word": "and"
+      },
+      {
+        "start": 37.81999969482422,
+        "end": 37.81999969482422,
+        "word": "production"
+      },
+      {
+        "start": 37.81999969482422,
+        "end": 38.15999984741211,
+        "word": "views"
+      },
+      {
+        "start": 38.91999816894531,
+        "end": 38.959999084472656,
+        "word": "edit"
+      },
+      {
+        "start": 38.959999084472656,
+        "end": 39.41999816894531,
+        "word": "narration"
+      },
+      {
+        "start": 39.91999816894531,
+        "end": 40.2400016784668,
+        "word": "and"
+      },
+      {
+        "start": 40.2400016784668,
+        "end": 40.540000915527344,
+        "word": "verify"
+      },
+      {
+        "start": 40.540000915527344,
+        "end": 41.20000076293945,
+        "word": "persistence"
+      },
+      {
+        "start": 41.86000061035156,
+        "end": 42.18000030517578,
+        "word": "The"
+      },
+      {
+        "start": 42.18000030517578,
+        "end": 42.47999954223633,
+        "word": "full"
+      },
+      {
+        "start": 42.47999954223633,
+        "end": 42.959999084472656,
+        "word": "pipeline"
+      },
+      {
+        "start": 43.36000061035156,
+        "end": 43.84000015258789,
+        "word": "docgen"
+      },
+      {
+        "start": 43.84000015258789,
+        "end": 44.439998626708984,
+        "word": "generate"
+      },
+      {
+        "start": 44.439998626708984,
+        "end": 44.619998931884766,
+        "word": "all"
+      },
+      {
+        "start": 45.040000915527344,
+        "end": 45.29999923706055,
+        "word": "is"
+      },
+      {
+        "start": 45.29999923706055,
+        "end": 45.58000183105469,
+        "word": "designed"
+      },
+      {
+        "start": 45.58000183105469,
+        "end": 45.900001525878906,
+        "word": "for"
+      },
+      {
+        "start": 45.900001525878906,
+        "end": 46.68000030517578,
+        "word": "reproducibility"
+      },
+      {
+        "start": 47.720001220703125,
+        "end": 47.720001220703125,
+        "word": "Given"
+      },
+      {
+        "start": 47.720001220703125,
+        "end": 48.040000915527344,
+        "word": "the"
+      },
+      {
+        "start": 48.040000915527344,
+        "end": 48.34000015258789,
+        "word": "same"
+      },
+      {
+        "start": 48.34000015258789,
+        "end": 48.7599983215332,
+        "word": "narration"
+      },
+      {
+        "start": 48.7599983215332,
+        "end": 49.279998779296875,
+        "word": "markdown"
+      },
+      {
+        "start": 49.279998779296875,
+        "end": 49.560001373291016,
+        "word": "and"
+      },
+      {
+        "start": 49.560001373291016,
+        "end": 49.86000061035156,
+        "word": "visual"
+      },
+      {
+        "start": 49.86000061035156,
+        "end": 50.2400016784668,
+        "word": "sources"
+      },
+      {
+        "start": 50.7400016784668,
+        "end": 51.0,
+        "word": "it"
+      },
+      {
+        "start": 51.0,
+        "end": 51.220001220703125,
+        "word": "produces"
+      },
+      {
+        "start": 51.220001220703125,
+        "end": 51.880001068115234,
+        "word": "identical"
+      },
+      {
+        "start": 51.880001068115234,
+        "end": 52.279998779296875,
+        "word": "output"
+      },
+      {
+        "start": 52.900001525878906,
+        "end": 53.2400016784668,
+        "word": "This"
+      },
+      {
+        "start": 53.2400016784668,
+        "end": 53.52000045776367,
+        "word": "means"
+      },
+      {
+        "start": 53.52000045776367,
+        "end": 53.65999984741211,
+        "word": "you"
+      },
+      {
+        "start": 53.65999984741211,
+        "end": 53.900001525878906,
+        "word": "can"
+      },
+      {
+        "start": 53.900001525878906,
+        "end": 54.540000915527344,
+        "word": "regenerate"
+      },
+      {
+        "start": 54.540000915527344,
+        "end": 54.91999816894531,
+        "word": "all"
+      },
+      {
+        "start": 54.91999816894531,
+        "end": 55.2400016784668,
+        "word": "demo"
+      },
+      {
+        "start": 55.2400016784668,
+        "end": 55.63999938964844,
+        "word": "assets"
+      },
+      {
+        "start": 55.63999938964844,
+        "end": 56.2400016784668,
+        "word": "in"
+      },
+      {
+        "start": 56.2400016784668,
+        "end": 56.58000183105469,
+        "word": "CI"
+      },
+      {
+        "start": 56.58000183105469,
+        "end": 57.15999984741211,
+        "word": "after"
+      },
+      {
+        "start": 57.15999984741211,
+        "end": 57.52000045776367,
+        "word": "a"
+      },
+      {
+        "start": 57.52000045776367,
+        "end": 57.58000183105469,
+        "word": "code"
+      },
+      {
+        "start": 57.58000183105469,
+        "end": 57.880001068115234,
+        "word": "change"
+      },
+      {
+        "start": 57.880001068115234,
+        "end": 58.31999969482422,
+        "word": "and"
+      },
+      {
+        "start": 58.31999969482422,
+        "end": 58.5,
+        "word": "diff"
+      },
+      {
+        "start": 58.5,
+        "end": 58.720001220703125,
+        "word": "the"
+      },
+      {
+        "start": 58.720001220703125,
+        "end": 59.040000915527344,
+        "word": "results"
+      },
+      {
+        "start": 60.08000183105469,
+        "end": 60.099998474121094,
+        "word": "For"
+      },
+      {
+        "start": 60.099998474121094,
+        "end": 60.400001525878906,
+        "word": "teams"
+      },
+      {
+        "start": 60.560001373291016,
+        "end": 60.65999984741211,
+        "word": "the"
+      },
+      {
+        "start": 60.65999984741211,
+        "end": 60.97999954223633,
+        "word": "wrapper"
+      },
+      {
+        "start": 60.97999954223633,
+        "end": 61.2599983215332,
+        "word": "shell"
+      },
+      {
+        "start": 61.2599983215332,
+        "end": 61.5,
+        "word": "scripts"
+      },
+      {
+        "start": 61.5,
+        "end": 61.959999084472656,
+        "word": "generated"
+      },
+      {
+        "start": 61.959999084472656,
+        "end": 62.47999954223633,
+        "word": "by"
+      },
+      {
+        "start": 62.47999954223633,
+        "end": 62.70000076293945,
+        "word": "docgen"
+      },
+      {
+        "start": 62.70000076293945,
+        "end": 62.959999084472656,
+        "word": "init"
+      },
+      {
+        "start": 62.959999084472656,
+        "end": 63.58000183105469,
+        "word": "mean"
+      },
+      {
+        "start": 63.58000183105469,
+        "end": 64.13999938964844,
+        "word": "everyone"
+      },
+      {
+        "start": 64.13999938964844,
+        "end": 64.41999816894531,
+        "word": "uses"
+      },
+      {
+        "start": 64.41999816894531,
+        "end": 64.69999694824219,
+        "word": "the"
+      },
+      {
+        "start": 64.69999694824219,
+        "end": 65.0,
+        "word": "same"
+      },
+      {
+        "start": 65.0,
+        "end": 65.4000015258789,
+        "word": "commands"
+      },
+      {
+        "start": 66.44000244140625,
+        "end": 66.76000213623047,
+        "word": "Generate"
+      },
+      {
+        "start": 66.76000213623047,
+        "end": 66.9000015258789,
+        "word": "all"
+      },
+      {
+        "start": 66.9000015258789,
+        "end": 67.63999938964844,
+        "word": "sh"
+      },
+      {
+        "start": 68.31999969482422,
+        "end": 68.55999755859375,
+        "word": "compose"
+      },
+      {
+        "start": 68.55999755859375,
+        "end": 69.23999786376953,
+        "word": "sh"
+      },
+      {
+        "start": 69.5999984741211,
+        "end": 70.12000274658203,
+        "word": "and"
+      },
+      {
+        "start": 70.12000274658203,
+        "end": 70.12000274658203,
+        "word": "validate"
+      },
+      {
+        "start": 70.12000274658203,
+        "end": 70.77999877929688,
+        "word": "sh"
+      },
+      {
+        "start": 70.77999877929688,
+        "end": 71.45999908447266,
+        "word": "all"
+      },
+      {
+        "start": 71.45999908447266,
+        "end": 71.72000122070312,
+        "word": "delegate"
+      },
+      {
+        "start": 71.72000122070312,
+        "end": 72.36000061035156,
+        "word": "to"
+      },
+      {
+        "start": 72.36000061035156,
+        "end": 72.36000061035156,
+        "word": "docgen"
+      },
+      {
+        "start": 72.95999908447266,
+        "end": 73.45999908447266,
+        "word": "New"
+      },
+      {
+        "start": 73.45999908447266,
+        "end": 73.69999694824219,
+        "word": "team"
+      },
+      {
+        "start": 73.69999694824219,
+        "end": 73.9800033569336,
+        "word": "members"
+      },
+      {
+        "start": 73.9800033569336,
+        "end": 74.44000244140625,
+        "word": "install"
+      },
+      {
+        "start": 74.44000244140625,
+        "end": 74.81999969482422,
+        "word": "docgen"
+      },
+      {
+        "start": 75.30000305175781,
+        "end": 75.37999725341797,
+        "word": "run"
+      },
+      {
+        "start": 75.37999725341797,
+        "end": 75.81999969482422,
+        "word": "the"
+      },
+      {
+        "start": 75.81999969482422,
+        "end": 75.81999969482422,
+        "word": "scripts"
+      },
+      {
+        "start": 76.0,
+        "end": 76.4000015258789,
+        "word": "and"
+      },
+      {
+        "start": 76.4000015258789,
+        "end": 76.66000366210938,
+        "word": "everything"
+      },
+      {
+        "start": 76.66000366210938,
+        "end": 77.0,
+        "word": "works"
+      },
+      {
+        "start": 77.41999816894531,
+        "end": 77.83999633789062,
+        "word": "That"
+      },
+      {
+        "start": 77.83999633789062,
+        "end": 77.9800033569336,
+        "word": "is"
+      },
+      {
+        "start": 77.9800033569336,
+        "end": 78.19999694824219,
+        "word": "the"
+      },
+      {
+        "start": 78.19999694824219,
+        "end": 78.4000015258789,
+        "word": "full"
+      },
+      {
+        "start": 78.4000015258789,
+        "end": 78.5999984741211,
+        "word": "loop"
+      },
+      {
+        "start": 79.04000091552734,
+        "end": 79.4000015258789,
+        "word": "Write"
+      },
+      {
+        "start": 79.4000015258789,
+        "end": 79.83999633789062,
+        "word": "narration"
+      },
+      {
+        "start": 79.83999633789062,
+        "end": 80.04000091552734,
+        "word": "and"
+      },
+      {
+        "start": 80.04000091552734,
+        "end": 80.44000244140625,
+        "word": "markdown"
+      },
+      {
+        "start": 81.12000274658203,
+        "end": 81.12000274658203,
+        "word": "generate"
+      },
+      {
+        "start": 81.12000274658203,
+        "end": 81.5199966430664,
+        "word": "audio"
+      },
+      {
+        "start": 81.5199966430664,
+        "end": 81.77999877929688,
+        "word": "with"
+      },
+      {
+        "start": 81.77999877929688,
+        "end": 82.30000305175781,
+        "word": "TTS"
+      },
+      {
+        "start": 82.91999816894531,
+        "end": 82.94000244140625,
+        "word": "render"
+      },
+      {
+        "start": 82.94000244140625,
+        "end": 83.36000061035156,
+        "word": "visuals"
+      },
+      {
+        "start": 83.36000061035156,
+        "end": 83.73999786376953,
+        "word": "with"
+      },
+      {
+        "start": 83.73999786376953,
+        "end": 83.83999633789062,
+        "word": "Manim"
+      },
+      {
+        "start": 83.83999633789062,
+        "end": 84.04000091552734,
+        "word": "and"
+      },
+      {
+        "start": 84.04000091552734,
+        "end": 84.58000183105469,
+        "word": "VHS"
+      },
+      {
+        "start": 85.12000274658203,
+        "end": 85.30000305175781,
+        "word": "compose"
+      },
+      {
+        "start": 85.30000305175781,
+        "end": 85.66000366210938,
+        "word": "with"
+      },
+      {
+        "start": 85.66000366210938,
+        "end": 86.58000183105469,
+        "word": "FFmpeg"
+      },
+      {
+        "start": 87.27999877929688,
+        "end": 87.27999877929688,
+        "word": "validate"
+      },
+      {
+        "start": 87.27999877929688,
+        "end": 87.66000366210938,
+        "word": "before"
+      },
+      {
+        "start": 87.66000366210938,
+        "end": 87.87999725341797,
+        "word": "you"
+      },
+      {
+        "start": 87.87999725341797,
+        "end": 88.12000274658203,
+        "word": "push"
+      },
+      {
+        "start": 88.69999694824219,
+        "end": 88.76000213623047,
+        "word": "and"
+      },
+      {
+        "start": 88.76000213623047,
+        "end": 88.95999908447266,
+        "word": "the"
+      },
+      {
+        "start": 88.95999908447266,
+        "end": 89.18000030517578,
+        "word": "wizard"
+      },
+      {
+        "start": 89.18000030517578,
+        "end": 89.4800033569336,
+        "word": "helps"
+      },
+      {
+        "start": 89.4800033569336,
+        "end": 89.87999725341797,
+        "word": "you"
+      },
+      {
+        "start": 89.87999725341797,
+        "end": 90.0999984741211,
+        "word": "write"
+      },
+      {
+        "start": 90.0999984741211,
+        "end": 90.5999984741211,
+        "word": "the"
+      },
+      {
+        "start": 90.5999984741211,
+        "end": 90.5999984741211,
+        "word": "narration"
+      },
+      {
+        "start": 90.5999984741211,
+        "end": 90.95999908447266,
+        "word": "in"
+      },
+      {
+        "start": 90.95999908447266,
+        "end": 91.0999984741211,
+        "word": "the"
+      },
+      {
+        "start": 91.0999984741211,
+        "end": 91.33999633789062,
+        "word": "first"
+      },
+      {
+        "start": 91.33999633789062,
+        "end": 91.62000274658203,
+        "word": "place"
+      }
+    ]
+  }
+}

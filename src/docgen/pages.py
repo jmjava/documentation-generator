@@ -59,14 +59,16 @@ class PagesGenerator:
 
         concat_cards = []
         for cname in sorted(concat_map.keys()):
+            fname = cname if cname.endswith(".mp4") else f"{cname}.mp4"
             anchor = cname.replace(".mp4", "").replace("_", "-")
+            duration = self._probe_concat_duration(cname)
             concat_cards.append(
                 f'            <div class="video-card" id="{anchor}">\n'
                 f'                <p class="seg-id">#{anchor}</p>\n'
                 f'                <h2>{cname}</h2>\n'
-                f'                <span class="duration">concat</span>\n'
+                f'                <span class="duration">{duration}</span>\n'
                 f'                <video controls preload="metadata">\n'
-                f'                    <source src="{demos_sub}/recordings/{cname}" type="video/mp4">\n'
+                f'                    <source src="{demos_sub}/recordings/{fname}" type="video/mp4">\n'
                 f'                </video>\n'
                 f'            </div>'
             )
@@ -199,6 +201,24 @@ class PagesGenerator:
     def _find_recording_name(self, seg_id: str) -> str:
         rec = self._find_recording(seg_id)
         return rec.name if rec else f"{seg_id}.mp4"
+
+    def _probe_concat_duration(self, cname: str) -> str:
+        fname = cname if cname.endswith(".mp4") else f"{cname}.mp4"
+        rec = self.config.recordings_dir / fname
+        if not rec.exists():
+            return "concat"
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(rec)],
+                capture_output=True, text=True, timeout=10,
+            )
+            dur = float(json.loads(out.stdout).get("format", {}).get("duration", 0))
+            if dur > 0:
+                m, s = divmod(int(dur), 60)
+                return f"~{m}m {s}s"
+        except Exception:
+            pass
+        return "concat"
 
 
 def _esc(s: str) -> str:

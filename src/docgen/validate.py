@@ -1,4 +1,9 @@
-"""Unified validator combining all quality checks."""
+"""Unified validator combining all quality checks.
+
+Core checks (freeze_ratio, blank_frames) use only cv2 — always available.
+OCR text scanning uses pytesseract — degrades gracefully if tesseract
+binary is missing, but cv2 checks still run and still fail the build.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,9 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
+
+import cv2
+import numpy as np
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -39,6 +47,35 @@ class ValidationReport:
         }
 
 
+def _sample_frames(path: Path, interval_sec: float = 2.0) -> list[tuple[float, np.ndarray]]:
+    """Read frames at *interval_sec* across the entire video. Returns (timestamp, frame) pairs."""
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        return []
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = total_frames / fps if fps > 0 else 0
+
+    timestamps: list[float] = []
+    t = 0.0
+    while t < duration:
+        timestamps.append(t)
+        t += interval_sec
+    if duration > 0 and (not timestamps or timestamps[-1] < duration - 0.5):
+        timestamps.append(max(0, duration - 0.1))
+
+    samples: list[tuple[float, np.ndarray]] = []
+    for ts in timestamps:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(ts * fps))
+        ret, frame = cap.read()
+        if ret:
+            samples.append((ts, frame))
+
+    cap.release()
+    return samples
+
+
 class Validator:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -59,6 +96,11 @@ class Validator:
             report.checks.append(self._check_streams(rec))
             max_drift = max_drift_override or self.config.max_drift_sec
             report.checks.append(self._check_drift(rec, max_drift))
+
+            samples = _sample_frames(rec, interval_sec=2.0)
+            report.checks.append(self._check_freeze_ratio(rec, samples))
+            report.checks.append(self._check_blank_frames(rec, samples))
+            report.checks.append(self._check_ocr(rec, samples))
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
@@ -71,8 +113,7 @@ class Validator:
 
         Missing recordings are reported as warnings, not failures — a project
         that hasn't generated videos yet should still be pushable.  Quality
-        checks on *existing* recordings (streams, drift) and narration lint
-        are hard failures.
+        checks on *existing* recordings and narration lint are hard failures.
         """
         reports = self.run_all()
         hard_fail = False
@@ -80,7 +121,8 @@ class Validator:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
-                        if c.get("name") == "recording_exists":
+                        soft_checks = {"recording_exists", "ocr_scan", "freeze_ratio"}
+                        if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
                             hard_fail = True
@@ -99,6 +141,135 @@ class Validator:
                     for d in c.get("details", []):
                         print(f"    {d}")
 
+    # ── Core frame-level checks (cv2 only — always runs) ─────────────
+
+    def _check_freeze_ratio(
+        self, path: Path, samples: list[tuple[float, np.ndarray]]
+    ) -> CheckResult:
+        """Fail if the video ends with a long frozen tail.
+
+        Walks backward from the last frame and counts how many consecutive
+        frames at the END are identical (MSE < 1.0 on 64x36 grayscale).
+        Interior pauses (terminal idle, animation holds) are expected in
+        narrated demos and are NOT penalised.
+        """
+        max_ratio = self.config.max_freeze_ratio
+
+        if len(samples) < 3:
+            return CheckResult("freeze_ratio", True, ["Too few frames to check"])
+
+        duration = samples[-1][0] - samples[0][0]
+        if duration < 5:
+            return CheckResult("freeze_ratio", True, ["Video too short to check"])
+
+        thumbs = []
+        for _ts, frame in samples:
+            small = cv2.resize(frame, (64, 36))
+            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            thumbs.append(gray)
+
+        trailing_frozen = 0
+        for i in range(len(thumbs) - 1, 0, -1):
+            mse = float(np.mean((thumbs[i] - thumbs[i - 1]) ** 2))
+            if mse < 1.0:
+                trailing_frozen += 1
+            else:
+                break
+
+        interval = duration / (len(samples) - 1) if len(samples) > 1 else 2.0
+        frozen_secs = trailing_frozen * interval
+        ratio = frozen_secs / duration if duration > 0 else 0.0
+        passed = ratio <= max_ratio
+        return CheckResult(
+            "freeze_ratio", passed,
+            [f"Trailing freeze≈{frozen_secs:.1f}s / {duration:.1f}s ({ratio:.0%}, max={max_ratio:.0%})"],
+        )
+
+    def _check_blank_frames(
+        self, path: Path, samples: list[tuple[float, np.ndarray]]
+    ) -> CheckResult:
+        """Fail if a significant portion of the video is blank/black/dark.
+
+        Samples the ENTIRE video at regular intervals and checks mean
+        pixel intensity.  A frame with mean < 15 (out of 255) is dark.
+        """
+        if not samples:
+            return CheckResult("blank_frames", False, ["No frames sampled"])
+
+        duration = samples[-1][0] - samples[0][0] if len(samples) > 1 else 0
+        dark_threshold = 15
+        dark_count = 0
+        dark_ranges: list[str] = []
+        in_dark_run = False
+        dark_start = 0.0
+
+        for ts, frame in samples:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            mean_intensity = float(np.mean(gray))
+
+            if mean_intensity < dark_threshold:
+                dark_count += 1
+                if not in_dark_run:
+                    in_dark_run = True
+                    dark_start = ts
+            else:
+                if in_dark_run:
+                    dark_ranges.append(f"{dark_start:.1f}s-{ts:.1f}s")
+                    in_dark_run = False
+
+        if in_dark_run:
+            dark_ranges.append(f"{dark_start:.1f}s-{samples[-1][0]:.1f}s")
+
+        dark_ratio = dark_count / len(samples) if samples else 0
+        max_dark_ratio = 0.15
+        passed = dark_ratio <= max_dark_ratio
+
+        details = [f"Dark frames: {dark_count}/{len(samples)} ({dark_ratio:.0%}, max={max_dark_ratio:.0%})"]
+        if dark_ranges:
+            details.append(f"Dark ranges: {', '.join(dark_ranges[:5])}")
+
+        return CheckResult("blank_frames", passed, details)
+
+    # ── OCR text scanning (pytesseract — degrades if binary missing) ──
+
+    def _check_ocr(
+        self, path: Path, samples: list[tuple[float, np.ndarray]]
+    ) -> CheckResult:
+        """Run OCR on sampled frames to detect error text in recordings.
+
+        Uses the SAME samples as freeze/blank checks so the entire video
+        is covered.  Gracefully skips if tesseract binary is not installed.
+        """
+        import re
+
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+        except Exception:
+            return CheckResult("ocr_scan", True, ["tesseract binary not installed (skipped)"])
+
+        error_patterns = self.config.ocr_config.get("error_patterns", [])
+        if not error_patterns or not samples:
+            return CheckResult("ocr_scan", True, ["No patterns or frames to check"])
+
+        issues: list[str] = []
+        passed = True
+
+        for ts, frame in samples:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            text = pytesseract.image_to_string(thresh)
+
+            for pat in error_patterns:
+                if re.search(pat, text, re.IGNORECASE):
+                    issues.append(f"Pattern '{pat}' at {ts:.1f}s")
+                    passed = False
+
+        details = issues[:10] if issues else ["No OCR issues detected"]
+        return CheckResult("ocr_scan", passed, details)
+
+    # ── Narration lint ────────────────────────────────────────────────
+
     def _check_narration_lint(self, seg_id: str) -> CheckResult:
         narr = self._find_narration(seg_id)
         if not narr:
@@ -113,27 +284,7 @@ class Validator:
             result.issues[:10] if result.issues else [],
         )
 
-    def _find_narration(self, seg_id: str) -> Path | None:
-        d = self.config.narration_dir
-        if not d.exists():
-            return None
-        seg_name = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{seg_name}.md"
-        if exact.exists():
-            return exact
-        for md in d.glob(f"{seg_id}-*.md"):
-            return md
-        for md in d.glob(f"*{seg_id}*.md"):
-            return md
-        return None
-
-    def _find_recording(self, seg_id: str) -> Path | None:
-        d = self.config.recordings_dir
-        if not d.exists():
-            return None
-        for mp4 in d.glob(f"*{seg_id}*.mp4"):
-            return mp4
-        return None
+    # ── ffprobe-based checks ──────────────────────────────────────────
 
     def _check_streams(self, path: Path) -> CheckResult:
         try:
@@ -179,3 +330,31 @@ class Validator:
             )
         except Exception as exc:
             return CheckResult("av_drift", False, [str(exc)])
+
+    # ── Helpers ────────────────────────────────────────────────────────
+
+    def _find_narration(self, seg_id: str) -> Path | None:
+        d = self.config.narration_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.md"
+        if exact.exists():
+            return exact
+        for md in d.glob(f"{seg_id}-*.md"):
+            return md
+        for md in d.glob(f"*{seg_id}*.md"):
+            return md
+        return None
+
+    def _find_recording(self, seg_id: str) -> Path | None:
+        d = self.config.recordings_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.mp4"
+        if exact.exists():
+            return exact
+        for mp4 in d.glob(f"*{seg_id}*.mp4"):
+            return mp4
+        return None

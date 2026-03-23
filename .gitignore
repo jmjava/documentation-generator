@@ -32,5 +32,6 @@ htmlcov/
 docs/demos/audio/*.mp3
 docs/demos/animations/media/
 docs/demos/terminal/rendered/
-docs/demos/recordings/*.mp4
 docs/demos/.docgen-state.json
+
+# recordings/*.mp4 — COMMITTED via Git LFS for GitHub Pages

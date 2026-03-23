@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,6 +21,11 @@ ERROR_PATTERNS = [
     r"bash: ",
     r"error:",
 ]
+
+_CLEAN_BASHRC = """\
+# Minimal bashrc for VHS recordings — no prompt stacking, no git helpers.
+export PS1='$ '
+"""
 
 
 @dataclass
@@ -51,20 +58,71 @@ class VHSRunner:
             results.append(self._render_one(t, strict))
         return results
 
+    @staticmethod
+    def _clean_env() -> dict[str, str]:
+        """Build a minimal environment that produces a clean VHS recording.
+
+        Problems this solves:
+        - (.venv) stacking: .bashrc re-activates the venv on every prompt
+        - parse_git_branch: command not found: PS1 references missing functions
+        - PROMPT_COMMAND noise: running extra commands on every prompt
+        - PATH pollution: duplicated venv bin entries
+
+        Strategy: build PATH from scratch with only the venv bin + system dirs.
+        Redirect HOME to a temp dir with a minimal .bashrc.
+        Tapes MUST use ``Set Shell "bash --norc --noprofile"`` to skip
+        all user/system startup files unconditionally.
+        """
+        fake_home = tempfile.mkdtemp(prefix="vhs_home_")
+        Path(fake_home, ".bashrc").write_text(_CLEAN_BASHRC)
+
+        venv_bin = os.environ.get("VIRTUAL_ENV", "")
+        if venv_bin:
+            venv_bin = str(Path(venv_bin) / "bin")
+
+        seen: set[str] = set()
+        clean_path_parts: list[str] = []
+        for p in os.environ.get("PATH", "").split(os.pathsep):
+            if p in seen:
+                continue
+            seen.add(p)
+            if ".venv" in p and p != venv_bin:
+                continue
+            clean_path_parts.append(p)
+        if venv_bin and venv_bin not in seen:
+            clean_path_parts.insert(0, venv_bin)
+
+        env = {
+            "PATH": os.pathsep.join(clean_path_parts),
+            "HOME": fake_home,
+            "PS1": "$ ",
+            "TERM": os.environ.get("TERM", "xterm-256color"),
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+            "USER": os.environ.get("USER", "user"),
+        }
+        return env
+
     def _render_one(self, tape_path: Path, strict: bool) -> VHSResult:
         print(f"[vhs] Rendering {tape_path.name}")
+        env = self._clean_env()
         try:
             proc = subprocess.run(
                 ["vhs", str(tape_path)],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=300,
                 cwd=str(tape_path.parent),
+                env=env,
             )
         except FileNotFoundError:
             return VHSResult(tape=tape_path.name, success=False, errors=["vhs not found in PATH"])
         except subprocess.TimeoutExpired:
             return VHSResult(tape=tape_path.name, success=False, errors=["VHS render timed out"])
+        finally:
+            fake_home = env.get("HOME", "")
+            if fake_home and "vhs_home_" in fake_home:
+                import shutil
+                shutil.rmtree(fake_home, ignore_errors=True)
 
         combined = proc.stdout + "\n" + proc.stderr
         errors = self._scan_output(combined)

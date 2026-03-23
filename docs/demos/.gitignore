@@ -1,0 +1,14 @@
+# docgen: intermediate objects (regenerable)
+.venv/
+slides/node_modules/
+slides/dist/
+animations/media/partial_movie_files/
+animations/media/videos/
+terminal/rendered/.tmp/
+terminal/rendered/*.mp4
+audio/*.mp3
+__pycache__/
+*.pyc
+.docgen-state.json
+
+# recordings/*.mp4 — COMMITTED (tracked via LFS for README/Pages links)

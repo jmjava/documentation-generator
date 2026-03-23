@@ -10,11 +10,15 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+class ComposeError(RuntimeError):
+    """Raised when composition would produce an unacceptable video."""
+
+
 class Composer:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def compose_segments(self, segment_ids: list[str]) -> int:
+    def compose_segments(self, segment_ids: list[str], *, strict: bool = True) -> int:
         composed = 0
         for seg_id in segment_ids:
             vmap = self.config.visual_map.get(seg_id, {})
@@ -24,9 +28,9 @@ class Composer:
 
             ok = False
             if vtype == "manim":
-                ok = self._compose_simple(seg_id, self._manim_path(vmap))
+                ok = self._compose_simple(seg_id, self._manim_path(vmap), strict=strict)
             elif vtype == "vhs":
-                ok = self._compose_simple(seg_id, self._vhs_path(vmap))
+                ok = self._compose_simple(seg_id, self._vhs_path(vmap), strict=strict)
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -43,7 +47,14 @@ class Composer:
         print(f"\n=== Composed {composed} / {len(segment_ids)} segment videos ===")
         return composed
 
-    def _compose_simple(self, seg_id: str, video_path: Path) -> bool:
+    def check_freeze_ratio(self, audio_dur: float, video_dur: float) -> float:
+        """Return the freeze ratio that would result from composing these durations."""
+        if audio_dur <= 0:
+            return 0.0
+        gap = max(0.0, audio_dur - video_dur)
+        return gap / audio_dur
+
+    def _compose_simple(self, seg_id: str, video_path: Path, *, strict: bool = True) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
             print(f"    SKIP: no audio for {seg_id}")
@@ -60,6 +71,18 @@ class Composer:
         if audio_dur is None or video_dur is None:
             print(f"    SKIP: cannot probe durations")
             return False
+
+        freeze = self.check_freeze_ratio(audio_dur, video_dur)
+        max_ratio = self.config.max_freeze_ratio
+        if freeze > max_ratio:
+            msg = (
+                f"    FREEZE GUARD: {seg_id} visual is {video_dur:.1f}s but audio "
+                f"is {audio_dur:.1f}s → {freeze:.0%} frozen "
+                f"(max {max_ratio:.0%}). Re-render the visual source to be longer."
+            )
+            if strict:
+                raise ComposeError(msg)
+            print(f"    WARNING: {msg}")
 
         if video_dur < audio_dur:
             pad = audio_dur - video_dur

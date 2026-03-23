@@ -23,6 +23,10 @@ class Pipeline:
             from docgen.tts import TTSGenerator
             TTSGenerator(self.config).generate()
 
+        print("\n=== Stage: Timestamps ===")
+        from docgen.timestamps import TimestampExtractor
+        TimestampExtractor(self.config).extract_all()
+
         if not skip_manim:
             print("\n=== Stage: Manim ===")
             from docgen.manim_runner import ManimRunner

@@ -83,6 +83,16 @@ def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
 
 
 @main.command()
+@click.pass_context
+def timestamps(ctx: click.Context) -> None:
+    """Extract Whisper timestamps from TTS audio -> timing.json."""
+    from docgen.timestamps import TimestampExtractor
+
+    cfg = ctx.obj["config"]
+    TimestampExtractor(cfg).extract_all()
+
+
+@main.command()
 @click.option("--scene", default=None, help="Render a single Manim scene.")
 @click.pass_context
 def manim(ctx: click.Context, scene: str | None) -> None:

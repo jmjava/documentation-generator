@@ -95,6 +95,11 @@ class Config:
         return float(self.raw.get("validation", {}).get("max_drift_sec", 2.75))
 
     @property
+    def max_freeze_ratio(self) -> float:
+        """Maximum fraction of a composed video that may be a frozen last frame."""
+        return float(self.raw.get("validation", {}).get("max_freeze_ratio", 0.25))
+
+    @property
     def ocr_config(self) -> dict[str, Any]:
         defaults: dict[str, Any] = {
             "sample_interval_sec": 2,
@@ -104,6 +109,7 @@ class Config:
                 "syntax error",
                 "Permission denied",
                 "bash:",
+                r"\(\.venv\).*\(\.venv\)",
             ],
             "min_confidence": 40,
         }
