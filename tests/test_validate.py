@@ -6,11 +6,8 @@ depend on any external recordings or tesseract.
 
 from __future__ import annotations
 
-import json
 import subprocess
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -19,7 +16,7 @@ import yaml
 
 from docgen.compose import ComposeError, Composer
 from docgen.config import Config
-from docgen.validate import CheckResult, Validator, _sample_frames
+from docgen.validate import Validator, _sample_frames
 
 
 # ── Helpers: create synthetic test videos ─────────────────────────────
@@ -357,7 +354,7 @@ def _make_silent_audio(path: Path, duration_sec: float = 10.0) -> Path:
     subprocess.run(
         [
             "ffmpeg", "-y", "-f", "lavfi",
-            "-i", f"anullsrc=r=44100:cl=mono",
+            "-i", "anullsrc=r=44100:cl=mono",
             "-t", str(duration_sec),
             "-c:a", "libmp3lame", "-b:a", "32k",
             str(path),

@@ -196,7 +196,6 @@ class Validator:
         if not samples:
             return CheckResult("blank_frames", False, ["No frames sampled"])
 
-        duration = samples[-1][0] - samples[0][0] if len(samples) > 1 else 0
         dark_threshold = 15
         dark_count = 0
         dark_ranges: list[str] = []

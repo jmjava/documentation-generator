@@ -385,7 +385,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
 
 
 def _write_narration_readme(plan: InitPlan) -> str:
-    content = textwrap.dedent(f"""\
+    content = textwrap.dedent("""\
         # Narration scripts (TTS source)
 
         These Markdown files are the spoken script for demo segments.

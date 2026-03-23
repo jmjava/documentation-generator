@@ -69,7 +69,7 @@ class Composer:
         audio_dur = self._probe_duration(audio)
         video_dur = self._probe_duration(video_path)
         if audio_dur is None or video_dur is None:
-            print(f"    SKIP: cannot probe durations")
+            print("    SKIP: cannot probe durations")
             return False
 
         freeze = self.check_freeze_ratio(audio_dur, video_dur)
