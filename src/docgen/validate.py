@@ -62,6 +62,8 @@ class Validator:
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
+        report.checks.append(self._check_narration_lint(seg_id))
+
         return report.to_dict()
 
     def run_pre_push(self) -> None:
@@ -86,6 +88,34 @@ class Validator:
                     print(f"  [{seg}] {status} {c.get('name')}")
                     for d in c.get("details", []):
                         print(f"    {d}")
+
+    def _check_narration_lint(self, seg_id: str) -> CheckResult:
+        narr = self._find_narration(seg_id)
+        if not narr:
+            return CheckResult("narration_lint", True, ["No narration file (skipped)"])
+        from docgen.narration_lint import lint_pre_tts
+        text = narr.read_text(encoding="utf-8")
+        deny = self.config.narration_lint_config.get("pre_tts_deny_patterns")
+        result = lint_pre_tts(text, deny_patterns=deny)
+        return CheckResult(
+            "narration_lint",
+            result.passed,
+            result.issues[:10] if result.issues else [],
+        )
+
+    def _find_narration(self, seg_id: str) -> Path | None:
+        d = self.config.narration_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.md"
+        if exact.exists():
+            return exact
+        for md in d.glob(f"{seg_id}-*.md"):
+            return md
+        for md in d.glob(f"*{seg_id}*.md"):
+            return md
+        return None
 
     def _find_recording(self, seg_id: str) -> Path | None:
         d = self.config.recordings_dir
