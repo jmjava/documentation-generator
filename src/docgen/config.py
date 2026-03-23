@@ -45,6 +45,15 @@ class Config:
         return self.raw.get("segments", {}).get("all", self.segments_default)
 
     @property
+    def segment_names(self) -> dict[str, str]:
+        """Map segment ID → full name stem, e.g. {"01": "01-architecture"}."""
+        return self.raw.get("segment_names", {})
+
+    def resolve_segment_name(self, seg_id: str) -> str:
+        """Return the full name for a segment, falling back to the ID itself."""
+        return self.segment_names.get(seg_id, seg_id)
+
+    @property
     def visual_map(self) -> dict[str, Any]:
         return self.raw.get("visual_map", {})
 

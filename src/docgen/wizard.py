@@ -169,6 +169,23 @@ def generate_narration_via_llm(
 # Flask app factory
 # ---------------------------------------------------------------------------
 
+def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path | None:
+    """Find an asset file by segment name, then segment ID prefix, then glob."""
+    if not directory.exists():
+        return None
+    exact = directory / f"{seg_name}{ext}"
+    if exact.exists():
+        return exact
+    exact_id = directory / f"{seg_id}{ext}"
+    if exact_id.exists():
+        return exact_id
+    for f in directory.glob(f"{seg_id}-*{ext}"):
+        return f
+    for f in directory.glob(f"{seg_id}*{ext}"):
+        return f
+    return None
+
+
 def create_app(config: Any | None = None) -> Flask:
     app = Flask(
         __name__,
@@ -277,34 +294,23 @@ def create_app(config: Any | None = None) -> Flask:
         state = load_state(base)
         result = []
         for seg_id in cfg.segments_all:
-            narration_path = cfg.narration_dir / f"{seg_id}.md"
-            audio_path = cfg.audio_dir / f"{seg_id}.mp3"
+            seg_name = cfg.resolve_segment_name(seg_id)
 
-            # Try to find the recording with any name prefix
-            rec_found = None
-            if cfg.recordings_dir.exists():
-                for mp4 in cfg.recordings_dir.glob(f"{seg_id}*.mp4"):
-                    rec_found = mp4
-                    break
-                if not rec_found:
-                    for mp4 in cfg.recordings_dir.glob(f"*{seg_id}*.mp4"):
-                        rec_found = mp4
-                        break
+            narr_found = _find_asset(cfg.narration_dir, seg_name, seg_id, ".md")
+            audio_found = _find_asset(cfg.audio_dir, seg_name, seg_id, ".mp3")
+            rec_found = _find_asset(cfg.recordings_dir, seg_name, seg_id, ".mp4")
 
             seg_state = state.get("segments", {}).get(seg_id, {})
             result.append({
                 "id": seg_id,
+                "name": seg_name,
                 "status": seg_state.get("status", "draft"),
                 "revision_notes": seg_state.get("revision_notes", ""),
-                "has_narration": narration_path.exists(),
-                "has_audio": audio_path.exists() or bool(
-                    list(cfg.audio_dir.glob(f"*{seg_id}*.mp3")) if cfg.audio_dir.exists() else []
-                ),
+                "has_narration": narr_found is not None,
+                "has_audio": audio_found is not None,
                 "has_recording": rec_found is not None,
-                "narration_path": str(narration_path.relative_to(base)) if narration_path.exists() else None,
-                "audio_path": str(next(cfg.audio_dir.glob(f"*{seg_id}*.mp3")).relative_to(base))
-                    if cfg.audio_dir.exists() and list(cfg.audio_dir.glob(f"*{seg_id}*.mp3"))
-                    else None,
+                "narration_path": str(narr_found.relative_to(base)) if narr_found else None,
+                "audio_path": str(audio_found.relative_to(base)) if audio_found else None,
                 "recording_path": str(rec_found.relative_to(base)) if rec_found else None,
                 "visual_map": cfg.visual_map.get(seg_id, {}),
             })
@@ -317,18 +323,13 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
-        # Try exact match first, then glob
-        candidates = [
-            cfg.narration_dir / f"{segment_id}.md",
-        ]
-        if cfg.narration_dir.exists():
-            candidates.extend(cfg.narration_dir.glob(f"*{segment_id}*.md"))
-        for p in candidates:
-            if p.exists():
-                return jsonify({
-                    "text": p.read_text(encoding="utf-8"),
-                    "path": str(p.relative_to(cfg.base_dir)),
-                })
+        seg_name = cfg.resolve_segment_name(segment_id)
+        found = _find_asset(cfg.narration_dir, seg_name, segment_id, ".md")
+        if found:
+            return jsonify({
+                "text": found.read_text(encoding="utf-8"),
+                "path": str(found.relative_to(cfg.base_dir)),
+            })
         return jsonify({"text": "", "path": None})
 
     @app.route("/api/narration/<segment_id>", methods=["PUT"])
@@ -338,12 +339,9 @@ def create_app(config: Any | None = None) -> Flask:
             return jsonify({"error": "no config"}), 400
         data = request.json or {}
         text = data.get("text", "")
-        # Find or create narration file
-        target = cfg.narration_dir / f"{segment_id}.md"
-        if cfg.narration_dir.exists():
-            for existing in cfg.narration_dir.glob(f"*{segment_id}*.md"):
-                target = existing
-                break
+        seg_name = cfg.resolve_segment_name(segment_id)
+        found = _find_asset(cfg.narration_dir, seg_name, segment_id, ".md")
+        target = found or (cfg.narration_dir / f"{seg_name}.md")
         cfg.narration_dir.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
         return jsonify({"ok": True, "path": str(target.relative_to(cfg.base_dir))})
