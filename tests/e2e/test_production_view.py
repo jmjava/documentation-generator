@@ -83,8 +83,10 @@ class TestSegmentReview:
 
 class TestNarrationEditing:
     def test_edit_narration_text(self, page: Page):
-        page.locator("#segment-list li", has_text="01-intro").click()
+        with page.expect_response("**/api/narration/01-intro"):
+            page.locator("#segment-list li", has_text="01-intro").click()
         editor = page.locator("#narration-editor")
+        expect(editor).to_have_value(re.compile(r"Welcome to the test project"))
         editor.fill("Updated narration content for testing.")
         expect(editor).to_have_value("Updated narration content for testing.")
 
