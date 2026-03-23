@@ -18,6 +18,23 @@ Reusable Python library and CLI for producing narrated demo videos from Markdown
 pip install docgen @ git+https://github.com/jmjava/documentation-generator.git
 ```
 
+## Development setup
+
+```bash
+git clone https://github.com/jmjava/documentation-generator.git
+cd documentation-generator
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Run the tests:
+
+```bash
+pytest                        # unit tests
+pytest tests/e2e/ -x          # end-to-end (Playwright, needs `playwright install chromium`)
+```
+
 ## Quick start
 
 ```bash

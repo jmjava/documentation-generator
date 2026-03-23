@@ -317,6 +317,12 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
     created = []
 
     _bash_dir = 'DEMOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
+    _venv_activate = "\n".join([
+        'REPO_ROOT="$(cd "$DEMOS_DIR/../.." && pwd)"',
+        'for _venv in "$DEMOS_DIR/.venv" "$REPO_ROOT/.venv"; do',
+        '    [ -f "$_venv/bin/activate" ] && { source "$_venv/bin/activate"; break; }',
+        'done',
+    ])
 
     scripts = {
         "generate-all.sh": "\n".join([
@@ -325,6 +331,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
             "# Wraps: docgen generate-all",
             "set -euo pipefail",
             _bash_dir,
+            _venv_activate,
             'ARGS=()',
             'for arg in "$@"; do',
             '    if [[ "$arg" == "--dry-run" ]]; then',
@@ -341,6 +348,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
             "# Wraps: docgen compose",
             "set -euo pipefail",
             _bash_dir,
+            _venv_activate,
             'exec docgen --config "$DEMOS_DIR/docgen.yaml" compose "$@"',
             "",
         ]),
@@ -350,6 +358,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
             "# Wraps: docgen rebuild-after-audio",
             "set -euo pipefail",
             _bash_dir,
+            _venv_activate,
             'echo "Rebuild after audio (skipping TTS, using existing audio/*.mp3)"',
             'exec docgen --config "$DEMOS_DIR/docgen.yaml" rebuild-after-audio',
             "",
@@ -360,6 +369,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
             "# Wraps: docgen validate --pre-push",
             "set -euo pipefail",
             _bash_dir,
+            _venv_activate,
             'exec docgen --config "$DEMOS_DIR/docgen.yaml" validate --pre-push',
             "",
         ]),
