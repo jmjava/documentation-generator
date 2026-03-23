@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import os
+
 import click
 
 from docgen.config import Config
+
+
+def _load_env(cfg: Config | None) -> None:
+    """Load .env file from config if specified, so OPENAI_API_KEY etc. are available."""
+    if cfg and cfg.env_file and cfg.env_file.exists():
+        for line in cfg.env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, val = line.partition("=")
+                os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
 
 
 @click.group()
@@ -24,6 +36,7 @@ def main(ctx: click.Context, config_path: str | None) -> None:
     except FileNotFoundError:
         cfg = None
     ctx.obj["config"] = cfg
+    _load_env(cfg)
 
 
 @main.command()
@@ -74,19 +87,28 @@ def vhs(ctx: click.Context, tape: str | None, strict: bool) -> None:
 
     cfg = ctx.obj["config"]
     runner = VHSRunner(cfg)
-    runner.render(tape=tape, strict=strict)
+    results = runner.render(tape=tape, strict=strict)
+    for r in results:
+        status = "ok" if r.success else "FAIL"
+        click.echo(f"  [{status}] {r.tape}")
+        for e in r.errors:
+            click.echo(f"    {e}")
 
 
 @main.command()
 @click.argument("segments", nargs=-1)
 @click.pass_context
 def compose(ctx: click.Context, segments: tuple[str, ...]) -> None:
-    """Compose segments (audio + video)."""
+    """Compose segments (audio + video via ffmpeg).
+
+    Pass segment IDs to compose specific ones, or omit for the default set.
+    """
     from docgen.compose import Composer
 
     cfg = ctx.obj["config"]
     comp = Composer(cfg)
     target = list(segments) if segments else cfg.segments_default
+    click.echo(f"=== Composing {len(target)} segments ===")
     comp.compose_segments(target)
 
 
@@ -95,7 +117,7 @@ def compose(ctx: click.Context, segments: tuple[str, ...]) -> None:
 @click.option("--pre-push", is_flag=True, help="Run all checks; exit non-zero on any failure.")
 @click.pass_context
 def validate(ctx: click.Context, max_drift: float | None, pre_push: bool) -> None:
-    """Run validation checks on composed videos."""
+    """Run validation checks on composed videos (streams, drift, narration lint)."""
     from docgen.validate import Validator
 
     cfg = ctx.obj["config"]
@@ -108,10 +130,45 @@ def validate(ctx: click.Context, max_drift: float | None, pre_push: bool) -> Non
 
 
 @main.command()
+@click.option("--segment", default=None, help="Lint a single segment.")
+@click.pass_context
+def lint(ctx: click.Context, segment: str | None) -> None:
+    """Run narration lint on all (or one) segment narration files."""
+    from docgen.narration_lint import NarrationLinter
+
+    cfg = ctx.obj["config"]
+    linter = NarrationLinter(cfg)
+    segments = [segment] if segment else cfg.segments_all
+    issues_total = 0
+
+    for seg_id in segments:
+        seg_name = cfg.resolve_segment_name(seg_id)
+        narr_dir = cfg.narration_dir
+        if not narr_dir.exists():
+            continue
+        path = narr_dir / f"{seg_name}.md"
+        if not path.exists():
+            candidates = list(narr_dir.glob(f"{seg_id}-*.md"))
+            path = candidates[0] if candidates else None
+        if not path or not path.exists():
+            click.echo(f"  [{seg_id}] no narration file")
+            continue
+        result = linter.lint_text(path.read_text(encoding="utf-8"))
+        status = "PASS" if result.passed else "FAIL"
+        click.echo(f"  [{seg_id}] {status} {seg_name}")
+        for issue in result.issues:
+            click.echo(f"    {issue}")
+            issues_total += 1
+
+    if issues_total:
+        raise SystemExit(1)
+
+
+@main.command()
 @click.option("--config-name", "concat_name", default=None, help="Concat config name.")
 @click.pass_context
 def concat(ctx: click.Context, concat_name: str | None) -> None:
-    """Concatenate full demo files."""
+    """Concatenate full demo files from composed segments."""
     from docgen.concat import ConcatBuilder
 
     cfg = ctx.obj["config"]
@@ -137,7 +194,7 @@ def pages(ctx: click.Context, force: bool) -> None:
 @click.option("--skip-vhs", is_flag=True)
 @click.pass_context
 def generate_all(ctx: click.Context, skip_tts: bool, skip_manim: bool, skip_vhs: bool) -> None:
-    """Run full pipeline: TTS → Manim → VHS → compose → validate → concat → pages."""
+    """Run full pipeline: TTS -> Manim -> VHS -> compose -> validate -> concat -> pages."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
@@ -148,9 +205,9 @@ def generate_all(ctx: click.Context, skip_tts: bool, skip_manim: bool, skip_vhs:
 @main.command("rebuild-after-audio")
 @click.pass_context
 def rebuild_after_audio(ctx: click.Context) -> None:
-    """Recompose + validate + concat (skip TTS/Manim/VHS)."""
+    """Rebuild everything after new audio: Manim -> VHS -> compose -> validate -> concat."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
-    pipeline.run(skip_tts=True, skip_manim=True, skip_vhs=True)
+    pipeline.run(skip_tts=True)

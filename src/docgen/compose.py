@@ -14,58 +14,99 @@ class Composer:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def compose_segments(self, segment_ids: list[str]) -> None:
+    def compose_segments(self, segment_ids: list[str]) -> int:
+        composed = 0
         for seg_id in segment_ids:
             vmap = self.config.visual_map.get(seg_id, {})
             vtype = vmap.get("type", "vhs")
+            seg_name = self.config.resolve_segment_name(seg_id)
+            print(f"  [{seg_id}] {seg_name} ({vtype})")
+
+            ok = False
             if vtype == "manim":
-                self.compose_simple(seg_id, self._manim_path(vmap))
+                ok = self._compose_simple(seg_id, self._manim_path(vmap))
             elif vtype == "vhs":
-                self.compose_simple(seg_id, self._vhs_path(vmap))
+                ok = self._compose_simple(seg_id, self._vhs_path(vmap))
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
-                self.compose_mixed(seg_id, sources)
+                ok = self._compose_mixed(seg_id, sources)
             elif vtype == "still":
-                self.compose_still(seg_id, vmap.get("source", ""))
+                ok = self._compose_still(seg_id, vmap.get("source", ""))
+            elif vtype == "image":
+                ok = self._compose_image(seg_id, vmap.get("source", ""))
             else:
-                print(f"[compose] Unknown type '{vtype}' for segment {seg_id}")
+                print(f"    unknown type '{vtype}'")
 
-    def compose_simple(self, seg_id: str, video_path: Path) -> None:
+            if ok:
+                composed += 1
+
+        print(f"\n=== Composed {composed} / {len(segment_ids)} segment videos ===")
+        return composed
+
+    def _compose_simple(self, seg_id: str, video_path: Path) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
-            print(f"[compose] No audio for {seg_id}")
-            return
+            print(f"    SKIP: no audio for {seg_id}")
+            return False
         if not video_path.exists():
-            print(f"[compose] Video not found: {video_path}")
-            return
+            print(f"    SKIP: missing {video_path}")
+            return False
 
         out = self._output_path(seg_id)
         out.parent.mkdir(parents=True, exist_ok=True)
-        print(f"[compose] {seg_id}: {video_path.name} + {audio.name} -> {out.name}")
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-stream_loop", "-1", "-i", str(video_path),
-            "-i", str(audio),
-            "-c:v", "libx264", "-c:a", "aac",
-            "-shortest", "-movflags", "+faststart",
-            str(out),
-        ]
-        self._run_ffmpeg(cmd)
+        audio_dur = self._probe_duration(audio)
+        video_dur = self._probe_duration(video_path)
+        if audio_dur is None or video_dur is None:
+            print(f"    SKIP: cannot probe durations")
+            return False
 
-    def compose_mixed(self, seg_id: str, video_paths: list[Path]) -> None:
+        if video_dur < audio_dur:
+            pad = audio_dur - video_dur
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(video_path), "-i", str(audio),
+                "-filter_complex",
+                f"[0:v]tpad=stop_mode=clone:stop_duration={pad:.3f}[v]",
+                "-map", "[v]", "-map", "1:a:0",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                "-t", f"{audio_dur:.3f}",
+                "-movflags", "+faststart",
+                str(out),
+            ]
+            self._run_ffmpeg(cmd)
+            print(f"    ok video={video_dur:.1f}s + freeze {pad:.1f}s -> audio={audio_dur:.1f}s")
+        else:
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(video_path), "-i", str(audio),
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                "-shortest", "-movflags", "+faststart",
+                str(out),
+            ]
+            self._run_ffmpeg(cmd)
+            print(f"    ok video={video_dur:.1f}s muxed to narration (~{audio_dur:.1f}s, -shortest)")
+
+        return True
+
+    def _compose_mixed(self, seg_id: str, video_paths: list[Path]) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
-            return
+            print(f"    SKIP: no audio for {seg_id}")
+            return False
         existing = [v for v in video_paths if v.exists()]
         if not existing:
-            print(f"[compose] No video sources found for mixed segment {seg_id}")
-            return
+            print(f"    SKIP: no video sources for mixed segment {seg_id}")
+            return False
 
         out = self._output_path(seg_id)
         out.parent.mkdir(parents=True, exist_ok=True)
 
-        # Concat videos first, then add audio
         concat_list = out.parent / f".{seg_id}-concat.txt"
         concat_list.write_text(
             "\n".join(f"file '{v}'" for v in existing), encoding="utf-8"
@@ -75,39 +116,84 @@ class Composer:
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0", "-i", str(concat_list),
             "-i", str(audio),
-            "-c:v", "libx264", "-c:a", "aac",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
             "-shortest", "-movflags", "+faststart",
             str(out),
         ]
         self._run_ffmpeg(cmd)
         concat_list.unlink(missing_ok=True)
 
-    def compose_still(self, seg_id: str, image_source: str) -> None:
+        ad = self._probe_duration(audio)
+        print(f"    ok mixed concat + audio={ad:.1f}s" if ad else "    ok mixed concat")
+        return True
+
+    def _compose_still(self, seg_id: str, hex_color: str) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
-            return
-        img = self.config.base_dir / image_source
-        if not img.exists():
-            print(f"[compose] Still image not found: {img}")
-            return
+            print(f"    SKIP: no audio for {seg_id}")
+            return False
 
         out = self._output_path(seg_id)
         out.parent.mkdir(parents=True, exist_ok=True)
 
         cmd = [
             "ffmpeg", "-y",
-            "-loop", "1", "-i", str(img),
+            "-f", "lavfi", "-i", f"color=c=0x{hex_color}:s=1280x720:r=30",
             "-i", str(audio),
-            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
             "-shortest", "-movflags", "+faststart",
             str(out),
         ]
         self._run_ffmpeg(cmd)
+        ad = self._probe_duration(audio)
+        print(f"    ok still 1280x720 + audio={ad:.1f}s" if ad else "    ok still")
+        return True
+
+    def _compose_image(self, seg_id: str, relpath: str) -> bool:
+        audio = self._find_audio(seg_id)
+        if not audio:
+            print(f"    SKIP: no audio for {seg_id}")
+            return False
+
+        img = self.config.base_dir / relpath
+        if not img.exists():
+            print(f"    SKIP: missing image {img}")
+            return False
+
+        out = self._output_path(seg_id)
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        audio_dur = self._probe_duration(audio)
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-framerate", "30", "-i", str(img),
+            "-i", str(audio),
+            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,"
+                   "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
+            "-t", f"{audio_dur:.3f}" if audio_dur else "",
+            "-movflags", "+faststart",
+            str(out),
+        ]
+        cmd = [c for c in cmd if c]
+        self._run_ffmpeg(cmd)
+        print(f"    ok image {img.name} + audio={audio_dur:.1f}s" if audio_dur else "    ok image")
+        return True
 
     def _find_audio(self, seg_id: str) -> Path | None:
         d = self.config.audio_dir
         if not d.exists():
             return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.mp3"
+        if exact.exists():
+            return exact
+        for mp3 in d.glob(f"{seg_id}-*.mp3"):
+            return mp3
         for mp3 in d.glob(f"*{seg_id}*.mp3"):
             return mp3
         return None
@@ -121,7 +207,6 @@ class Composer:
         return self.config.terminal_dir / "rendered" / src
 
     def _resolve_source(self, source: str) -> Path:
-        # Try Manim first, then VHS
         manim_path = self.config.animations_dir / "media" / "videos" / "scenes" / "720p30" / source
         if manim_path.exists():
             return manim_path
@@ -131,18 +216,28 @@ class Composer:
         return self.config.base_dir / source
 
     def _output_path(self, seg_id: str) -> Path:
-        # Match existing naming: find narration file stem or use seg_id
-        for md in self.config.narration_dir.glob(f"*{seg_id}*.md"):
-            return self.config.recordings_dir / f"{md.stem}.mp4"
-        return self.config.recordings_dir / f"{seg_id}.mp4"
+        seg_name = self.config.resolve_segment_name(seg_id)
+        return self.config.recordings_dir / f"{seg_name}.mp4"
+
+    @staticmethod
+    def _probe_duration(path: Path) -> float | None:
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "csv=p=0", str(path)],
+                capture_output=True, text=True, timeout=30,
+            )
+            return float(out.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+            return None
 
     @staticmethod
     def _run_ffmpeg(cmd: list[str]) -> None:
         try:
             subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
         except FileNotFoundError:
-            print("[compose] ffmpeg not found in PATH")
+            print("    ERROR: ffmpeg not found in PATH")
         except subprocess.CalledProcessError as exc:
-            print(f"[compose] ffmpeg failed: {exc.stderr[:300]}")
+            print(f"    ERROR: ffmpeg failed: {exc.stderr[:300]}")
         except subprocess.TimeoutExpired:
-            print("[compose] ffmpeg timed out")
+            print("    ERROR: ffmpeg timed out")

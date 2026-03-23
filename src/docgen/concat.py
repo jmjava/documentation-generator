@@ -32,17 +32,23 @@ class ConcatBuilder:
 
         files: list[Path] = []
         for seg_id in seg_ids:
-            found = list(recordings_dir.glob(f"*{seg_id}*.mp4"))
-            if found:
-                files.append(found[0])
+            seg_name = self.config.resolve_segment_name(seg_id)
+            exact = recordings_dir / f"{seg_name}.mp4"
+            if exact.exists():
+                files.append(exact)
             else:
-                print(f"[concat] Missing recording for segment {seg_id}")
+                found = list(recordings_dir.glob(f"*{seg_id}*.mp4"))
+                if found:
+                    files.append(found[0])
+                else:
+                    print(f"[concat] Missing recording for segment {seg_id}")
 
         if not files:
             print(f"[concat] No files to concatenate for {out_name}")
             return
 
-        out = recordings_dir / out_name
+        fname = out_name if out_name.endswith(".mp4") else f"{out_name}.mp4"
+        out = recordings_dir / fname
         concat_list = recordings_dir / f".concat-{out_name}.txt"
         concat_list.write_text(
             "\n".join(f"file '{f.name}'" for f in files), encoding="utf-8"
