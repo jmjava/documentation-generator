@@ -1,0 +1,110 @@
+# docgen.yaml — dogfood: docgen's own demo videos
+# See: https://github.com/jmjava/documentation-generator
+#
+# This project uses docgen to produce demo videos about docgen itself.
+#   docgen generate-all       # full pipeline
+#   docgen wizard             # interactive GUI
+#   docgen validate           # check recordings
+
+repo_root: ../..
+
+dirs:
+  narration: narration
+  audio: audio
+  animations: animations
+  terminal: terminal
+  recordings: recordings
+
+segments:
+  default: &all_segments
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  all: *all_segments
+
+segment_names:
+  "01": 01-overview
+  "02": 02-init-scaffold
+  "03": 03-wizard-gui
+  "04": 04-tts-pipeline
+  "05": 05-compose-validate
+  "06": 06-ci-integration
+
+# Visual source mapping
+# 01, 03: Manim animations (architecture overview, wizard GUI walkthrough)
+# 02, 04, 05, 06: VHS terminal recordings (live docgen commands)
+visual_map:
+  "01":
+    type: manim
+    scene: DocgenOverviewScene
+    source: DocgenOverviewScene.mp4
+  "02":
+    type: vhs
+    tape: 02-init-scaffold.tape
+    source: 02-init-scaffold.mp4
+  "03":
+    type: manim
+    scene: WizardGUIScene
+    source: WizardGUIScene.mp4
+  "04":
+    type: vhs
+    tape: 04-tts-pipeline.tape
+    source: 04-tts-pipeline.mp4
+  "05":
+    type: vhs
+    tape: 05-compose-validate.tape
+    source: 05-compose-validate.mp4
+  "06":
+    type: vhs
+    tape: 06-ci-integration.tape
+    source: 06-ci-integration.mp4
+
+manim:
+  quality: 720p30
+  scenes:
+    - DocgenOverviewScene
+    - WizardGUIScene
+
+tts:
+  model: gpt-4o-mini-tts
+  voice: coral
+  instructions: >
+    You are narrating a technical demo video about docgen, a Python library
+    for generating demo videos from Markdown narration. Speak in a calm,
+    professional tone like a senior engineer giving a conference talk.
+    Pronounce technical terms clearly: docgen, Manim, VHS, ffmpeg, Tekton,
+    Kubernetes, Playwright, pytest, Flask, OpenAI, YAML. Say "dot yaml" not
+    "YAML file extension". Say "TTS" as the letters T-T-S.
+
+concat:
+  full-demo: *all_segments
+
+validation:
+  max_drift_sec: 2.75
+  narration_lint:
+    pre_tts_deny_patterns:
+      - "target duration"
+      - "intended length"
+      - "visual:"
+      - "edit for voice"
+
+wizard:
+  llm_model: gpt-4o
+  system_prompt: >
+    You are a technical writer creating narration scripts for demo videos about
+    docgen, a Python CLI and library for generating narrated demo videos.
+    Write in plain spoken English suitable for text-to-speech. No markdown
+    formatting, no headings, no bullet points. Conversational but professional
+    tone, like a senior engineer presenting at a conference.
+  exclude_patterns:
+    - "**/node_modules/**"
+    - "**/.pytest_cache/**"
+    - "**/__pycache__/**"
+    - "**/.venv/**"
+    - "**/docs/demos/audio/**"
+    - "**/docs/demos/recordings/**"
+    - "**/docs/demos/terminal/rendered/**"
+    - "**/docs/demos/animations/media/**"

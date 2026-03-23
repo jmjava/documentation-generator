@@ -1,0 +1,18 @@
+# Pre-commit hooks. Install: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+
+# Validate demo recordings (A/V drift, narration lint) before push
+- repo: local
+  hooks:
+    - id: docgen-validate
+      name: docgen validate (demo A/V + narration lint)
+      entry: bash -c 'cd docs/demos && docgen --config docgen.yaml validate --pre-push'
+      language: system
+      stages: [pre-push]
+      pass_filenames: false
+      files: ^docs/demos/

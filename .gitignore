@@ -28,6 +28,9 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-animations/media/
-terminal/rendered/
-audio/*.mp3
+# Generated demo assets (reproducible via docgen generate-all)
+docs/demos/audio/*.mp3
+docs/demos/animations/media/
+docs/demos/terminal/rendered/
+docs/demos/recordings/*.mp4
+docs/demos/.docgen-state.json
