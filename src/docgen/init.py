@@ -411,36 +411,37 @@ def _install_pre_push_hook(plan: InitPlan) -> str | None:
     precommit_cfg = git_root / ".pre-commit-config.yaml"
     demo_rel = os.path.relpath(plan.demo_dir, git_root)
 
-    hook_entry = textwrap.dedent(f"""\
-
-      # Validate demo recordings (A/V drift, narration lint) before push
-      - repo: local
-        hooks:
-          - id: docgen-validate
-            name: docgen validate (demo A/V + narration lint)
-            entry: bash -c 'cd {demo_rel} && docgen --config docgen.yaml validate --pre-push'
-            language: system
-            stages: [pre-push]
-            pass_filenames: false
-            files: ^{re.escape(demo_rel)}/
-    """)
+    hook_block = "\n".join([
+        "",
+        "  # Validate demo recordings (A/V drift, narration lint) before push",
+        "  - repo: local",
+        "    hooks:",
+        "      - id: docgen-validate",
+        "        name: docgen validate (demo A/V + narration lint)",
+        f"        entry: bash -c 'cd {demo_rel} && docgen --config docgen.yaml validate --pre-push'",
+        "        language: system",
+        "        stages: [pre-push]",
+        "        pass_filenames: false",
+        f"        files: ^{re.escape(demo_rel)}/",
+        "",
+    ])
 
     if precommit_cfg.exists():
         existing = precommit_cfg.read_text(encoding="utf-8")
         if "docgen-validate" in existing:
             click.echo("  Pre-push hook already present in .pre-commit-config.yaml")
             return None
-        precommit_cfg.write_text(existing + hook_entry, encoding="utf-8")
+        precommit_cfg.write_text(existing.rstrip() + "\n" + hook_block, encoding="utf-8")
     else:
-        content = textwrap.dedent("""\
-            # Pre-commit hooks. Install: pip install pre-commit && pre-commit install
-            repos:
-              - repo: https://github.com/pre-commit/pre-commit-hooks
-                rev: v4.5.0
-                hooks:
-                  - id: check-added-large-files
-                    args: ['--maxkb=1000']
-        """) + hook_entry
+        content = "\n".join([
+            "# Pre-commit hooks. Install: pip install pre-commit && pre-commit install",
+            "repos:",
+            "  - repo: https://github.com/pre-commit/pre-commit-hooks",
+            "    rev: v4.5.0",
+            "    hooks:",
+            "      - id: check-added-large-files",
+            "        args: ['--maxkb=1000']",
+        ]) + "\n" + hook_block
         precommit_cfg.write_text(content, encoding="utf-8")
 
     # Try to install the hook
