@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -133,7 +133,7 @@ class PagesGenerator:
                 f.write("\n".join(added) + "\n")
             print(f"[pages] Updated {out} with {len(added)} LFS rules")
         else:
-            print(f"[pages] .gitattributes already has LFS rules")
+            print("[pages] .gitattributes already has LFS rules")
 
     # -- .gitignore ------------------------------------------------------------
 

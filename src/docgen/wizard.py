@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -32,12 +31,17 @@ def _load_gitignore_patterns(repo_root: Path) -> list[str]:
 
 def _is_ignored(rel_path: str, gitignore: list[str], extra_excludes: list[str]) -> bool:
     for pat in gitignore + extra_excludes:
-        if fnmatch.fnmatch(rel_path, pat) or fnmatch.fnmatch(rel_path, f"**/{pat}"):
-            return True
+        candidates = [pat]
+        if pat.startswith("**/"):
+            candidates.append(pat[3:])
+        for p in candidates:
+            if fnmatch.fnmatch(rel_path, p):
+                return True
         parts = rel_path.split("/")
         for i in range(len(parts)):
             partial = "/".join(parts[: i + 1])
-            if fnmatch.fnmatch(partial, pat.rstrip("/")):
+            stripped = pat.rstrip("/").removeprefix("**/")
+            if fnmatch.fnmatch(partial, pat.rstrip("/")) or fnmatch.fnmatch(partial, stripped):
                 return True
     return False
 
@@ -273,10 +277,8 @@ def create_app(config: Any | None = None) -> Flask:
         state = load_state(base)
         result = []
         for seg_id in cfg.segments_all:
-            narration_file = cfg.narration_dir / f"{seg_id}.md" if cfg.narration_dir.exists() else None
             narration_path = cfg.narration_dir / f"{seg_id}.md"
             audio_path = cfg.audio_dir / f"{seg_id}.mp3"
-            rec_path = cfg.recordings_dir / f"{seg_id}.mp4"
 
             # Try to find the recording with any name prefix
             rec_found = None

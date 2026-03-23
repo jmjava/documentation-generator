@@ -66,10 +66,6 @@ class Validator:
 
     def run_pre_push(self) -> None:
         reports = self.run_all()
-        failures = [r for r in reports if not all(
-            c.get("passed", True) for c in r.get("checks", [])  # type: ignore
-        ) if isinstance(r, dict)]
-        # Simpler: just check
         all_passed = True
         for r in reports:
             if isinstance(r, dict):

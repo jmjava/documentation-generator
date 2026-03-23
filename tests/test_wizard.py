@@ -1,6 +1,5 @@
 """Tests for docgen.wizard file scanning and tree building."""
 
-from pathlib import Path
 
 from docgen.wizard import scan_md_files, build_file_tree
 

@@ -27,7 +27,7 @@ class ConcatBuilder:
     def _build_one(self, out_name: str, seg_ids: list[str]) -> None:
         recordings_dir = self.config.recordings_dir
         if not recordings_dir.exists():
-            print(f"[concat] Recordings dir not found")
+            print("[concat] Recordings dir not found")
             return
 
         files: list[Path] = []
