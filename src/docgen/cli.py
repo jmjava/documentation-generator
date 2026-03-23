@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import click
 
@@ -37,6 +38,22 @@ def main(ctx: click.Context, config_path: str | None) -> None:
         cfg = None
     ctx.obj["config"] = cfg
     _load_env(cfg)
+
+
+@main.command()
+@click.argument("target_dir", required=False, default=None, type=click.Path())
+@click.pass_context
+def init(ctx: click.Context, target_dir: str | None) -> None:
+    """Scaffold a new project: docgen.yaml, wrapper scripts, directories.
+
+    Optionally pass a target directory (defaults to current directory).
+    """
+    from docgen.init import generate_files, print_summary, run_wizard
+
+    target = Path(target_dir).resolve() if target_dir else None
+    plan = run_wizard(target_dir=target)
+    created = generate_files(plan)
+    print_summary(plan, created)
 
 
 @main.command()
