@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docgen"
+version = "0.1.0"
+description = "Reusable demo generation pipeline: TTS, Manim, VHS, ffmpeg composition, validation, GitHub Pages publishing"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "jmjava"}]
+
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "openai>=1.0",
+    "flask>=3.0",
+    "jinja2>=3.1",
+    "opencv-python>=4.8",
+    "pytesseract>=0.3.10",
+]
+
+[project.optional-dependencies]
+manim = ["manim>=0.18"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+]
+
+[project.scripts]
+docgen = "docgen.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+docgen = ["templates/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

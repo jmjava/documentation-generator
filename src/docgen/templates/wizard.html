@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>docgen wizard</title>
+<link rel="stylesheet" href="/static/wizard.css">
+</head>
+<body>
+
+<nav id="topnav">
+  <span class="brand">docgen wizard</span>
+  <button class="nav-btn active" data-view="setup">Setup</button>
+  <button class="nav-btn" data-view="production">Production</button>
+</nav>
+
+<!-- ================================================================== -->
+<!-- VIEW: SETUP                                                        -->
+<!-- ================================================================== -->
+<div id="view-setup" class="view">
+  <div class="setup-layout">
+    <section class="panel tree-panel">
+      <h2>Project files</h2>
+      <p class="hint">Select .md files to use as narration source material.</p>
+      <div id="file-tree" class="tree-container"></div>
+    </section>
+
+    <section class="panel config-panel">
+      <h2>Guidance</h2>
+      <p class="hint">Describe what the video should emphasize, target audience, tone, etc.</p>
+      <textarea id="guidance" rows="6" placeholder="e.g., Focus on the CI/CD pipeline and developer experience. Keep technical depth moderate."></textarea>
+
+      <h2>Segment mapping</h2>
+      <p class="hint">Drag selected files into segments, or auto-group.</p>
+      <div id="segment-mapper">
+        <div id="segment-slots"></div>
+        <button id="btn-add-segment" class="btn btn-secondary">+ Add segment</button>
+        <button id="btn-auto-group" class="btn btn-secondary">Auto-group by directory</button>
+      </div>
+
+      <div class="action-bar">
+        <button id="btn-generate" class="btn btn-primary" disabled>Generate narration</button>
+        <span id="generate-status" class="status-text"></span>
+      </div>
+
+      <div id="draft-review" class="draft-review hidden">
+        <h2>Generated drafts</h2>
+        <div id="drafts-container"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- VIEW: PRODUCTION                                                   -->
+<!-- ================================================================== -->
+<div id="view-production" class="view hidden">
+  <div class="production-layout">
+    <aside class="panel segment-sidebar">
+      <h2>Segments</h2>
+      <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+        <span id="progress-text">0 / 0 approved</span>
+      </div>
+      <ul id="segment-list"></ul>
+    </aside>
+
+    <main class="panel review-main">
+      <div id="no-segment-selected" class="placeholder">
+        <p>Select a segment from the sidebar to begin reviewing.</p>
+      </div>
+
+      <div id="segment-review" class="hidden">
+        <h2 id="review-segment-title"></h2>
+        <div class="status-badge-row">
+          <span id="review-status-badge" class="badge"></span>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="narration">Narration</button>
+          <button class="tab-btn" data-tab="audio">Audio</button>
+          <button class="tab-btn" data-tab="video">Video</button>
+        </div>
+
+        <div class="tab-content active" data-tab="narration">
+          <textarea id="narration-editor" rows="16" placeholder="Narration text will appear here..."></textarea>
+          <div class="narration-actions">
+            <button id="btn-save-narration" class="btn btn-secondary">Save</button>
+            <div class="revision-row">
+              <input id="revision-notes" type="text" placeholder="Revision notes for regeneration (optional)...">
+              <button id="btn-regen-narration" class="btn btn-secondary">Regenerate narration</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="audio">
+          <div id="audio-player-container">
+            <audio id="audio-player" controls></audio>
+            <p id="audio-status" class="hint"></p>
+          </div>
+          <div class="audio-actions">
+            <button id="btn-redo-tts" class="btn btn-secondary">Redo TTS</button>
+          </div>
+          <div id="narration-lint-results" class="validation-card hidden">
+            <h3>Narration lint</h3>
+            <pre id="lint-output"></pre>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="video">
+          <div class="video-review-layout">
+            <div class="video-col">
+              <video id="video-player" controls></video>
+              <p id="video-status" class="hint"></p>
+            </div>
+            <div class="validation-col">
+              <h3>Validation results</h3>
+              <div id="validation-results">
+                <p class="hint">Run validate to see results.</p>
+              </div>
+            </div>
+          </div>
+          <div class="video-actions">
+            <button id="btn-redo-vhs" class="btn btn-secondary">Redo VHS</button>
+            <button id="btn-redo-manim" class="btn btn-secondary">Redo Manim</button>
+            <button id="btn-redo-compose" class="btn btn-secondary">Redo compose</button>
+            <button id="btn-run-validate" class="btn btn-secondary">Run validate</button>
+          </div>
+        </div>
+
+        <div class="review-action-bar">
+          <button id="btn-redo-all" class="btn btn-warning">Redo all steps</button>
+          <button id="btn-flag-rework" class="btn btn-secondary">Flag for rework</button>
+          <button id="btn-approve" class="btn btn-primary">Mark approved</button>
+          <div class="nav-btns">
+            <button id="btn-prev-seg" class="btn btn-secondary">&larr; Previous</button>
+            <button id="btn-next-seg" class="btn btn-secondary">Next &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="/static/wizard.js"></script>
+</body>
+</html>
