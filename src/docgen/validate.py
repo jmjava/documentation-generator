@@ -67,15 +67,25 @@ class Validator:
         return report.to_dict()
 
     def run_pre_push(self) -> None:
+        """Run all checks; exit non-zero on quality failures.
+
+        Missing recordings are reported as warnings, not failures — a project
+        that hasn't generated videos yet should still be pushable.  Quality
+        checks on *existing* recordings (streams, drift) and narration lint
+        are hard failures.
+        """
         reports = self.run_all()
-        all_passed = True
+        hard_fail = False
         for r in reports:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
-                        all_passed = False
-                        print(f"FAIL [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
-        if not all_passed:
+                        if c.get("name") == "recording_exists":
+                            print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
+                        else:
+                            hard_fail = True
+                            print(f"FAIL [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
+        if hard_fail:
             raise SystemExit(1)
         print("[validate] All checks passed")
 
