@@ -76,6 +76,18 @@ def _sample_frames(path: Path, interval_sec: float = 2.0) -> list[tuple[float, n
     return samples
 
 
+_LFS_SIGNATURE = b"version https://git-lfs.github.com/spec/v1"
+
+
+def _is_lfs_pointer(path: Path) -> bool:
+    """Return True if *path* is a Git LFS pointer file (not actual media)."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(len(_LFS_SIGNATURE)) == _LFS_SIGNATURE
+    except OSError:
+        return False
+
+
 class Validator:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -92,7 +104,11 @@ class Validator:
         report = ValidationReport(segment=seg_id)
         rec = self._find_recording(seg_id)
 
-        if rec:
+        if rec and _is_lfs_pointer(rec):
+            report.checks.append(
+                CheckResult("lfs_pointer", True, [f"LFS pointer — skipping media checks for {seg_id}"])
+            )
+        elif rec:
             report.checks.append(self._check_streams(rec))
             max_drift = max_drift_override or self.config.max_drift_sec
             report.checks.append(self._check_drift(rec, max_drift))

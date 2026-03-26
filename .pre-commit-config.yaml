@@ -6,6 +6,17 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
 
+  # Upload LFS objects (pre-commit replaces git-lfs's own pre-push hook)
+  - repo: local
+    hooks:
+      - id: git-lfs-push
+        name: git lfs push
+        entry: bash -c 'git lfs push origin HEAD --all'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+
   # Validate demo recordings (A/V drift, narration lint) before push
   - repo: local
     hooks:
