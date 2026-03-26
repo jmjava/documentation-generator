@@ -31,8 +31,26 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg tesseract-ocr
       - run: pip install ".[dev]"
       - run: pytest tests/ --ignore=tests/e2e -v --tb=short
+
+  smoke:
+    name: smoke (config + lint + tts dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - name: Validate config loads
+        run: docgen --config docs/demos/docgen.yaml validate --help
+      - name: Narration lint
+        run: docgen --config docs/demos/docgen.yaml lint
+      - name: TTS dry-run
+        run: docgen --config docs/demos/docgen.yaml tts --dry-run
 
   e2e:
     runs-on: ubuntu-latest

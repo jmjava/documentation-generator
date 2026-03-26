@@ -115,6 +115,16 @@ class DocgenOverviewScene(_TimedScene):
 
         self.timed_play(Write(title), run_time=1.2)
         self.timed_play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.8)
+
+        tagline = Text(
+            "Reproducible · version-controlled · fully automated",
+            font_size=16, color=GREY_B,
+        )
+        tagline.next_to(subtitle, DOWN, buff=0.4)
+        self.wait_until(seg_start(1))
+        self.timed_play(FadeIn(tagline, shift=UP * 0.15), run_time=0.7)
+        title_group.add(tagline)
+
         self.wait_until(seg_start(2))
 
         # ── Beat 2: Title shrinks; show inputs ────────────────────────
@@ -188,7 +198,17 @@ class DocgenOverviewScene(_TimedScene):
             out_group.add(ot)
 
         self.timed_play(FadeIn(outputs_label), run_time=0.4)
-        self.timed_play(*[FadeIn(o, shift=UP * 0.15) for o in out_group], run_time=0.6)
+
+        out_per = max(0.3, (seg_start(9) - self._clock - 1.0) / len(out_group))
+        for o in out_group:
+            self.timed_play(FadeIn(o, shift=UP * 0.15), run_time=out_per)
+
+        output_arrows = VGroup()
+        for sb in [stage_boxes[-1]]:
+            arr = _arrow(sb[0].get_bottom(), outputs_label.get_top(), color=C_ACCENT)
+            output_arrows.add(arr)
+        self.timed_play(Create(output_arrows[0]), run_time=0.5)
+
         self.wait_until(seg_start(9))
 
         # ── Beats 9-10: Concat + Pages ────────────────────────────────
@@ -208,6 +228,23 @@ class DocgenOverviewScene(_TimedScene):
 
         self.timed_play(Create(val_to_concat), FadeIn(concat_box), run_time=0.5)
         self.timed_play(Create(concat_to_pages), FadeIn(pages_box), run_time=0.5)
+
+        checks_group = VGroup()
+        check_items = [
+            ("✓ stream presence", C_GREEN),
+            ("✓ A/V drift < 2.75s", C_GREEN),
+            ("✓ no blank frames", C_GREEN),
+            ("✓ narration lint clean", C_GREEN),
+        ]
+        for ci, (cl, cc) in enumerate(check_items):
+            ct = Text(cl, font_size=12, color=cc)
+            ct.move_to(LEFT * 5.0 + DOWN * (1.8 + ci * 0.35))
+            checks_group.add(ct)
+
+        check_per = max(0.3, (seg_start(11) - self._clock - 0.5) / len(check_items))
+        for ct in checks_group:
+            self.timed_play(FadeIn(ct, shift=RIGHT * 0.2), run_time=check_per)
+
         self.wait_until(seg_start(11))
 
         # ── Beat 11: Single command highlight ─────────────────────────
@@ -223,6 +260,28 @@ class DocgenOverviewScene(_TimedScene):
 
         self.timed_play(FadeIn(cmd_group, shift=UP * 0.3), run_time=0.7)
         self.timed_play(Indicate(cmd_group, color=C_ACCENT, scale_factor=1.05), run_time=0.8)
+
+        config_items = VGroup()
+        cfg_entries = [
+            ("segments:", C_ACCENT),
+            ("  visual_map:", C_TEAL),
+            ("  tts:", C_PURPLE),
+            ("  validation:", C_RED),
+            ("  wizard:", C_ORANGE),
+        ]
+        for ci, (cl, cc) in enumerate(cfg_entries):
+            ct = Text(cl, font_size=12, color=cc, font="Monospace")
+            ct.move_to(RIGHT * 4.0 + DOWN * (1.8 + ci * 0.3))
+            config_items.add(ct)
+
+        cfg_label = Text("docgen.yaml", font_size=14, color=C_ORANGE, weight=BOLD)
+        cfg_label.move_to(RIGHT * 4.0 + DOWN * 1.4)
+        self.timed_play(FadeIn(cfg_label), run_time=0.3)
+
+        cfg_per = max(0.2, (seg_start(12) - self._clock - 0.3) / len(config_items))
+        for ct in config_items:
+            self.timed_play(FadeIn(ct, shift=RIGHT * 0.15), run_time=cfg_per)
+
         self.wait_until(seg_start(12))
 
         # ── Beat 12: Final + fade out ─────────────────────────────────
@@ -351,6 +410,36 @@ class WizardGUIScene(_TimedScene):
         self.timed_play(
             *[FadeIn(c, shift=LEFT * 0.1) for c in checks],
             run_time=0.5,
+        )
+        self.wait_until(seg_start(6))
+
+        # ── Beats 6-7: Exclude patterns filter animation ─────────
+        exclude_title = Text("Excluded by docgen.yaml:", font_size=13, color=C_ORANGE)
+        exclude_title.move_to(RIGHT * 2.5 + UP * 0.8)
+
+        excluded_dirs = [
+            "node_modules/",
+            "__pycache__/",
+            ".pytest_cache/",
+            ".venv/",
+        ]
+        excl_group = VGroup()
+        for ei, edir in enumerate(excluded_dirs):
+            et = Text(edir, font_size=11, color=C_RED, font="Monospace")
+            cross = Text("✗", font_size=13, color=C_RED)
+            et.move_to(RIGHT * 3.0 + UP * (0.3 - ei * 0.35))
+            cross.move_to(RIGHT * 1.8 + UP * (0.3 - ei * 0.35))
+            excl_group.add(VGroup(cross, et))
+
+        self.timed_play(FadeIn(exclude_title), run_time=0.4)
+
+        excl_per = max(0.3, (seg_start(8) - self._clock - 0.5) / len(excl_group))
+        for eg in excl_group:
+            self.timed_play(FadeIn(eg, shift=LEFT * 0.15), run_time=excl_per)
+
+        self.wait_until(seg_start(8) - 0.3)
+        self.timed_play(
+            FadeOut(exclude_title), FadeOut(excl_group), run_time=0.3,
         )
         self.wait_until(seg_start(8))
 
