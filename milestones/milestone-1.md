@@ -4,8 +4,9 @@
 
 ## Items
 
-- [ ] **Install tesseract in CI** — add `apt-get install tesseract-ocr` to `ci.yml` so OCR validation runs on every push (catches "command not found", `.venv` stacking, etc. in terminal recordings)
-- [ ] **Install ffmpeg in CI** — add `apt-get install ffmpeg` so compose-guard and integration tests run instead of being skipped
-- [ ] **Tighten Manim animation pacing** — add more animation beats to `DocgenOverviewScene` and `WizardGUIScene` so static holds drop from ~57% to <30% of the video
-- [ ] **Merge `milestone/doc-generator` into `tekton-dag` main** — integrate `docgen.yaml`, wrapper scripts, and the 14-segment demo pipeline into the parent repo
-- [ ] **End-to-end smoke test** — add a CI job that runs `docgen generate-all --dry-run` to verify the full pipeline config is valid without calling OpenAI or rendering video
+- [x] **Install tesseract in CI** — `apt-get install tesseract-ocr` added to `ci.yml` unit job
+- [x] **Install ffmpeg in CI** — `apt-get install ffmpeg` added to `ci.yml` unit job
+- [x] **Tighten Manim animation pacing** — added tagline, sequential outputs, validation checks, config entries, exclude-pattern filter animations; static holds dropped from ~57% to <1%
+- [x] **Merge `milestone/doc-generator` into `tekton-dag` main** — fast-forward merged (6 commits, 67 files)
+- [x] **End-to-end smoke test** — added `smoke` CI job: config validation, narration lint, TTS dry-run
+- [x] **LFS auto-push** — added `git-lfs-push` pre-commit hook; validator skips LFS pointer files gracefully
