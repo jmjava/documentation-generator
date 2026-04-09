@@ -88,6 +88,22 @@ class Config:
     def manim_quality(self) -> str:
         return self.raw.get("manim", {}).get("quality", "720p30")
 
+    @property
+    def manim_font(self) -> str:
+        return self.raw.get("manim", {}).get("font", "Liberation Sans")
+
+    # -- Compose / ffmpeg ------------------------------------------------------
+
+    @property
+    def ffmpeg_timeout(self) -> int:
+        """Timeout in seconds for ffmpeg subprocess calls."""
+        return int(self.raw.get("compose", {}).get("ffmpeg_timeout", 600))
+
+    @property
+    def compose_warn_stale(self) -> bool:
+        """Warn during compose if a VHS .tape file is newer than its rendered mp4."""
+        return bool(self.raw.get("compose", {}).get("warn_stale_vhs", True))
+
     # -- Validation ------------------------------------------------------------
 
     @property

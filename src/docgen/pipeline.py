@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,8 +42,27 @@ class Pipeline:
                     print(f"  WARNING: {r.tape} had errors: {r.errors}")
 
         print("\n=== Stage: Compose ===")
-        from docgen.compose import Composer
-        Composer(self.config).compose_segments(self.config.segments_all)
+        from docgen.compose import Composer, ComposeError
+        composer = Composer(self.config)
+        try:
+            composer.compose_segments(self.config.segments_all)
+        except ComposeError:
+            if skip_manim:
+                raise
+            print(
+                "\n=== Stage: Manim (retry) ===\n"
+                "[pipeline] Compose hit FREEZE GUARD — this often happens on the "
+                "first run because Manim scenes need timing data from timestamps.\n"
+                "[pipeline] Clearing Manim cache and re-rendering…"
+            )
+            media_dir = self.config.animations_dir / "media"
+            if media_dir.exists():
+                shutil.rmtree(media_dir)
+            from docgen.manim_runner import ManimRunner as _MR
+            _MR(self.config).render()
+
+            print("\n=== Stage: Compose (retry) ===")
+            composer.compose_segments(self.config.segments_all)
 
         print("\n=== Stage: Validate ===")
         from docgen.validate import Validator

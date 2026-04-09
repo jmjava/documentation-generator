@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -12,6 +13,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
+
+_VHS_COMMON_PATHS = [
+    Path.home() / "go" / "bin" / "vhs",
+    Path("/usr/local/bin/vhs"),
+    Path("/snap/bin/vhs"),
+]
 
 ERROR_PATTERNS = [
     r"command not found",
@@ -53,10 +60,36 @@ class VHSRunner:
         else:
             tapes = sorted(terminal_dir.glob("*.tape"))
 
+        vhs_bin = self._find_vhs()
+        if not vhs_bin:
+            return [
+                VHSResult(tape=t.name, success=False, errors=["vhs not found"])
+                for t in tapes
+            ]
+
         results: list[VHSResult] = []
         for t in tapes:
-            results.append(self._render_one(t, strict))
+            results.append(self._render_one(t, strict, vhs_bin=vhs_bin))
         return results
+
+    @staticmethod
+    def _find_vhs() -> str | None:
+        """Locate the vhs binary, checking PATH then common install locations."""
+        found = shutil.which("vhs")
+        if found:
+            return found
+
+        for candidate in _VHS_COMMON_PATHS:
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+
+        print(
+            "[vhs] vhs not found in PATH or common locations. "
+            "Install with: go install github.com/charmbracelet/vhs@latest  "
+            "or see https://github.com/charmbracelet/vhs#installation\n"
+            "Checked: PATH, ~/go/bin, /usr/local/bin, /snap/bin"
+        )
+        return None
 
     @staticmethod
     def _clean_env() -> dict[str, str]:
@@ -102,22 +135,34 @@ class VHSRunner:
         }
         return env
 
-    def _render_one(self, tape_path: Path, strict: bool) -> VHSResult:
+    def _render_one(
+        self, tape_path: Path, strict: bool, *, vhs_bin: str = "vhs"
+    ) -> VHSResult:
         print(f"[vhs] Rendering {tape_path.name}")
         env = self._clean_env()
+        timeout = self.config.ffmpeg_timeout
         try:
             proc = subprocess.run(
-                ["vhs", str(tape_path)],
+                [vhs_bin, str(tape_path)],
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=timeout,
                 cwd=str(tape_path.parent),
                 env=env,
             )
         except FileNotFoundError:
-            return VHSResult(tape=tape_path.name, success=False, errors=["vhs not found in PATH"])
+            return VHSResult(
+                tape=tape_path.name, success=False,
+                errors=[
+                    f"vhs not found at '{vhs_bin}'. "
+                    "Install with: go install github.com/charmbracelet/vhs@latest"
+                ],
+            )
         except subprocess.TimeoutExpired:
-            return VHSResult(tape=tape_path.name, success=False, errors=["VHS render timed out"])
+            return VHSResult(
+                tape=tape_path.name, success=False,
+                errors=[f"VHS render timed out after {timeout}s"],
+            )
         finally:
             fake_home = env.get("HOME", "")
             if fake_home and "vhs_home_" in fake_home:

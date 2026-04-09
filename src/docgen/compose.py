@@ -223,14 +223,63 @@ class Composer:
 
     def _manim_path(self, vmap: dict[str, Any]) -> Path:
         src = vmap.get("source", "")
-        return self.config.animations_dir / "media" / "videos" / "scenes" / "720p30" / src
+        base = self.config.animations_dir / "media" / "videos" / "scenes"
+        return self._resolve_quality_path(base, src)
 
     def _vhs_path(self, vmap: dict[str, Any]) -> Path:
         src = vmap.get("source", "")
-        return self.config.terminal_dir / "rendered" / src
+        rendered = self.config.terminal_dir / "rendered" / src
+        if self.config.compose_warn_stale:
+            self._check_stale_vhs(src, rendered)
+        return rendered
+
+    def _check_stale_vhs(self, source_name: str, rendered: Path) -> None:
+        """Warn if a .tape file is newer than its rendered mp4."""
+        if not rendered.exists():
+            return
+        stem = Path(source_name).stem
+        terminal_dir = self.config.terminal_dir
+        for tape in terminal_dir.glob(f"*{stem}*.tape"):
+            if tape.stat().st_mtime > rendered.stat().st_mtime:
+                print(
+                    f"    WARNING: {tape.name} is newer than {rendered.name} — "
+                    f"run 'docgen vhs' to re-render before composing."
+                )
+                break
+
+    def _resolve_quality_path(self, base: Path, source: str) -> Path:
+        """Find the rendered Manim file, trying the configured quality first,
+        then falling back to any available quality directory."""
+        from docgen.manim_runner import ManimRunner
+        preferred = ManimRunner(self.config).quality_subdir()
+
+        candidate = base / preferred / source
+        if candidate.exists():
+            return candidate
+
+        for subdir in ("1080p60", "1080p30", "1440p60", "720p30", "480p15", "2160p60"):
+            candidate = base / subdir / source
+            if candidate.exists():
+                if subdir != preferred:
+                    print(
+                        f"    NOTE: using {subdir}/{source} "
+                        f"(configured quality {preferred} not found)"
+                    )
+                return candidate
+
+        no_scenes = base.parent / preferred / source
+        if no_scenes.exists():
+            return no_scenes
+        for subdir in ("1080p60", "1080p30", "1440p60", "720p30", "480p15", "2160p60"):
+            no_scenes = base.parent / subdir / source
+            if no_scenes.exists():
+                return no_scenes
+
+        return base / preferred / source
 
     def _resolve_source(self, source: str) -> Path:
-        manim_path = self.config.animations_dir / "media" / "videos" / "scenes" / "720p30" / source
+        base = self.config.animations_dir / "media" / "videos" / "scenes"
+        manim_path = self._resolve_quality_path(base, source)
         if manim_path.exists():
             return manim_path
         vhs_path = self.config.terminal_dir / "rendered" / source
@@ -254,13 +303,16 @@ class Composer:
         except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
             return None
 
-    @staticmethod
-    def _run_ffmpeg(cmd: list[str]) -> None:
+    def _run_ffmpeg(self, cmd: list[str]) -> None:
+        timeout = self.config.ffmpeg_timeout
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=timeout)
         except FileNotFoundError:
             print("    ERROR: ffmpeg not found in PATH")
         except subprocess.CalledProcessError as exc:
             print(f"    ERROR: ffmpeg failed: {exc.stderr[:300]}")
         except subprocess.TimeoutExpired:
-            print("    ERROR: ffmpeg timed out")
+            print(
+                f"    ERROR: ffmpeg timed out after {timeout}s. "
+                f"Increase compose.ffmpeg_timeout in docgen.yaml for long scenes."
+            )
