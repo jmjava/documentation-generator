@@ -117,10 +117,15 @@ class Validator:
             report.checks.append(self._check_freeze_ratio(rec, samples))
             report.checks.append(self._check_blank_frames(rec, samples))
             report.checks.append(self._check_ocr(rec, samples))
+
+            vtype = self.config.visual_map.get(seg_id, {}).get("type", "vhs")
+            if vtype == "manim":
+                report.checks.append(self._check_layout(rec))
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
         report.checks.append(self._check_narration_lint(seg_id))
+        report.checks.append(self._check_scene_lint())
 
         return report.to_dict()
 
@@ -137,7 +142,10 @@ class Validator:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
-                        soft_checks = {"recording_exists", "ocr_scan", "freeze_ratio"}
+                        soft_checks = {
+                            "recording_exists", "ocr_scan", "freeze_ratio",
+                            "layout", "scene_lint",
+                        }
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
@@ -345,6 +353,49 @@ class Validator:
             )
         except Exception as exc:
             return CheckResult("av_drift", False, [str(exc)])
+
+    # ── Layout validation (Manim frames — pytesseract) ──────────────
+
+    def _check_layout(self, path: Path) -> CheckResult:
+        """Run layout overlap/edge checks on a Manim-rendered video.
+
+        Degrades gracefully if pytesseract or tesseract is not installed.
+        """
+        try:
+            from docgen.manim_layout import LayoutValidator
+            import pytesseract  # noqa: F401
+            pytesseract.get_tesseract_version()
+        except Exception:
+            return CheckResult("layout", True, ["tesseract not available (skipped)"])
+
+        validator = LayoutValidator(self.config)
+        report = validator.validate_video(path)
+
+        if not report.issues:
+            return CheckResult("layout", True, ["No layout issues detected"])
+
+        details = [
+            f"{i.kind} at {i.timestamp_sec:.1f}s: {i.description}"
+            for i in report.issues[:10]
+        ]
+        return CheckResult("layout", report.passed, details)
+
+    # ── Scene lint (weight=BOLD, positional color) ────────────────
+
+    def _check_scene_lint(self) -> CheckResult:
+        """Lint Manim scene files for known pitfalls."""
+        from docgen.scene_lint import lint_scene_dir
+
+        results = lint_scene_dir(self.config)
+        if not results:
+            return CheckResult("scene_lint", True, [])
+
+        details: list[str] = []
+        for r in results:
+            for issue in r.issues:
+                details.append(f"{r.path}: {issue}")
+
+        return CheckResult("scene_lint", len(details) == 0, details[:10])
 
     # ── Helpers ────────────────────────────────────────────────────────
 

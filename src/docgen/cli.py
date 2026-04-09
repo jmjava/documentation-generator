@@ -191,6 +191,29 @@ def lint(ctx: click.Context, segment: str | None) -> None:
         raise SystemExit(1)
 
 
+@main.command("scene-lint")
+@click.pass_context
+def scene_lint(ctx: click.Context) -> None:
+    """Lint Manim scene files for known pitfalls (weight=BOLD, positional color args)."""
+    from docgen.scene_lint import lint_scene_dir
+
+    cfg = ctx.obj["config"]
+    results = lint_scene_dir(cfg)
+
+    if not results:
+        click.echo("[scene-lint] No issues found")
+        return
+
+    for r in results:
+        click.echo(f"  {r.path}")
+        for issue in r.issues:
+            click.echo(f"    {issue}")
+
+    total = sum(len(r.issues) for r in results)
+    click.echo(f"\n[scene-lint] {total} issue(s) in {len(results)} file(s)")
+    raise SystemExit(1)
+
+
 @main.command()
 @click.option("--config-name", "concat_name", default=None, help="Concat config name.")
 @click.pass_context
