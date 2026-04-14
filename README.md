@@ -77,9 +77,9 @@ manim:
 vhs:
   vhs_path: ""              # optional explicit binary path (relative to docgen.yaml or absolute)
   sync_from_timing: false   # opt-in: allow tape Sleep rewrites from timing.json
-  typing_ms_per_char: 55    # typing estimate used by sync-vhs
+  typing_ms_per_char: 35    # typing estimate used by sync-vhs
   max_typing_sec: 3.0       # per block cap for typing estimate
-  min_sleep_sec: 0.05       # floor for rewritten Sleep values
+  min_sleep_sec: 0.2        # floor for rewritten Sleep values
 
 pipeline:
   sync_vhs_after_timestamps: false  # opt-in: run sync-vhs automatically in generate-all/rebuild-after-audio
@@ -87,6 +87,20 @@ pipeline:
 compose:
   ffmpeg_timeout_sec: 300   # can also be overridden with: docgen compose --ffmpeg-timeout N
   warn_stale_vhs: true      # warns if terminal/*.tape is newer than terminal/rendered/*.mp4
+
+validation:
+  layout:
+    sample_interval_sec: 2.0
+    edge_margin_px: 15
+    min_spacing_px: 10
+    check_overlap: true
+    check_contrast: true
+    min_contrast_ratio: 3.5
+    check_font_size: true
+    min_text_height_px: 10
+    max_text_regions: 45
+    check_single_font: true
+    default_font_family: "Liberation Sans"
 ```
 
 If you edit a `.tape` file, run `docgen vhs` before `docgen compose` so compose does not use stale rendered terminal video.
@@ -100,6 +114,14 @@ docgen sync-vhs
 docgen vhs
 docgen compose
 ```
+
+Font consistency guardrails for Manim scenes:
+
+- `docgen validate` checks Manim recordings for layout safety: off-screen clipping, spacing, overlap, contrast, and minimum text size.
+- `docgen validate` also lints scene source for single-font consistency:
+  - requires one default `Text.set_default(font="...")` family (defaults to `Liberation Sans`)
+  - flags `weight=BOLD`
+  - flags mixed explicit `font=` families and `Text("...", COLOR_CONST)` positional color mistakes
 ## System dependencies
 
 - **ffmpeg** — composition and probing

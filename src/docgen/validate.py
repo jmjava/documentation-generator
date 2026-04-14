@@ -117,10 +117,13 @@ class Validator:
             report.checks.append(self._check_freeze_ratio(rec, samples))
             report.checks.append(self._check_blank_frames(rec, samples))
             report.checks.append(self._check_ocr(rec, samples))
+            report.checks.append(self._check_layout(seg_id, rec))
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
         report.checks.append(self._check_narration_lint(seg_id))
+        report.checks.append(self._check_manim_scene_lint(seg_id))
+        report.checks.append(self._check_manim_scene_lint(seg_id))
 
         return report.to_dict()
 
@@ -298,6 +301,45 @@ class Validator:
             result.passed,
             result.issues[:10] if result.issues else [],
         )
+
+    def _check_layout(self, seg_id: str, recording_path: Path) -> CheckResult:
+        vmap = self.config.visual_map.get(seg_id, {})
+        if str(vmap.get("type", "")).lower() != "manim":
+            return CheckResult("layout_quality", True, ["Non-Manim segment (skipped)"])
+        try:
+            from docgen.manim_layout import LayoutValidator
+
+            report = LayoutValidator(self.config).validate_video(recording_path)
+            if report.passed:
+                return CheckResult("layout_quality", True, ["No layout issues detected"])
+            details = [f"{issue.kind}@{issue.timestamp_sec:.1f}s: {issue.description}" for issue in report.issues[:25]]
+            return CheckResult("layout_quality", False, details)
+        except Exception as exc:
+            return CheckResult("layout_quality", False, [f"layout validator error: {exc}"])
+
+    def _check_manim_scene_lint(self, seg_id: str) -> CheckResult:
+        vmap = self.config.visual_map.get(seg_id, {})
+        if str(vmap.get("type", "")).lower() != "manim":
+            return CheckResult("manim_scene_lint", True, ["Non-Manim segment (skipped)"])
+        try:
+            from docgen.manim_scene_lint import lint_scene_file
+
+            scene_file = self.config.animations_dir / "scenes.py"
+            if not scene_file.exists():
+                return CheckResult("manim_scene_lint", True, ["No scenes.py file (skipped)"])
+            result = lint_scene_file(
+                scene_file,
+                expected_font=self.config.manim_font,
+            )
+            return CheckResult(
+                "manim_scene_lint",
+                result.passed,
+                [f"{issue.kind}@L{issue.line}: {issue.message}" for issue in result.issues[:25]]
+                if result.issues
+                else ["No Manim scene lint issues detected"],
+            )
+        except Exception as exc:
+            return CheckResult("manim_scene_lint", False, [f"manim scene lint error: {exc}"])
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 

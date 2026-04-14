@@ -95,6 +95,16 @@ class Config:
         return str(value) if value else None
 
     @property
+    def manim_font(self) -> str:
+        """Preferred single font family for Manim Text()."""
+        return str(self.raw.get("manim", {}).get("font", "Liberation Sans"))
+
+    @property
+    def manim_font_family(self) -> str:
+        """Backward-compatible alias for configured single Manim font."""
+        return self.manim_font
+
+    @property
     def vhs_config(self) -> dict[str, Any]:
         defaults: dict[str, Any] = {
             "vhs_path": "",
@@ -188,8 +198,26 @@ class Config:
             "min_spacing_px": 10,
             "edge_margin_px": 15,
             "check_overlap": True,
+            "sample_interval_sec": 2.0,
+            "check_contrast": True,
+            "min_contrast_ratio": 3.5,
+            "check_font_size": True,
+            "min_text_height_px": 10,
+            "max_text_regions": 45,
         }
         defaults.update(self.raw.get("validation", {}).get("layout", {}))
+        return defaults
+
+    @property
+    def manim_lint_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "enabled": True,
+            "enforce_single_font": True,
+            "deny_weight_bold": True,
+            "deny_positional_text_color": True,
+            "expected_font": self.manim_font,
+        }
+        defaults.update(self.raw.get("validation", {}).get("manim_lint", {}))
         return defaults
 
     @property
