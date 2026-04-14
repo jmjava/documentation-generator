@@ -134,7 +134,6 @@ class Config:
         if "sync_vhs_after_timestamps" in pipeline_cfg:
             return bool(pipeline_cfg.get("sync_vhs_after_timestamps"))
         return self.sync_from_timing
-
     # -- Compose ----------------------------------------------------------------
 
     @property

@@ -100,7 +100,6 @@ docgen sync-vhs
 docgen vhs
 docgen compose
 ```
-
 ## System dependencies
 
 - **ffmpeg** — composition and probing
