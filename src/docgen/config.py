@@ -95,10 +95,45 @@ class Config:
         return str(value) if value else None
 
     @property
+    def vhs_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "vhs_path": "",
+            "sync_from_timing": False,
+            "typing_ms_per_char": 35,
+            "max_typing_sec": 3.0,
+            "min_sleep_sec": 0.2,
+        }
+        defaults.update(self.raw.get("vhs", {}))
+        return defaults
+
+    @property
     def vhs_path(self) -> str | None:
         """Optional absolute/relative path to the VHS executable."""
-        value = self.raw.get("vhs", {}).get("vhs_path")
+        value = self.vhs_config.get("vhs_path")
         return str(value) if value else None
+
+    @property
+    def sync_from_timing(self) -> bool:
+        return bool(self.vhs_config.get("sync_from_timing", False))
+
+    @property
+    def typing_ms_per_char(self) -> int:
+        return int(self.vhs_config.get("typing_ms_per_char", 35))
+
+    @property
+    def max_typing_sec(self) -> float:
+        return float(self.vhs_config.get("max_typing_sec", 3.0))
+
+    @property
+    def min_sleep_sec(self) -> float:
+        return float(self.vhs_config.get("min_sleep_sec", 0.2))
+
+    @property
+    def sync_vhs_after_timestamps(self) -> bool:
+        pipeline_cfg = self.raw.get("pipeline", {})
+        if "sync_vhs_after_timestamps" in pipeline_cfg:
+            return bool(pipeline_cfg.get("sync_vhs_after_timestamps"))
+        return self.sync_from_timing
 
     # -- Compose ----------------------------------------------------------------
 

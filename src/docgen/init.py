@@ -257,6 +257,10 @@ def _write_config(plan: InitPlan) -> str:
         },
         "vhs": {
             "vhs_path": "",
+            "sync_from_timing": False,
+            "typing_ms_per_char": 55,
+            "max_typing_sec": 3.0,
+            "min_sleep_sec": 0.2,
         },
         "compose": {
             "ffmpeg_timeout_sec": 300,

@@ -72,6 +72,10 @@ manim:
 
 vhs:
   vhs_path: ""
+  sync_from_timing: true
+  typing_ms_per_char: 45
+  max_typing_sec: 2.0
+  min_sleep_sec: 0.2
 
 compose:
   ffmpeg_timeout_sec: 300

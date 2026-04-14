@@ -122,6 +122,18 @@ def vhs(ctx: click.Context, tape: str | None, strict: bool) -> None:
             click.echo(f"    {e}")
 
 
+@main.command("sync-vhs")
+@click.option("--segment", default=None, help="Sync tape(s) for one segment ID/name.")
+@click.option("--dry-run", is_flag=True, help="Preview updates without writing files.")
+@click.pass_context
+def sync_vhs(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
+    """Sync VHS Sleep durations from animations/timing.json."""
+    from docgen.tape_sync import TapeSynchronizer
+
+    cfg = ctx.obj["config"]
+    TapeSynchronizer(cfg).sync(segment=segment, dry_run=dry_run)
+
+
 @main.command()
 @click.argument("segments", nargs=-1)
 @click.option(
@@ -225,22 +237,35 @@ def pages(ctx: click.Context, force: bool) -> None:
 @click.option("--skip-tts", is_flag=True)
 @click.option("--skip-manim", is_flag=True)
 @click.option("--skip-vhs", is_flag=True)
+@click.option("--skip-tape-sync", is_flag=True, help="Skip optional sync-vhs stage after timestamps.")
 @click.pass_context
-def generate_all(ctx: click.Context, skip_tts: bool, skip_manim: bool, skip_vhs: bool) -> None:
+def generate_all(
+    ctx: click.Context,
+    skip_tts: bool,
+    skip_manim: bool,
+    skip_vhs: bool,
+    skip_tape_sync: bool,
+) -> None:
     """Run full pipeline: TTS -> Manim -> VHS -> compose -> validate -> concat -> pages."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
-    pipeline.run(skip_tts=skip_tts, skip_manim=skip_manim, skip_vhs=skip_vhs)
+    pipeline.run(
+        skip_tts=skip_tts,
+        skip_manim=skip_manim,
+        skip_vhs=skip_vhs,
+        skip_tape_sync=skip_tape_sync,
+    )
 
 
 @main.command("rebuild-after-audio")
+@click.option("--skip-tape-sync", is_flag=True, help="Skip optional sync-vhs stage after timestamps.")
 @click.pass_context
-def rebuild_after_audio(ctx: click.Context) -> None:
+def rebuild_after_audio(ctx: click.Context, skip_tape_sync: bool) -> None:
     """Rebuild everything after new audio: Manim -> VHS -> compose -> validate -> concat."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
-    pipeline.run(skip_tts=True)
+    pipeline.run(skip_tts=True, skip_tape_sync=skip_tape_sync)
