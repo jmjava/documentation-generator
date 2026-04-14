@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from docgen.binaries import resolve_binary
+
 if TYPE_CHECKING:
     from docgen.config import Config
 
@@ -105,9 +107,18 @@ class VHSRunner:
     def _render_one(self, tape_path: Path, strict: bool) -> VHSResult:
         print(f"[vhs] Rendering {tape_path.name}")
         env = self._clean_env()
+        vhs_bin = self._resolve_vhs_binary()
+        if not vhs_bin:
+            return VHSResult(
+                tape=tape_path.name,
+                success=False,
+                errors=[
+                    "vhs not found. Install VHS or set vhs.vhs_path in docgen.yaml.",
+                ],
+            )
         try:
             proc = subprocess.run(
-                ["vhs", str(tape_path)],
+                [vhs_bin, str(tape_path)],
                 capture_output=True,
                 text=True,
                 timeout=300,
@@ -151,3 +162,28 @@ class VHSRunner:
                     found.append(line.strip()[:120])
                     break
         return found
+
+    def _resolve_vhs_binary(self) -> str | None:
+        configured = self.config.vhs_path
+        if configured and not Path(configured).is_absolute():
+            configured = str((self.config.base_dir / configured).resolve())
+
+        candidates = [
+            Path.home() / "go" / "bin" / "vhs",
+            "/usr/local/bin/vhs",
+            "/snap/bin/vhs",
+        ]
+        resolution = resolve_binary("vhs", configured_path=configured, extra_candidates=candidates)
+        if resolution.path:
+            return resolution.path
+
+        print("[vhs] VHS executable not found.")
+        if resolution.tried:
+            print("[vhs] Tried:")
+            for candidate in resolution.tried:
+                print(f"  - {candidate}")
+        print(
+            "[vhs] Fix: install VHS and ensure it is executable, or set "
+            "`vhs.vhs_path` in docgen.yaml."
+        )
+        return None

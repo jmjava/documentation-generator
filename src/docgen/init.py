@@ -253,6 +253,14 @@ def _write_config(plan: InitPlan) -> str:
         "manim": {
             "quality": "720p30",
             "scenes": [f"Scene{s['id']}" for s in plan.segments],
+            "manim_path": "",
+        },
+        "vhs": {
+            "vhs_path": "",
+        },
+        "compose": {
+            "ffmpeg_timeout_sec": 300,
+            "warn_stale_vhs": True,
         },
         "tts": {
             "model": plan.tts_model,

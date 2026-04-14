@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from docgen.binaries import resolve_binary
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -24,13 +28,24 @@ class ManimRunner:
             print(f"[manim] scenes.py not found at {scenes_file}")
             return
 
-        quality_flag = self._quality_flag()
-        for s in scenes:
-            self._render_one(scenes_file, s, quality_flag)
+        quality_args, quality_label = self._quality_args()
+        manim_bin = self._resolve_manim_binary()
+        if not manim_bin:
+            return
 
-    def _render_one(self, scenes_file, scene_name: str, quality_flag: str) -> None:
+        print(f"[manim] Rendering at {quality_label}")
+        for s in scenes:
+            self._render_one(manim_bin, scenes_file, s, quality_args)
+
+    def _render_one(
+        self,
+        manim_bin: str,
+        scenes_file: Path,
+        scene_name: str,
+        quality_args: list[str],
+    ) -> None:
         print(f"[manim] Rendering {scene_name}")
-        cmd = ["manim", quality_flag, str(scenes_file), scene_name]
+        cmd = [manim_bin, *quality_args, str(scenes_file), scene_name]
         try:
             subprocess.run(
                 cmd,
@@ -39,13 +54,61 @@ class ManimRunner:
                 timeout=300,
             )
         except FileNotFoundError:
-            print("[manim] manim not found in PATH — install with: pip install manim")
+            print(
+                "[manim] manim executable not found. "
+                "Install with `pip install manim` in this environment or set "
+                "`manim.manim_path` in docgen.yaml."
+            )
         except subprocess.CalledProcessError as exc:
             print(f"[manim] FAILED {scene_name}: exit code {exc.returncode}")
         except subprocess.TimeoutExpired:
             print(f"[manim] TIMEOUT {scene_name}")
 
-    def _quality_flag(self) -> str:
-        q = self.config.manim_quality
-        mapping = {"480p15": "-pql", "720p30": "-pqm", "1080p60": "-pqh"}
-        return mapping.get(q, "-pqm")
+    def _resolve_manim_binary(self) -> str | None:
+        configured = self.config.manim_path
+        if configured and not Path(configured).is_absolute():
+            configured = str((self.config.base_dir / configured).resolve())
+
+        resolution = resolve_binary("manim", configured_path=configured)
+        if resolution.path:
+            return resolution.path
+
+        print("[manim] manim executable not found.")
+        if resolution.tried:
+            print("[manim] Tried:")
+            for candidate in resolution.tried:
+                print(f"  - {candidate}")
+        print(
+            "[manim] Fix: install with `pip install manim` in this env, "
+            "or set `manim.manim_path` in docgen.yaml."
+        )
+        return None
+
+    def _quality_args(self) -> tuple[list[str], str]:
+        q = str(self.config.manim_quality).strip().lower()
+        preset_map = {
+            "480p15": (["-pql"], "480p15 (-pql)"),
+            "720p30": (["-pqm"], "720p30 (-pqm)"),
+            "1080p60": (["-pqh"], "1080p60 (-pqh)"),
+            "2160p60": (["-pqp"], "2160p60 (-pqp)"),
+        }
+        if q in preset_map:
+            return preset_map[q]
+
+        match = re.match(r"^(\d{3,4})p(\d{2})$", q)
+        if match:
+            height = int(match.group(1))
+            fps = int(match.group(2))
+            width = (height * 16) // 9
+            if width % 2:
+                width += 1
+            return (
+                ["--resolution", f"{width},{height}", "--frame_rate", str(fps)],
+                f"{height}p{fps} (--resolution {width}x{height}, --frame_rate {fps})",
+            )
+
+        print(
+            f"[manim] WARNING: quality '{self.config.manim_quality}' not recognized; "
+            "falling back to 720p30 (-pqm)."
+        )
+        return (["-pqm"], "720p30 (-pqm fallback)")
