@@ -89,6 +89,6 @@ def test_binary_paths_and_compose_config(tmp_path):
     assert c.vhs_path == "/opt/bin/vhs"
     assert c.ffmpeg_timeout_sec == 900
     assert c.warn_stale_vhs is False
-    assert c.sync_vhs_from_timing is True
+    assert c.sync_from_timing is True
     assert c.sync_vhs_after_timestamps is True
     assert c.typing_ms_per_char == 40
