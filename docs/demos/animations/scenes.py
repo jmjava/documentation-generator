@@ -15,6 +15,8 @@ from pathlib import Path
 
 from manim import *
 
+Text.set_default(font="Liberation Sans")
+
 # ── Palette ──────────────────────────────────────────────────────────
 C_BG = "#1e1e2e"
 C_ACCENT = "#667eea"
@@ -105,9 +107,9 @@ class DocgenOverviewScene(_TimedScene):
             return self._clock + 2
 
         # ── Beat 0-1: Title card ──────────────────────────────────────
-        title = Text("docgen", font_size=52, color=C_ACCENT, weight=BOLD)
+        title = Text("docgen", font_size=56, color=C_ACCENT)
         subtitle = Text(
-            "Markdown  →  polished demo videos",
+            "Markdown -> polished demo videos",
             font_size=22, color=C_WHITE,
         )
         subtitle.next_to(title, DOWN, buff=0.3)
@@ -117,7 +119,7 @@ class DocgenOverviewScene(_TimedScene):
         self.timed_play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.8)
 
         tagline = Text(
-            "Reproducible · version-controlled · fully automated",
+            "Reproducible - version-controlled - fully automated",
             font_size=16, color=GREY_B,
         )
         tagline.next_to(subtitle, DOWN, buff=0.4)
@@ -250,7 +252,7 @@ class DocgenOverviewScene(_TimedScene):
         # ── Beat 11: Single command highlight ─────────────────────────
         cmd = Text(
             "docgen generate-all",
-            font_size=24, color=C_ACCENT, weight=BOLD,
+            font_size=28, color=C_ACCENT,
         )
         cmd_bg = RoundedRectangle(
             corner_radius=0.12, width=cmd.width + 0.6, height=cmd.height + 0.4,
@@ -274,7 +276,7 @@ class DocgenOverviewScene(_TimedScene):
             ct.move_to(RIGHT * 4.0 + DOWN * (1.8 + ci * 0.3))
             config_items.add(ct)
 
-        cfg_label = Text("docgen.yaml", font_size=14, color=C_ORANGE, weight=BOLD)
+        cfg_label = Text("docgen.yaml", font_size=16, color=C_ORANGE)
         cfg_label.move_to(RIGHT * 4.0 + DOWN * 1.4)
         self.timed_play(FadeIn(cfg_label), run_time=0.3)
 
@@ -330,7 +332,7 @@ class WizardGUIScene(_TimedScene):
             return self._clock + 2
 
         # ── Beat 0: Title ─────────────────────────────────────────────
-        title = Text("docgen wizard", font_size=44, color=C_ACCENT, weight=BOLD)
+        title = Text("docgen wizard", font_size=48, color=C_ACCENT)
         subtitle = Text(
             "Local web GUI for narration authoring",
             font_size=20, color=C_WHITE,
@@ -573,7 +575,7 @@ class WizardGUIScene(_TimedScene):
 
     @staticmethod
     def _tab(label, color, active=False):
-        t = Text(label, font_size=15, color=color, weight=BOLD if active else NORMAL)
+        t = Text(label, font_size=16 if active else 15, color=color)
         underline = Line(
             t.get_left() + DOWN * 0.15,
             t.get_right() + DOWN * 0.15,

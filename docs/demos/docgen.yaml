@@ -66,6 +66,7 @@ visual_map:
 manim:
   quality: 720p30
   manim_path: ""
+  font: "Liberation Sans"
   scenes:
     - DocgenOverviewScene
     - WizardGUIScene

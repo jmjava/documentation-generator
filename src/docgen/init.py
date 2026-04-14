@@ -254,6 +254,7 @@ def _write_config(plan: InitPlan) -> str:
             "quality": "720p30",
             "scenes": [f"Scene{s['id']}" for s in plan.segments],
             "manim_path": "",
+            "font": "Liberation Sans",
         },
         "vhs": {
             "vhs_path": "",
@@ -279,6 +280,13 @@ def _write_config(plan: InitPlan) -> str:
         },
         "validation": {
             "max_drift_sec": 2.75,
+            "manim_lint": {
+                "enabled": True,
+                "enforce_single_font_family": True,
+                "allowed_font_family": "Liberation Sans",
+                "ban_weight_bold": True,
+                "ban_text_positional_color": True,
+            },
             "narration_lint": {
                 "pre_tts_deny_patterns": [
                     "target duration",
