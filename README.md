@@ -55,6 +55,7 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen vhs [--tape 02-quickstart.tape] [--strict]` | Render VHS terminal recordings |
+| `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
@@ -75,6 +76,13 @@ manim:
 
 vhs:
   vhs_path: ""              # optional explicit binary path (relative to docgen.yaml or absolute)
+  sync_from_timing: false   # opt-in: allow tape Sleep rewrites from timing.json
+  typing_ms_per_char: 55    # typing estimate used by sync-vhs
+  max_typing_sec: 3.0       # per block cap for typing estimate
+  min_sleep_sec: 0.05       # floor for rewritten Sleep values
+
+pipeline:
+  sync_vhs_after_timestamps: false  # opt-in: run sync-vhs automatically in generate-all/rebuild-after-audio
 
 compose:
   ffmpeg_timeout_sec: 300   # can also be overridden with: docgen compose --ffmpeg-timeout N
@@ -83,6 +91,15 @@ compose:
 
 If you edit a `.tape` file, run `docgen vhs` before `docgen compose` so compose does not use stale rendered terminal video.
 
+To auto-align tape pacing with generated narration:
+
+```bash
+docgen timestamps
+docgen sync-vhs --dry-run
+docgen sync-vhs
+docgen vhs
+docgen compose
+```
 ## System dependencies
 
 - **ffmpeg** — composition and probing

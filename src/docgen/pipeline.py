@@ -17,6 +17,7 @@ class Pipeline:
         skip_tts: bool = False,
         skip_manim: bool = False,
         skip_vhs: bool = False,
+        skip_tape_sync: bool = False,
     ) -> None:
         if not skip_tts:
             print("\n=== Stage: TTS ===")
@@ -26,6 +27,11 @@ class Pipeline:
         print("\n=== Stage: Timestamps ===")
         from docgen.timestamps import TimestampExtractor
         TimestampExtractor(self.config).extract_all()
+
+        if self.config.sync_vhs_after_timestamps and not skip_tape_sync:
+            print("\n=== Stage: Sync VHS tape sleep timings ===")
+            from docgen.tape_sync import TapeSynchronizer
+            TapeSynchronizer(self.config).sync()
 
         if not skip_manim:
             print("\n=== Stage: Manim ===")
