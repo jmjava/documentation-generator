@@ -55,7 +55,7 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen vhs [--tape 02-quickstart.tape] [--strict]` | Render VHS terminal recordings |
-| `docgen compose [01 02 03]` | Compose segments (audio + video) |
+| `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate index.html, pages.yml, .gitattributes, .gitignore |
@@ -65,6 +65,23 @@ docgen validate --pre-push  # validate all outputs before committing
 ## Configuration
 
 Create a `docgen.yaml` in your demos directory. See [examples/minimal-bundle/docgen.yaml](examples/minimal-bundle/docgen.yaml) for a starting point.
+
+Useful pipeline options:
+
+```yaml
+manim:
+  quality: 1080p30          # supports 480p15, 720p30, 1080p30, 1080p60, 1440p30, 1440p60, 2160p60
+  manim_path: ""            # optional explicit binary path (relative to docgen.yaml or absolute)
+
+vhs:
+  vhs_path: ""              # optional explicit binary path (relative to docgen.yaml or absolute)
+
+compose:
+  ffmpeg_timeout_sec: 300   # can also be overridden with: docgen compose --ffmpeg-timeout N
+  warn_stale_vhs: true      # warns if terminal/*.tape is newer than terminal/rendered/*.mp4
+```
+
+If you edit a `.tape` file, run `docgen vhs` before `docgen compose` so compose does not use stale rendered terminal video.
 
 ## System dependencies
 

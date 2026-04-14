@@ -56,6 +56,10 @@ def test_defaults():
         assert c.manim_quality == "720p30"
         assert c.max_drift_sec == 2.75
         assert c.ocr_config["sample_interval_sec"] == 2
+        assert c.ffmpeg_timeout_sec == 300
+        assert c.warn_stale_vhs is True
+        assert c.manim_path is None
+        assert c.vhs_path is None
     finally:
         cfg_path.unlink()
 
@@ -69,3 +73,18 @@ def test_resolved_dirs(tmp_config):
     c = Config.from_yaml(tmp_config)
     assert c.narration_dir == tmp_config.parent / "narration"
     assert c.audio_dir == tmp_config.parent / "audio"
+
+
+def test_binary_paths_and_compose_config(tmp_path):
+    cfg = {
+        "manim": {"manim_path": "/opt/bin/manim"},
+        "vhs": {"vhs_path": "/opt/bin/vhs"},
+        "compose": {"ffmpeg_timeout_sec": 900, "warn_stale_vhs": False},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.manim_path == "/opt/bin/manim"
+    assert c.vhs_path == "/opt/bin/vhs"
+    assert c.ffmpeg_timeout_sec == 900
+    assert c.warn_stale_vhs is False

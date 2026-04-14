@@ -88,6 +88,38 @@ class Config:
     def manim_quality(self) -> str:
         return self.raw.get("manim", {}).get("quality", "720p30")
 
+    @property
+    def manim_path(self) -> str | None:
+        """Optional absolute/relative path to the Manim executable."""
+        value = self.raw.get("manim", {}).get("manim_path")
+        return str(value) if value else None
+
+    @property
+    def vhs_path(self) -> str | None:
+        """Optional absolute/relative path to the VHS executable."""
+        value = self.raw.get("vhs", {}).get("vhs_path")
+        return str(value) if value else None
+
+    # -- Compose ----------------------------------------------------------------
+
+    @property
+    def compose_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "ffmpeg_timeout_sec": 300,
+            "warn_stale_vhs": True,
+        }
+        defaults.update(self.raw.get("compose", {}))
+        return defaults
+
+    @property
+    def ffmpeg_timeout_sec(self) -> int:
+        value = self.compose_config.get("ffmpeg_timeout_sec", 300)
+        return int(value)
+
+    @property
+    def warn_stale_vhs(self) -> bool:
+        return bool(self.compose_config.get("warn_stale_vhs", True))
+
     # -- Validation ------------------------------------------------------------
 
     @property

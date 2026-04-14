@@ -124,8 +124,14 @@ def vhs(ctx: click.Context, tape: str | None, strict: bool) -> None:
 
 @main.command()
 @click.argument("segments", nargs=-1)
+@click.option(
+    "--ffmpeg-timeout",
+    default=None,
+    type=int,
+    help="Override ffmpeg timeout in seconds (default from docgen.yaml compose.ffmpeg_timeout_sec).",
+)
 @click.pass_context
-def compose(ctx: click.Context, segments: tuple[str, ...]) -> None:
+def compose(ctx: click.Context, segments: tuple[str, ...], ffmpeg_timeout: int | None) -> None:
     """Compose segments (audio + video via ffmpeg).
 
     Pass segment IDs to compose specific ones, or omit for the default set.
@@ -133,7 +139,7 @@ def compose(ctx: click.Context, segments: tuple[str, ...]) -> None:
     from docgen.compose import Composer
 
     cfg = ctx.obj["config"]
-    comp = Composer(cfg)
+    comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
     target = list(segments) if segments else cfg.segments_default
     click.echo(f"=== Composing {len(target)} segments ===")
     comp.compose_segments(target)

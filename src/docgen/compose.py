@@ -15,8 +15,13 @@ class ComposeError(RuntimeError):
 
 
 class Composer:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, ffmpeg_timeout_sec: int | None = None) -> None:
         self.config = config
+        self.ffmpeg_timeout_sec = (
+            int(ffmpeg_timeout_sec)
+            if ffmpeg_timeout_sec is not None
+            else int(self.config.ffmpeg_timeout_sec)
+        )
 
     def compose_segments(self, segment_ids: list[str], *, strict: bool = True) -> int:
         composed = 0
@@ -30,7 +35,9 @@ class Composer:
             if vtype == "manim":
                 ok = self._compose_simple(seg_id, self._manim_path(vmap), strict=strict)
             elif vtype == "vhs":
-                ok = self._compose_simple(seg_id, self._vhs_path(vmap), strict=strict)
+                video_path = self._vhs_path(vmap)
+                self._warn_if_stale_vhs(vmap, video_path)
+                ok = self._compose_simple(seg_id, video_path, strict=strict)
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -223,16 +230,24 @@ class Composer:
 
     def _manim_path(self, vmap: dict[str, Any]) -> Path:
         src = vmap.get("source", "")
-        return self.config.animations_dir / "media" / "videos" / "scenes" / "720p30" / src
+        if not src:
+            return self.config.animations_dir / "media" / "videos" / "scenes" / "720p30"
+
+        for base in self._manim_video_dirs():
+            candidate = base / src
+            if candidate.exists():
+                return candidate
+        return self._manim_video_dirs()[0] / src
 
     def _vhs_path(self, vmap: dict[str, Any]) -> Path:
         src = vmap.get("source", "")
         return self.config.terminal_dir / "rendered" / src
 
     def _resolve_source(self, source: str) -> Path:
-        manim_path = self.config.animations_dir / "media" / "videos" / "scenes" / "720p30" / source
-        if manim_path.exists():
-            return manim_path
+        for base in self._manim_video_dirs():
+            manim_path = base / source
+            if manim_path.exists():
+                return manim_path
         vhs_path = self.config.terminal_dir / "rendered" / source
         if vhs_path.exists():
             return vhs_path
@@ -254,13 +269,69 @@ class Composer:
         except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
             return None
 
-    @staticmethod
-    def _run_ffmpeg(cmd: list[str]) -> None:
+    def _run_ffmpeg(self, cmd: list[str]) -> None:
+        timeout_sec = max(1, int(self.ffmpeg_timeout_sec))
+        out_path = Path(cmd[-1]) if cmd else None
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=timeout_sec)
         except FileNotFoundError:
-            print("    ERROR: ffmpeg not found in PATH")
+            raise ComposeError("ffmpeg not found in PATH")
         except subprocess.CalledProcessError as exc:
-            print(f"    ERROR: ffmpeg failed: {exc.stderr[:300]}")
+            detail = (exc.stderr or exc.stdout or "")[:400]
+            raise ComposeError(f"ffmpeg failed: {detail}")
         except subprocess.TimeoutExpired:
-            print("    ERROR: ffmpeg timed out")
+            if out_path and out_path.exists() and out_path.stat().st_size > 0:
+                print(
+                    f"    WARNING: ffmpeg timed out after {timeout_sec}s, "
+                    f"but output exists at {out_path}."
+                )
+                return
+            raise ComposeError(f"ffmpeg timed out after {timeout_sec}s")
+
+    def _manim_video_dirs(self) -> list[Path]:
+        root = self.config.animations_dir / "media" / "videos"
+        quality = str(self.config.manim_quality).strip().lower()
+        fallback_qualities = [
+            quality,
+            "1080p30",
+            "1080p60",
+            "1440p30",
+            "1440p60",
+            "720p30",
+            "480p15",
+            "2160p60",
+        ]
+
+        ordered_qualities: list[str] = []
+        for q in fallback_qualities:
+            if q and q not in ordered_qualities:
+                ordered_qualities.append(q)
+
+        dirs: list[Path] = []
+        for q in ordered_qualities:
+            dirs.append(root / "scenes" / q)
+            dirs.append(root / q)
+        return dirs
+
+    def _warn_if_stale_vhs(self, vmap: dict[str, Any], video_path: Path) -> None:
+        if not self.config.warn_stale_vhs:
+            return
+
+        tape_name = str(vmap.get("tape", "")).strip()
+        if not tape_name:
+            source_name = str(vmap.get("source", "")).strip()
+            if source_name:
+                tape_name = f"{Path(source_name).stem}.tape"
+        if not tape_name:
+            return
+
+        tape_path = self.config.terminal_dir / tape_name
+        if not tape_path.exists() or not video_path.exists():
+            return
+
+        if tape_path.stat().st_mtime > (video_path.stat().st_mtime + 1):
+            print(
+                "    WARNING: tape is newer than rendered video "
+                f"({tape_path.name} > {video_path.name}). "
+                "Run `docgen vhs` before `docgen compose` to avoid stale output."
+            )

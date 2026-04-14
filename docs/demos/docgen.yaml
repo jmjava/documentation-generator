@@ -65,9 +65,17 @@ visual_map:
 
 manim:
   quality: 720p30
+  manim_path: ""
   scenes:
     - DocgenOverviewScene
     - WizardGUIScene
+
+vhs:
+  vhs_path: ""
+
+compose:
+  ffmpeg_timeout_sec: 300
+  warn_stale_vhs: true
 
 tts:
   model: gpt-4o-mini-tts
