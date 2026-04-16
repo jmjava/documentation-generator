@@ -7,6 +7,7 @@ binary is missing, but cv2 checks still run and still fail the build.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -88,9 +89,88 @@ def _is_lfs_pointer(path: Path) -> bool:
         return False
 
 
+def _is_text_call(node: ast.Call) -> bool:
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id == "Text"
+    if isinstance(func, ast.Attribute):
+        return func.attr == "Text"
+    return False
+
+
+def _looks_numeric(node: ast.AST) -> bool:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return True
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        return _looks_numeric(node.operand)
+    return False
+
+
+def _looks_like_color_positional(node: ast.AST) -> bool:
+    if _looks_numeric(node):
+        return False
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        value = node.value.strip()
+        if value.startswith("#"):
+            return True
+        # Positional named colors are almost always accidental in Text().
+        return bool(value) and value.replace("_", "").isalpha()
+    if isinstance(node, ast.Name):
+        ident = node.id.upper()
+        return node.id.isupper() or ident.startswith("C_") or "COLOR" in ident
+    if isinstance(node, ast.Attribute):
+        ident = node.attr.upper()
+        return node.attr.isupper() or ident.startswith("C_") or "COLOR" in ident
+    return False
+
+
+def _is_bold_weight(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == "BOLD"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "BOLD"
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value.strip().lower() == "bold"
+    return False
+
+
+def _lint_manim_text_usage(path: Path) -> list[str]:
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"{path}: could not read scene source ({exc})"]
+
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError as exc:
+        line = exc.lineno if exc.lineno is not None else "?"
+        return [f"{path}:{line} could not parse scenes.py ({exc.msg})"]
+
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not _is_text_call(node):
+            continue
+
+        if len(node.args) >= 2 and _looks_like_color_positional(node.args[1]):
+            issues.append(
+                f"{path}:{node.lineno} Text() second positional argument looks like a color; "
+                "use keyword form `Text(..., color=...)`."
+            )
+
+        for kw in node.keywords:
+            if kw.arg == "weight" and kw.value is not None and _is_bold_weight(kw.value):
+                issues.append(
+                    f"{path}:{node.lineno} Text(..., weight=BOLD) can substitute a different font; "
+                    "prefer emphasis with color/size."
+                )
+
+    return issues
+
+
 class Validator:
     def __init__(self, config: Config) -> None:
         self.config = config
+        self._manim_lint_cache: CheckResult | None = None
 
     def run_all(self, max_drift_override: float | None = None) -> list[ValidationReport]:
         reports: list[ValidationReport] = []
@@ -121,6 +201,8 @@ class Validator:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
         report.checks.append(self._check_narration_lint(seg_id))
+        if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
+            report.checks.append(self._check_manim_scene_lint())
 
         return report.to_dict()
 
@@ -298,6 +380,25 @@ class Validator:
             result.passed,
             result.issues[:10] if result.issues else [],
         )
+
+    def _check_manim_scene_lint(self) -> CheckResult:
+        if self._manim_lint_cache is not None:
+            return self._manim_lint_cache
+
+        scenes = self.config.animations_dir / "scenes.py"
+        if not scenes.exists():
+            result = CheckResult("manim_scene_lint", True, ["No animations/scenes.py (skipped)"])
+            self._manim_lint_cache = result
+            return result
+
+        issues = _lint_manim_text_usage(scenes)
+        result = CheckResult(
+            "manim_scene_lint",
+            not issues,
+            issues[:15] if issues else ["No risky Text() usage detected"],
+        )
+        self._manim_lint_cache = result
+        return result
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 

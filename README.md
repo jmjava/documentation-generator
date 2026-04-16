@@ -60,7 +60,7 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate index.html, pages.yml, .gitattributes, .gitignore |
-| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs]` | Run full pipeline |
+| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs] [--retry-manim]` | Run full pipeline (optionally auto-retry Manim after FREEZE GUARD) |
 | `docgen rebuild-after-audio` | Recompose + validate + concat |
 
 ## Configuration
@@ -99,6 +99,12 @@ docgen sync-vhs --dry-run
 docgen sync-vhs
 docgen vhs
 docgen compose
+```
+
+If `compose` fails with `FREEZE GUARD` after fresh timestamps, retry Manim once automatically:
+
+```bash
+docgen generate-all --retry-manim
 ```
 ## System dependencies
 

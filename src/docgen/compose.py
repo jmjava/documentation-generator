@@ -85,7 +85,9 @@ class Composer:
             msg = (
                 f"    FREEZE GUARD: {seg_id} visual is {video_dur:.1f}s but audio "
                 f"is {audio_dur:.1f}s → {freeze:.0%} frozen "
-                f"(max {max_ratio:.0%}). Re-render the visual source to be longer."
+                f"(max {max_ratio:.0%}). Re-render the visual source to be longer. "
+                "If this segment uses timing-driven Manim waits, run `docgen manim` again "
+                "after `docgen timestamps`, or use `docgen generate-all --retry-manim`."
             )
             if strict:
                 raise ComposeError(msg)

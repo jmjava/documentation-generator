@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ class Pipeline:
         skip_manim: bool = False,
         skip_vhs: bool = False,
         skip_tape_sync: bool = False,
+        retry_manim_on_freeze: bool = False,
     ) -> None:
         if not skip_tts:
             print("\n=== Stage: TTS ===")
@@ -47,8 +49,21 @@ class Pipeline:
                     print(f"  WARNING: {r.tape} had errors: {r.errors}")
 
         print("\n=== Stage: Compose ===")
-        from docgen.compose import Composer
-        Composer(self.config).compose_segments(self.config.segments_all)
+        from docgen.compose import ComposeError, Composer
+        composer = Composer(self.config)
+        try:
+            composer.compose_segments(self.config.segments_all)
+        except ComposeError as exc:
+            if self._should_retry_manim(exc, skip_manim, retry_manim_on_freeze):
+                print("\n=== Compose FREEZE GUARD detected; retrying Manim + compose once ===")
+                self._clear_manim_media_cache()
+                print("\n=== Stage: Manim (retry) ===")
+                from docgen.manim_runner import ManimRunner
+                ManimRunner(self.config).render()
+                print("\n=== Stage: Compose (retry) ===")
+                composer.compose_segments(self.config.segments_all)
+            else:
+                raise
 
         print("\n=== Stage: Validate ===")
         from docgen.validate import Validator
@@ -65,3 +80,19 @@ class Pipeline:
         PagesGenerator(self.config).generate_all(force=True)
 
         print("\n=== Pipeline complete ===")
+
+    @staticmethod
+    def _should_retry_manim(
+        exc: Exception, skip_manim: bool, retry_manim_on_freeze: bool
+    ) -> bool:
+        if skip_manim or not retry_manim_on_freeze:
+            return False
+        return "FREEZE GUARD" in str(exc).upper()
+
+    def _clear_manim_media_cache(self) -> None:
+        media_dir = self.config.animations_dir / "media"
+        if not media_dir.exists():
+            print("[pipeline] Manim cache already empty")
+            return
+        shutil.rmtree(media_dir)
+        print(f"[pipeline] Cleared Manim cache: {media_dir}")

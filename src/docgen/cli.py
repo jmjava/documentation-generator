@@ -238,6 +238,11 @@ def pages(ctx: click.Context, force: bool) -> None:
 @click.option("--skip-manim", is_flag=True)
 @click.option("--skip-vhs", is_flag=True)
 @click.option("--skip-tape-sync", is_flag=True, help="Skip optional sync-vhs stage after timestamps.")
+@click.option(
+    "--retry-manim",
+    is_flag=True,
+    help="If compose hits FREEZE GUARD, clear Manim cache and retry Manim + compose once.",
+)
 @click.pass_context
 def generate_all(
     ctx: click.Context,
@@ -245,6 +250,7 @@ def generate_all(
     skip_manim: bool,
     skip_vhs: bool,
     skip_tape_sync: bool,
+    retry_manim: bool,
 ) -> None:
     """Run full pipeline: TTS -> Manim -> VHS -> compose -> validate -> concat -> pages."""
     from docgen.pipeline import Pipeline
@@ -256,6 +262,7 @@ def generate_all(
         skip_manim=skip_manim,
         skip_vhs=skip_vhs,
         skip_tape_sync=skip_tape_sync,
+        retry_manim_on_freeze=retry_manim,
     )
 
 

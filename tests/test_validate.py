@@ -354,6 +354,57 @@ class TestValidateSegmentIntegration:
         v.run_pre_push()  # should NOT raise
 
 
+# ── Manim scene lint ───────────────────────────────────────────────────
+
+class TestManimSceneLint:
+    def _configure_manim(self, cfg_dir: Path, scenes_source: str) -> Config:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("manim", {})["scenes"] = ["Scene01"]
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "animations" / "scenes.py").write_text(scenes_source, encoding="utf-8")
+        return Config.from_yaml(cfg_dir / "docgen.yaml")
+
+    def test_flags_positional_text_color_and_bold_weight(self, cfg_dir):
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+C_BLUE = "#2979ff"
+
+class Demo(Scene):
+    def construct(self):
+        Text("Some label", C_BLUE, font_size=14)
+        Text("Heading", font_size=36, weight=BOLD)
+""".strip(),
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert not check["passed"]
+        details = " ".join(check["details"])
+        assert "second positional argument" in details
+        assert "weight=BOLD" in details
+
+    def test_clean_text_usage_passes(self, cfg_dir):
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+C_BLUE = "#2979ff"
+
+class Demo(Scene):
+    def construct(self):
+        Text("Some label", font_size=14, color=C_BLUE)
+        Text("Heading", font_size=36, color=WHITE)
+""".strip(),
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert check["passed"], check["details"]
+
+
 # ── Helper to create silent audio ─────────────────────────────────────
 
 def _make_silent_audio(path: Path, duration_sec: float = 10.0) -> Path:
