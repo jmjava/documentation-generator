@@ -10,6 +10,7 @@ https://jmjava.github.io/documentation-generator/
 - **TTS narration** — generate MP3 audio from Markdown scripts via OpenAI gpt-4o-mini-tts
 - **Manim animations** — render programmatic animation scenes
 - **VHS terminal recordings** — render `.tape` files into MP4s
+- **Playwright browser capture** — record browser-based demos as MP4 via headless Chromium
 - **ffmpeg composition** — combine audio + video into final segments
 - **Validation** — OCR error detection, layout analysis, audio-visual sync, narration linting
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules, `.gitignore`
@@ -132,6 +133,7 @@ Script contract:
   `DOCGEN_PLAYWRIGHT_WIDTH`, `DOCGEN_PLAYWRIGHT_HEIGHT`, and optional segment metadata
 - must write an MP4 to the requested output path
 - should use headless Playwright for CI compatibility
+
 ### VHS safety: avoid real long-running commands in tapes
 
 VHS executes commands in a real shell session. For demos, prefer simulated output with `echo`
@@ -175,6 +177,7 @@ docgen generate-all --retry-manim
 - **tesseract-ocr** — OCR validation
 - **VHS** — terminal recording (charmbracelet/vhs)
 - **Manim** — animation rendering (optional, install with `pip install docgen[manim]`)
+- **Playwright** — browser capture (optional, install with `pip install docgen[playwright]` then `playwright install chromium`)
 
 ## Milestone spec
 
