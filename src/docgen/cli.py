@@ -134,6 +134,42 @@ def vhs(
             click.echo(f"    {e}")
 
 
+@main.command()
+@click.option(
+    "--script",
+    "script_path",
+    default=None,
+    help="Python script to execute for browser actions (required for standalone mode).",
+)
+@click.option("--url", default=None, help="Target URL for browser capture.")
+@click.option("--source", default="playwright-capture.mp4", help="Output filename under terminal/rendered/.")
+@click.option("--width", default=1920, type=int, help="Browser viewport width.")
+@click.option("--height", default=1080, type=int, help="Browser viewport height.")
+@click.option("--timeout", "timeout_sec", default=120, type=int, help="Capture timeout in seconds.")
+@click.pass_context
+def playwright(
+    ctx: click.Context,
+    script_path: str | None,
+    url: str | None,
+    source: str,
+    width: int,
+    height: int,
+    timeout_sec: int,
+) -> None:
+    """Capture a browser demo video using Playwright."""
+    from docgen.playwright_runner import PlaywrightRunner
+
+    cfg = ctx.obj["config"]
+    runner = PlaywrightRunner(cfg)
+    video = runner.capture(
+        script=script_path or "",
+        output=source,
+        url=url,
+        viewport={"width": width, "height": height},
+    )
+    click.echo(f"[playwright] captured: {video}")
+
+
 @main.command("tape-lint")
 @click.option("--tape", default=None, help="Lint a single tape name or pattern.")
 @click.pass_context

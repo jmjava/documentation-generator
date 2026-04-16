@@ -54,7 +54,8 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen wizard [--port 8501]` | Launch narration setup wizard (local web GUI) |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
-| `docgen vhs [--tape 02-quickstart.tape] [--strict]` | Render VHS terminal recordings |
+| `docgen vhs [--tape 02-quickstart.tape] [--strict] [--timeout 120]` | Render VHS terminal recordings |
+| `docgen playwright --script scripts/capture.py --url http://localhost:3000 --output terminal/rendered/demo.mp4` | Capture browser demo video with Playwright script |
 | `docgen tape-lint [--tape 02-quickstart.tape]` | Lint tapes for commands likely to hang in VHS |
 | `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
@@ -83,6 +84,13 @@ vhs:
   min_sleep_sec: 0.05       # floor for rewritten Sleep values
   render_timeout_sec: 120   # per-tape timeout for `docgen vhs`
 
+playwright:
+  python_path: ""           # optional python executable for capture scripts
+  default_url: ""           # fallback URL when visual_map entry omits url
+  default_viewport:         # fallback viewport when visual_map entry omits viewport
+    width: 1920
+    height: 1080
+
 pipeline:
   sync_vhs_after_timestamps: false  # opt-in: run sync-vhs automatically in generate-all/rebuild-after-audio
 
@@ -92,6 +100,37 @@ compose:
 ```
 
 If you edit a `.tape` file, run `docgen vhs` before `docgen compose` so compose does not use stale rendered terminal video.
+
+### Playwright visual source (`type: playwright`)
+
+`visual_map` entries can now use a Playwright capture script:
+
+```yaml
+visual_map:
+  "04":
+    type: playwright
+    source: 04-browser-flow.mp4
+    script: scripts/demo_capture.py
+    url: http://localhost:3300
+    viewport:
+      width: 1920
+      height: 1080
+```
+
+During `docgen compose`, docgen runs the capture script first (if `source` does not exist yet),
+then muxes the generated MP4 with narration audio.
+
+Manual capture (useful while iterating on scripts):
+
+```bash
+docgen playwright --script scripts/demo_capture.py --url http://localhost:3300 \
+  --output terminal/rendered/04-browser-flow.mp4
+```
+
+Script contract:
+- receives CLI args: `--output`, optional `--url`, optional `--width`, optional `--height`
+- must write an MP4 to the requested output path
+- should use headless Playwright for CI compatibility
 
 ### VHS safety: avoid real long-running commands in tapes
 
