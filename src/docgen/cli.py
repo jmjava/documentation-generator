@@ -310,6 +310,28 @@ def pages(ctx: click.Context, force: bool) -> None:
     gen.generate_all(force=force)
 
 
+@main.command("scene-gen")
+@click.option("--segment", default=None, help="Generate scene for a single segment.")
+@click.option("--force", is_flag=True, help="Overwrite existing scene files.")
+@click.option("--dry-run", is_flag=True, help="Print generated code without writing files.")
+@click.pass_context
+def scene_gen(ctx: click.Context, segment: str | None, force: bool, dry_run: bool) -> None:
+    """Auto-generate Manim scenes from narration markdown.
+
+    Parses narration structure (headings, bullets, text) and generates
+    Manim scene code with proper timing. Manual scenes can be kept as
+    opt-in overrides.
+    """
+    from docgen.scene_gen import SceneGenerator
+
+    cfg = ctx.obj["config"]
+    gen = SceneGenerator(cfg)
+    created = gen.generate(segment=segment, force=force, dry_run=dry_run)
+    if created and not dry_run:
+        click.echo(f"\nGenerated {len(created)} scene file(s).")
+        click.echo("Next: docgen manim && docgen compose")
+
+
 @main.command("generate-all")
 @click.option("--skip-tts", is_flag=True)
 @click.option("--skip-manim", is_flag=True)
