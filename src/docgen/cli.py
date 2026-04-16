@@ -162,10 +162,11 @@ def playwright(
     cfg = ctx.obj["config"]
     runner = PlaywrightRunner(cfg)
     video = runner.capture(
-        script=script_path or "",
+        script=script_path,
         output=source,
         url=url,
         viewport={"width": width, "height": height},
+        timeout_sec=timeout_sec,
     )
     click.echo(f"[playwright] captured: {video}")
 

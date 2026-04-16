@@ -55,7 +55,7 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen vhs [--tape 02-quickstart.tape] [--strict] [--timeout 120]` | Render VHS terminal recordings |
-| `docgen playwright --script scripts/capture.py --url http://localhost:3000 --output terminal/rendered/demo.mp4` | Capture browser demo video with Playwright script |
+| `docgen playwright --script scripts/capture.py --url http://localhost:3000 --source demo.mp4` | Capture browser demo video with Playwright script |
 | `docgen tape-lint [--tape 02-quickstart.tape]` | Lint tapes for commands likely to hang in VHS |
 | `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
@@ -86,6 +86,7 @@ vhs:
 
 playwright:
   python_path: ""           # optional python executable for capture scripts
+  timeout_sec: 120          # capture timeout in seconds
   default_url: ""           # fallback URL when visual_map entry omits url
   default_viewport:         # fallback viewport when visual_map entry omits viewport
     width: 1920
@@ -123,15 +124,14 @@ then muxes the generated MP4 with narration audio.
 Manual capture (useful while iterating on scripts):
 
 ```bash
-docgen playwright --script scripts/demo_capture.py --url http://localhost:3300 \
-  --output terminal/rendered/04-browser-flow.mp4
+docgen playwright --script scripts/demo_capture.py --url http://localhost:3300 --source 04-browser-flow.mp4
 ```
 
 Script contract:
-- receives CLI args: `--output`, optional `--url`, optional `--width`, optional `--height`
+- receives env vars: `DOCGEN_PLAYWRIGHT_OUTPUT`, optional `DOCGEN_PLAYWRIGHT_URL`,
+  `DOCGEN_PLAYWRIGHT_WIDTH`, `DOCGEN_PLAYWRIGHT_HEIGHT`, and optional segment metadata
 - must write an MP4 to the requested output path
 - should use headless Playwright for CI compatibility
-
 ### VHS safety: avoid real long-running commands in tapes
 
 VHS executes commands in a real shell session. For demos, prefer simulated output with `echo`
