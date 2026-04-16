@@ -353,3 +353,61 @@ def rebuild_after_audio(ctx: click.Context, skip_tape_sync: bool) -> None:
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
     pipeline.run(skip_tts=True, skip_tape_sync=skip_tape_sync)
+
+
+@main.command("trace-extract")
+@click.option("--trace", "trace_path", default=None, help="Path to a Playwright trace.zip or directory.")
+@click.option("--output", default=None, help="Output events.json path (default: animations/<seg>-events.json).")
+@click.option("--segment", default=None, help="Extract only for one segment ID.")
+@click.pass_context
+def trace_extract(
+    ctx: click.Context,
+    trace_path: str | None,
+    output: str | None,
+    segment: str | None,
+) -> None:
+    """Extract browser action events from Playwright trace files."""
+    from docgen.playwright_trace import TraceExtractor
+
+    cfg = ctx.obj["config"]
+    extractor = TraceExtractor(cfg)
+
+    if trace_path:
+        import json
+
+        result = extractor.extract(trace_path)
+        events_data = [e.to_dict() for e in result.events]
+        if output:
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(
+                json.dumps(events_data, indent=2) + "\n", encoding="utf-8"
+            )
+            click.echo(f"[trace] Wrote {len(result.events)} events to {output}")
+        else:
+            click.echo(json.dumps(events_data, indent=2))
+        for w in result.warnings:
+            click.echo(f"  WARN: {w}", err=True)
+    else:
+        results = extractor.extract_all()
+        total = sum(len(r.events) for r in results)
+        click.echo(f"[trace] Extracted {total} events from {len(results)} trace(s)")
+
+
+@main.command("ai-provider")
+@click.pass_context
+def ai_provider_info(ctx: click.Context) -> None:
+    """Show the active AI provider and its configuration."""
+    from docgen.ai_provider import get_provider
+
+    cfg = ctx.obj["config"]
+    provider = get_provider(cfg)
+    ai_cfg = cfg.ai_config if cfg else {}
+    provider_name = ai_cfg.get("provider", "openai")
+    click.echo(f"Provider:       {provider_name}")
+    click.echo(f"Implementation: {type(provider).__name__}")
+    if provider_name == "ollama":
+        click.echo(f"Ollama URL:     {ai_cfg.get('ollama_url', 'http://localhost:11434')}")
+        click.echo(f"Ollama model:   {ai_cfg.get('ollama_model', 'llama3.2')}")
+    elif provider_name == "embabel":
+        click.echo(f"Embabel URL:    {ai_cfg.get('embabel_url', 'http://localhost:8080/sse')}")
+    click.echo(f"Whisper model:  {ai_cfg.get('whisper_model', 'whisper-1')}")

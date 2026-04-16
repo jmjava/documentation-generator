@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 manim = ["manim>=0.18"]
+embabel = ["mcp>=1.0"]
 dev = [
     "pytest>=7.0",
     "pytest-cov",

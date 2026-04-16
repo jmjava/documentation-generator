@@ -16,28 +16,16 @@ class TimestampExtractor:
 
     def extract(self, audio_path: str | Path) -> dict[str, Any]:
         """Transcribe audio and return word-level timestamps."""
-        import openai
+        from docgen.ai_provider import get_provider
 
-        client = openai.OpenAI()
-        with open(audio_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                response_format="verbose_json",
-                timestamp_granularities=["word", "segment"],
-            )
-
-        return {
-            "text": result.text,
-            "segments": [
-                {"start": s.start, "end": s.end, "text": s.text}
-                for s in (result.segments or [])
-            ],
-            "words": [
-                {"start": w.start, "end": w.end, "word": w.word}
-                for w in (result.words or [])
-            ],
-        }
+        provider = get_provider(self.config)
+        whisper_model = self.config.ai_config.get("whisper_model", "whisper-1")
+        return provider.transcribe(
+            audio_path=audio_path,
+            model=whisper_model,
+            response_format="verbose_json",
+            timestamp_granularities=["word", "segment"],
+        )
 
     def extract_all(self) -> None:
         """Extract timestamps for all segments and write timing.json."""

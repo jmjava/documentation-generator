@@ -1,4 +1,4 @@
-"""TTS narration generator using OpenAI gpt-4o-mini-tts."""
+"""TTS narration generator — uses the active AI provider (OpenAI by default)."""
 
 from __future__ import annotations
 
@@ -68,23 +68,21 @@ class TTSGenerator:
                 print(f"  ... ({len(plain) - 500} more chars)")
             return
 
-        import openai
+        from docgen.ai_provider import get_provider
 
         audio_dir.mkdir(parents=True, exist_ok=True)
-        out_path = audio_dir / f"{seg_id}.mp3"
 
-        # Find the output name matching the narration filename stem
         stem = src.stem
         out_path = audio_dir / f"{stem}.mp3"
 
         print(f"[tts] Generating audio for {seg_id} ({len(plain)} chars) -> {out_path}")
 
-        client = openai.OpenAI()
-        response = client.audio.speech.create(
+        provider = get_provider(self.config)
+        provider.tts(
+            text=plain,
+            output_path=out_path,
             model=self.config.tts_model,
             voice=self.config.tts_voice,
-            input=plain,
             instructions=self.config.tts_instructions,
         )
-        response.stream_to_file(str(out_path))
         print(f"[tts] Wrote {out_path}")

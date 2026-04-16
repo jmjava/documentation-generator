@@ -132,9 +132,10 @@ def generate_narration_via_llm(
     model: str,
     segment_name: str,
     revision_notes: str = "",
+    config: Any | None = None,
 ) -> str:
-    """Call OpenAI to generate a narration draft from source docs + guidance."""
-    import openai
+    """Generate a narration draft from source docs + guidance via the active AI provider."""
+    from docgen.ai_provider import get_provider
 
     user_parts = [
         f"Generate a narration script for demo video segment '{segment_name}'.",
@@ -153,16 +154,15 @@ def generate_narration_via_llm(
             "--- END REVISION NOTES ---",
         ]
 
-    client = openai.OpenAI()
-    response = client.chat.completions.create(
-        model=model,
+    provider = get_provider(config)
+    return provider.chat(
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "\n".join(user_parts)},
         ],
+        model=model,
         temperature=0.7,
     )
-    return response.choices[0].message.content or ""
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +256,7 @@ def create_app(config: Any | None = None) -> Flask:
                 model=wiz.get("llm_model", "gpt-4o"),
                 segment_name=segment_name,
                 revision_notes=revision_notes,
+                config=cfg,
             )
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500

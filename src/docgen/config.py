@@ -269,6 +269,32 @@ class Config:
     def pages_config(self) -> dict[str, Any]:
         return self.raw.get("pages", {})
 
+    # -- AI provider -----------------------------------------------------------
+
+    @property
+    def ai_config(self) -> dict[str, Any]:
+        """AI provider configuration block.
+
+        Supported keys:
+          provider        — "openai" (default), "ollama", "embabel"
+          chat_model      — override default chat model
+          tts_model       — override TTS model (also inherits from tts.model)
+          tts_voice       — override TTS voice (also inherits from tts.voice)
+          whisper_model   — override Whisper model (default: "whisper-1")
+          ollama_url      — Ollama server URL (default: http://localhost:11434)
+          ollama_model    — default Ollama model (default: llama3.2)
+          embabel_url     — Embabel MCP server URL (default: http://localhost:8080/sse)
+        """
+        defaults: dict[str, Any] = {
+            "provider": "openai",
+            "whisper_model": "whisper-1",
+            "ollama_url": "http://localhost:11434",
+            "ollama_model": "llama3.2",
+            "embabel_url": "http://localhost:8080/sse",
+        }
+        defaults.update(self.raw.get("ai", {}))
+        return defaults
+
     # -- Wizard ----------------------------------------------------------------
 
     @property
