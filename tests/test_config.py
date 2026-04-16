@@ -61,6 +61,10 @@ def test_defaults():
         assert c.manim_path is None
         assert c.vhs_path is None
         assert c.vhs_render_timeout_sec == 120
+        assert c.playwright_python_path is None
+        assert c.playwright_timeout_sec == 120
+        assert c.playwright_default_url is None
+        assert c.playwright_default_viewport == (1920, 1080)
     finally:
         cfg_path.unlink()
 
@@ -87,6 +91,12 @@ def test_binary_paths_and_compose_config(tmp_path):
         },
         "compose": {"ffmpeg_timeout_sec": 900, "warn_stale_vhs": False},
         "pipeline": {"sync_vhs_after_timestamps": True},
+        "playwright": {
+            "python_path": "/opt/bin/python3",
+            "timeout_sec": 240,
+            "default_url": "http://localhost:3300",
+            "default_viewport": {"width": 1366, "height": 768},
+        },
     }
     p = tmp_path / "docgen.yaml"
     p.write_text(yaml.dump(cfg), encoding="utf-8")
@@ -99,3 +109,7 @@ def test_binary_paths_and_compose_config(tmp_path):
     assert c.sync_vhs_after_timestamps is True
     assert c.typing_ms_per_char == 40
     assert c.vhs_render_timeout_sec == 240
+    assert c.playwright_python_path == "/opt/bin/python3"
+    assert c.playwright_timeout_sec == 240
+    assert c.playwright_default_url == "http://localhost:3300"
+    assert c.playwright_default_viewport == (1366, 768)

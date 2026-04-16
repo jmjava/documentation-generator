@@ -139,6 +139,40 @@ class Config:
         if "sync_vhs_after_timestamps" in pipeline_cfg:
             return bool(pipeline_cfg.get("sync_vhs_after_timestamps"))
         return self.sync_from_timing
+
+    # -- Playwright ------------------------------------------------------------
+
+    @property
+    def playwright_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "python_path": "",
+            "timeout_sec": 120,
+            "default_url": "",
+            "default_viewport": {"width": 1920, "height": 1080},
+        }
+        defaults.update(self.raw.get("playwright", {}))
+        return defaults
+
+    @property
+    def playwright_python_path(self) -> str | None:
+        value = self.playwright_config.get("python_path")
+        return str(value) if value else None
+
+    @property
+    def playwright_timeout_sec(self) -> int:
+        return int(self.playwright_config.get("timeout_sec", 120))
+
+    @property
+    def playwright_default_url(self) -> str | None:
+        value = str(self.playwright_config.get("default_url", "")).strip()
+        return value or None
+
+    @property
+    def playwright_default_viewport(self) -> tuple[int, int]:
+        raw = self.playwright_config.get("default_viewport", {}) or {}
+        width = int(raw.get("width", 1920))
+        height = int(raw.get("height", 1080))
+        return width, height
     # -- Compose ----------------------------------------------------------------
 
     @property

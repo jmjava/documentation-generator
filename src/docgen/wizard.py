@@ -386,6 +386,25 @@ def create_app(config: Any | None = None) -> Flask:
                 comp.compose_segments([segment_id])
                 return jsonify({"ok": True, "step": "compose", "segment": segment_id})
 
+            elif step == "playwright":
+                from docgen.playwright_runner import PlaywrightRunner
+
+                vmap = cfg.visual_map.get(segment_id, {})
+                source = str(vmap.get("source", "")).strip()
+                if not source:
+                    return jsonify({"error": "visual_map source is required for playwright"}), 400
+
+                runner = PlaywrightRunner(cfg)
+                video = runner.capture_segment(segment_id, vmap)
+                return jsonify(
+                    {
+                        "ok": True,
+                        "step": "playwright",
+                        "segment": segment_id,
+                        "video": str(video.relative_to(cfg.base_dir)),
+                    }
+                )
+
             elif step == "validate":
                 from docgen.validate import Validator
                 v = Validator(cfg)

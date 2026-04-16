@@ -38,6 +38,15 @@ class Composer:
                 video_path = self._vhs_path(vmap)
                 self._warn_if_stale_vhs(vmap, video_path)
                 ok = self._compose_simple(seg_id, video_path, strict=strict)
+            elif vtype == "playwright":
+                from docgen.playwright_runner import PlaywrightError, PlaywrightRunner
+
+                try:
+                    video_path = PlaywrightRunner(self.config).capture_segment(seg_id, vmap)
+                except PlaywrightError as exc:
+                    print(f"    SKIP: playwright capture failed ({exc})")
+                    video_path = Path("")
+                ok = video_path.exists() and self._compose_simple(seg_id, video_path, strict=strict)
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -243,6 +252,12 @@ class Composer:
 
     def _vhs_path(self, vmap: dict[str, Any]) -> Path:
         src = vmap.get("source", "")
+        return self.config.terminal_dir / "rendered" / src
+
+    def _playwright_path(self, vmap: dict[str, Any]) -> Path:
+        src = str(vmap.get("source", "")).strip()
+        if not src:
+            return self.config.terminal_dir / "rendered" / "playwright.mp4"
         return self.config.terminal_dir / "rendered" / src
 
     def _resolve_source(self, source: str) -> Path:
