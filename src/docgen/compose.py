@@ -47,6 +47,13 @@ class Composer:
                     print(f"    SKIP: playwright capture failed ({exc})")
                     video_path = Path("")
                 ok = video_path.exists() and self._compose_simple(seg_id, video_path, strict=strict)
+            elif vtype == "playwright_test":
+                video_path = self._playwright_test_path(seg_id, vmap)
+                if video_path.exists():
+                    retimed = self._retime_video(seg_id, video_path)
+                    ok = self._compose_simple(seg_id, retimed or video_path, strict=strict)
+                else:
+                    print(f"    SKIP: missing playwright_test video {video_path}")
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -259,6 +266,132 @@ class Composer:
         if not src:
             return self.config.terminal_dir / "rendered" / "playwright.mp4"
         return self.config.terminal_dir / "rendered" / src
+
+    def _playwright_test_path(self, seg_id: str, vmap: dict[str, Any]) -> Path:
+        src = str(vmap.get("source", "")).strip()
+        if not src:
+            return self.config.base_dir / "test-results" / "videos" / f"{seg_id}.webm"
+        path = self.config.base_dir / src
+        if path.exists():
+            return path
+        for ext in (".webm", ".mp4"):
+            candidate = path.with_suffix(ext)
+            if candidate.exists():
+                return candidate
+        return path
+
+    def _retime_video(self, seg_id: str, video_path: Path) -> Path | None:
+        """Apply speed adjustments from sync_map.json, return retimed path or None."""
+        import json as _json
+
+        sync_map_path = self.config.animations_dir / f"{seg_id}-sync_map.json"
+        if not sync_map_path.exists():
+            return None
+
+        try:
+            sync_data = _json.loads(sync_map_path.read_text(encoding="utf-8"))
+        except (OSError, _json.JSONDecodeError):
+            return None
+
+        speed_segs = sync_data.get("speed_segments", [])
+        if not speed_segs:
+            return None
+
+        if len(speed_segs) == 1:
+            factor = speed_segs[0].get("factor", 1.0)
+            if 0.95 <= factor <= 1.05:
+                return None
+            return self._apply_uniform_speed(video_path, seg_id, factor)
+
+        return self._apply_piecewise_speed(video_path, seg_id, speed_segs)
+
+    def _apply_uniform_speed(self, video_path: Path, seg_id: str, factor: float) -> Path | None:
+        """Apply a single speed factor to the entire video."""
+        retimed_path = self.config.recordings_dir / f".{seg_id}-retimed.mp4"
+        retimed_path.parent.mkdir(parents=True, exist_ok=True)
+
+        pts_factor = 1.0 / factor if factor > 0 else 1.0
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(video_path),
+            "-filter:v", f"setpts={pts_factor:.6f}*PTS",
+            "-an",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(retimed_path),
+        ]
+        try:
+            self._run_ffmpeg(cmd)
+            print(f"    retimed: {factor:.2f}x speed → {retimed_path.name}")
+            return retimed_path
+        except Exception as exc:
+            print(f"    WARNING: retiming failed ({exc}), using original video")
+            return None
+
+    def _apply_piecewise_speed(
+        self, video_path: Path, seg_id: str, speed_segs: list[dict[str, Any]]
+    ) -> Path | None:
+        """Split video at anchor points, retime each piece, concatenate."""
+        tmp_dir = self.config.recordings_dir / f".{seg_id}-retime-parts"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        part_paths: list[Path] = []
+        for i, seg in enumerate(speed_segs):
+            v_start = seg.get("video_start", 0)
+            v_end = seg.get("video_end", 0)
+            factor = seg.get("factor", 1.0)
+            if v_end <= v_start:
+                continue
+
+            part_path = tmp_dir / f"part-{i:03d}.mp4"
+            pts_factor = 1.0 / factor if factor > 0 else 1.0
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", f"{v_start:.3f}",
+                "-to", f"{v_end:.3f}",
+                "-i", str(video_path),
+                "-filter:v", f"setpts={pts_factor:.6f}*PTS",
+                "-an",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                str(part_path),
+            ]
+            try:
+                self._run_ffmpeg(cmd)
+                if part_path.exists() and part_path.stat().st_size > 0:
+                    part_paths.append(part_path)
+            except Exception as exc:
+                print(f"    WARNING: retiming part {i} failed ({exc})")
+
+        if not part_paths:
+            return None
+
+        retimed_path = self.config.recordings_dir / f".{seg_id}-retimed.mp4"
+        concat_list = tmp_dir / "concat.txt"
+        concat_list.write_text(
+            "\n".join(f"file '{p}'" for p in part_paths), encoding="utf-8"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0", "-i", str(concat_list),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(retimed_path),
+        ]
+        try:
+            self._run_ffmpeg(cmd)
+            print(f"    retimed: {len(speed_segs)} segments → {retimed_path.name}")
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return retimed_path
+        except Exception as exc:
+            print(f"    WARNING: concat retimed parts failed ({exc})")
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
 
     def _resolve_source(self, source: str) -> Path:
         for base in self._manim_video_dirs():

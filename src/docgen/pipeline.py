@@ -19,6 +19,7 @@ class Pipeline:
         skip_manim: bool = False,
         skip_vhs: bool = False,
         skip_tape_sync: bool = False,
+        skip_playwright_tests: bool = False,
         retry_manim_on_freeze: bool = False,
     ) -> None:
         if not skip_tts:
@@ -47,6 +48,26 @@ class Pipeline:
             for r in results:
                 if not r.success:
                     print(f"  WARNING: {r.tape} had errors: {r.errors}")
+
+        if not skip_playwright_tests and self._has_playwright_test_segments():
+            print("\n=== Stage: Playwright Tests ===")
+            from docgen.playwright_test_runner import PlaywrightTestRunner
+            runner = PlaywrightTestRunner(self.config)
+            test_results = runner.run_segment_tests()
+            for r in test_results:
+                status = "ok" if r.success else "FAIL"
+                print(f"  [{status}] {r.test}")
+                for e in r.errors:
+                    print(f"    {e}")
+
+            print("\n=== Stage: Trace Extraction ===")
+            from docgen.playwright_trace import TraceExtractor
+            TraceExtractor(self.config).extract_all()
+
+            if self.config.sync_playwright_after_timestamps:
+                print("\n=== Stage: Sync Playwright ===")
+                from docgen.playwright_sync import PlaywrightSynchronizer
+                PlaywrightSynchronizer(self.config).sync()
 
         print("\n=== Stage: Compose ===")
         from docgen.compose import ComposeError, Composer
@@ -80,6 +101,12 @@ class Pipeline:
         PagesGenerator(self.config).generate_all(force=True)
 
         print("\n=== Pipeline complete ===")
+
+    def _has_playwright_test_segments(self) -> bool:
+        return any(
+            v.get("type") == "playwright_test"
+            for v in self.config.visual_map.values()
+        )
 
     @staticmethod
     def _should_retry_manim(

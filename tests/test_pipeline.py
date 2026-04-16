@@ -92,6 +92,7 @@ def test_retry_manim_after_freeze_guard(tmp_path, monkeypatch) -> None:
         animations_dir=animations_dir,
         segments_all=["01"],
         sync_vhs_after_timestamps=False,
+        visual_map={},
     )
 
     Pipeline(cfg).run(skip_tts=True, skip_vhs=True, retry_manim_on_freeze=True)
@@ -122,6 +123,7 @@ def test_no_retry_when_flag_disabled(tmp_path, monkeypatch) -> None:
         animations_dir=animations_dir,
         segments_all=["01"],
         sync_vhs_after_timestamps=False,
+        visual_map={},
     )
 
     with pytest.raises(ComposeError, match="FREEZE GUARD"):

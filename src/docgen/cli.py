@@ -316,6 +316,9 @@ def pages(ctx: click.Context, force: bool) -> None:
 @click.option("--skip-vhs", is_flag=True)
 @click.option("--skip-tape-sync", is_flag=True, help="Skip optional sync-vhs stage after timestamps.")
 @click.option(
+    "--skip-playwright-tests", is_flag=True, help="Skip Playwright test execution and sync."
+)
+@click.option(
     "--retry-manim",
     is_flag=True,
     help="If compose hits FREEZE GUARD, clear Manim cache and retry Manim + compose once.",
@@ -327,9 +330,10 @@ def generate_all(
     skip_manim: bool,
     skip_vhs: bool,
     skip_tape_sync: bool,
+    skip_playwright_tests: bool,
     retry_manim: bool,
 ) -> None:
-    """Run full pipeline: TTS -> Manim -> VHS -> compose -> validate -> concat -> pages."""
+    """Run full pipeline: TTS -> Manim -> VHS -> Playwright tests -> compose -> validate -> concat."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
@@ -339,6 +343,7 @@ def generate_all(
         skip_manim=skip_manim,
         skip_vhs=skip_vhs,
         skip_tape_sync=skip_tape_sync,
+        skip_playwright_tests=skip_playwright_tests,
         retry_manim_on_freeze=retry_manim,
     )
 
@@ -353,6 +358,75 @@ def rebuild_after_audio(ctx: click.Context, skip_tape_sync: bool) -> None:
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
     pipeline.run(skip_tts=True, skip_tape_sync=skip_tape_sync)
+
+
+@main.command()
+@click.option(
+    "--provider", "provider_name", default=None,
+    help="AI provider override: openai, ollama, embabel.",
+)
+@click.option("--model", default=None, help="Model override for chat.")
+@click.option("--non-interactive", is_flag=True, help="Read stdin, print response, exit.")
+@click.pass_context
+def chat(
+    ctx: click.Context,
+    provider_name: str | None,
+    model: str | None,
+    non_interactive: bool,
+) -> None:
+    """Interactive AI chat for docgen — generate narration, run pipeline, diagnose errors."""
+    import os
+
+    from docgen.ai_provider import get_provider
+    from docgen.chat import run_chat
+
+    cfg = ctx.obj["config"]
+    if provider_name:
+        os.environ["DOCGEN_AI_PROVIDER"] = provider_name
+    provider = get_provider(cfg)
+    run_chat(cfg, provider, non_interactive=non_interactive, model=model)
+
+
+@main.command("sync-playwright")
+@click.option("--segment", default=None, help="Sync one segment ID only.")
+@click.option("--dry-run", is_flag=True, help="Preview sync without writing files.")
+@click.pass_context
+def sync_playwright(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
+    """Sync Playwright video events to narration timing."""
+    from docgen.playwright_sync import PlaywrightSynchronizer
+
+    cfg = ctx.obj["config"]
+    results = PlaywrightSynchronizer(cfg).sync(segment=segment, dry_run=dry_run)
+    total_anchors = sum(len(r.anchors) for r in results)
+    click.echo(
+        f"[sync-pw] Done: {len(results)} segment(s), {total_anchors} anchor(s) matched"
+    )
+
+
+@main.command("playwright-test")
+@click.option("--test", "test_filter", default=None, help="Filter to specific test(s).")
+@click.option("--timeout", default=None, type=int, help="Test execution timeout in seconds.")
+@click.pass_context
+def playwright_test(ctx: click.Context, test_filter: str | None, timeout: int | None) -> None:
+    """Run Playwright tests with video+tracing and collect artifacts."""
+    from docgen.playwright_test_runner import PlaywrightTestRunner
+
+    cfg = ctx.obj["config"]
+    runner = PlaywrightTestRunner(cfg)
+    if test_filter:
+        results = runner.run_tests(test_filter=test_filter, timeout_sec=timeout)
+    else:
+        results = runner.run_segment_tests()
+
+    for r in results:
+        status = "ok" if r.success else "FAIL"
+        click.echo(f"  [{status}] {r.test}")
+        if r.video_path:
+            click.echo(f"    video: {r.video_path}")
+        if r.trace_path:
+            click.echo(f"    trace: {r.trace_path}")
+        for e in r.errors:
+            click.echo(f"    {e}")
 
 
 @main.command("trace-extract")

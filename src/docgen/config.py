@@ -173,6 +173,31 @@ class Config:
         width = int(raw.get("width", 1920))
         height = int(raw.get("height", 1080))
         return width, height
+    # -- Playwright test integration -------------------------------------------
+
+    @property
+    def playwright_test_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "framework": "pytest",
+            "test_command": "",
+            "test_dir": "tests/e2e",
+            "video_dir": "test-results/videos",
+            "trace_dir": "test-results/traces",
+            "retain_on_failure": True,
+            "transcode_to_mp4": True,
+            "timeout_sec": 300,
+            "sync_strategy": "stretch",
+            "min_speed_factor": 0.25,
+            "max_speed_factor": 4.0,
+        }
+        defaults.update(self.raw.get("playwright_test", {}))
+        return defaults
+
+    @property
+    def sync_playwright_after_timestamps(self) -> bool:
+        pipeline_cfg = self.raw.get("pipeline", {})
+        return bool(pipeline_cfg.get("sync_playwright_after_timestamps", True))
+
     # -- Compose ----------------------------------------------------------------
 
     @property
