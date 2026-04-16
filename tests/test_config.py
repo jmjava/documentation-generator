@@ -53,7 +53,11 @@ def test_defaults():
     try:
         c = Config.from_yaml(cfg_path)
         assert c.tts_voice == "coral"
-        assert c.manim_quality == "720p30"
+        assert c.manim_quality == "1080p30"
+        assert c.manim_font == "Liberation Sans"
+        assert c.manim_min_font_size == 14
+        assert isinstance(c.manim_unsafe_unicode, list)
+        assert "\u2192" in c.manim_unsafe_unicode
         assert c.max_drift_sec == 2.75
         assert c.ocr_config["sample_interval_sec"] == 2
         assert c.ffmpeg_timeout_sec == 300
@@ -78,6 +82,24 @@ def test_resolved_dirs(tmp_config):
     c = Config.from_yaml(tmp_config)
     assert c.narration_dir == tmp_config.parent / "narration"
     assert c.audio_dir == tmp_config.parent / "audio"
+
+
+def test_manim_font_and_quality_overrides(tmp_path):
+    cfg = {
+        "manim": {
+            "quality": "720p30",
+            "font": "DejaVu Sans",
+            "min_font_size": 16,
+            "unsafe_unicode": ["\u2192"],
+        },
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.manim_quality == "720p30"
+    assert c.manim_font == "DejaVu Sans"
+    assert c.manim_min_font_size == 16
+    assert c.manim_unsafe_unicode == ["\u2192"]
 
 
 def test_binary_paths_and_compose_config(tmp_path):
