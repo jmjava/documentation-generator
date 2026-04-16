@@ -87,6 +87,7 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert (tmp_path / "demos" / "rebuild-after-audio.sh").exists()
     assert (tmp_path / "demos" / "validate.sh").exists()
     assert (tmp_path / "demos" / "narration" / "README.md").exists()
+    assert (tmp_path / "demos" / "terminal" / "README.md").exists()
     assert (tmp_path / "demos" / "narration" / "01-intro.md").exists()
     assert (tmp_path / "demos" / "narration" / "02-setup.md").exists()
 
@@ -94,6 +95,7 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     cfg = yaml.safe_load(cfg_text.split("\n\n", 1)[-1])
     assert cfg["segments"]["all"] == ["01", "02"]
     assert cfg["segment_names"]["01"] == "01-intro"
+    assert cfg["vhs"]["render_timeout_sec"] == 120
     assert "test-project" in cfg["tts"]["instructions"]
 
     assert len(created) >= 7

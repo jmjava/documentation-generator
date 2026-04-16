@@ -206,6 +206,11 @@ def generate_files(plan: InitPlan) -> list[str]:
     if not narr_readme.exists():
         created.append(_write_narration_readme(plan))
 
+    # terminal/README.md with safe tape authoring guidance
+    terminal_readme = plan.demo_dir / "terminal" / "README.md"
+    if not terminal_readme.exists():
+        created.append(_write_terminal_readme(plan))
+
     # Starter narration files (only for segments without existing files)
     for seg in plan.segments:
         narr_file = plan.demo_dir / "narration" / f"{seg['name']}.md"
@@ -261,6 +266,7 @@ def _write_config(plan: InitPlan) -> str:
             "typing_ms_per_char": 55,
             "max_typing_sec": 3.0,
             "min_sleep_sec": 0.2,
+            "render_timeout_sec": 120,
         },
         "compose": {
             "ffmpeg_timeout_sec": 300,
@@ -420,6 +426,37 @@ def _write_narration_readme(plan: InitPlan) -> str:
         ```
     """)
     path = plan.demo_dir / "narration" / "README.md"
+    path.write_text(content, encoding="utf-8")
+    return str(path)
+
+
+def _write_terminal_readme(plan: InitPlan) -> str:
+    content = textwrap.dedent("""\
+        # Terminal tape authoring (VHS)
+
+        `.tape` files run in a real shell. Avoid real long-running commands in demos.
+
+        ## Safe pattern: simulate output with `echo`
+
+        Prefer:
+
+        ```tape
+        Type "echo '$ python app.py --serve'"
+        Enter
+        Type "echo 'Starting server on :8080'"
+        Enter
+        ```
+
+        Avoid in tapes unless you really want to execute them:
+        - `python ...`
+        - `curl localhost ...`
+        - `npm start`, `docker ...`, `kubectl ...`
+
+        Useful checks:
+        - `docgen tape-lint` (warn on risky command patterns)
+        - `docgen vhs --strict` (fails on common shell error output)
+    """)
+    path = plan.demo_dir / "terminal" / "README.md"
     path.write_text(content, encoding="utf-8")
     return str(path)
 

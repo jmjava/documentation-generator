@@ -60,6 +60,7 @@ def test_defaults():
         assert c.warn_stale_vhs is True
         assert c.manim_path is None
         assert c.vhs_path is None
+        assert c.vhs_render_timeout_sec == 120
     finally:
         cfg_path.unlink()
 
@@ -78,7 +79,12 @@ def test_resolved_dirs(tmp_config):
 def test_binary_paths_and_compose_config(tmp_path):
     cfg = {
         "manim": {"manim_path": "/opt/bin/manim"},
-        "vhs": {"vhs_path": "/opt/bin/vhs", "sync_from_timing": True, "typing_ms_per_char": 40},
+        "vhs": {
+            "vhs_path": "/opt/bin/vhs",
+            "sync_from_timing": True,
+            "typing_ms_per_char": 40,
+            "render_timeout_sec": 240,
+        },
         "compose": {"ffmpeg_timeout_sec": 900, "warn_stale_vhs": False},
         "pipeline": {"sync_vhs_after_timestamps": True},
     }
@@ -92,3 +98,4 @@ def test_binary_paths_and_compose_config(tmp_path):
     assert c.sync_from_timing is True
     assert c.sync_vhs_after_timestamps is True
     assert c.typing_ms_per_char == 40
+    assert c.vhs_render_timeout_sec == 240

@@ -107,19 +107,59 @@ def manim(ctx: click.Context, scene: str | None) -> None:
 @main.command()
 @click.option("--tape", default=None, help="Render a single VHS tape.")
 @click.option("--strict", is_flag=True, help="Fail on any unexpected stderr output.")
+@click.option(
+    "--timeout",
+    "render_timeout_sec",
+    default=None,
+    type=int,
+    help="Override VHS per-tape timeout seconds (default from docgen.yaml vhs.render_timeout_sec).",
+)
 @click.pass_context
-def vhs(ctx: click.Context, tape: str | None, strict: bool) -> None:
+def vhs(
+    ctx: click.Context,
+    tape: str | None,
+    strict: bool,
+    render_timeout_sec: int | None,
+) -> None:
     """Render VHS terminal recordings."""
     from docgen.vhs import VHSRunner
 
     cfg = ctx.obj["config"]
     runner = VHSRunner(cfg)
-    results = runner.render(tape=tape, strict=strict)
+    results = runner.render(tape=tape, strict=strict, timeout_sec=render_timeout_sec)
     for r in results:
         status = "ok" if r.success else "FAIL"
         click.echo(f"  [{status}] {r.tape}")
         for e in r.errors:
             click.echo(f"    {e}")
+
+
+@main.command("tape-lint")
+@click.option("--tape", default=None, help="Lint a single tape name or pattern.")
+@click.pass_context
+def tape_lint(ctx: click.Context, tape: str | None) -> None:
+    """Lint VHS tapes for potentially real/hanging commands."""
+    from docgen.vhs import VHSRunner
+
+    cfg = ctx.obj["config"]
+    runner = VHSRunner(cfg)
+    reports = runner.lint_tapes(tape=tape)
+    if not reports:
+        click.echo("No tape files found.")
+        return
+
+    total_issues = 0
+    for report in reports:
+        if report.issues:
+            click.echo(f"[WARN] {report.tape}")
+            for issue in report.issues:
+                click.echo(f"  - {issue}")
+                total_issues += 1
+        else:
+            click.echo(f"[ok] {report.tape}")
+
+    if total_issues:
+        raise SystemExit(1)
 
 
 @main.command("sync-vhs")
