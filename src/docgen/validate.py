@@ -134,7 +134,22 @@ def _is_bold_weight(node: ast.AST) -> bool:
     return False
 
 
-def _lint_manim_text_usage(path: Path) -> list[str]:
+def _extract_font_size(node: ast.Call) -> int | None:
+    """Return the font_size value from a Text() call, or None if absent/dynamic."""
+    for kw in node.keywords:
+        if kw.arg == "font_size" and isinstance(kw.value, ast.Constant):
+            val = kw.value.value
+            if isinstance(val, (int, float)):
+                return int(val)
+    return None
+
+
+def _lint_manim_text_usage(
+    path: Path,
+    *,
+    min_font_size: int = 14,
+    unsafe_unicode: list[str] | None = None,
+) -> list[str]:
     try:
         source = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -147,6 +162,17 @@ def _lint_manim_text_usage(path: Path) -> list[str]:
         return [f"{path}:{line} could not parse scenes.py ({exc.msg})"]
 
     issues: list[str] = []
+
+    if unsafe_unicode:
+        for lineno, line_text in enumerate(source.splitlines(), start=1):
+            for ch in unsafe_unicode:
+                if ch in line_text:
+                    issues.append(
+                        f"{path}:{lineno} Unsafe unicode character U+{ord(ch):04X} "
+                        f"({repr(ch)}) may trigger Pango font fallback; "
+                        "use an ASCII equivalent."
+                    )
+
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not _is_text_call(node):
             continue
@@ -163,6 +189,13 @@ def _lint_manim_text_usage(path: Path) -> list[str]:
                     f"{path}:{node.lineno} Text(..., weight=BOLD) can substitute a different font; "
                     "prefer emphasis with color/size."
                 )
+
+        font_size = _extract_font_size(node)
+        if font_size is not None and font_size < min_font_size:
+            issues.append(
+                f"{path}:{node.lineno} Text() font_size={font_size} is below minimum {min_font_size}; "
+                "small text is unreadable in video."
+            )
 
     return issues
 
@@ -197,6 +230,10 @@ class Validator:
             report.checks.append(self._check_freeze_ratio(rec, samples))
             report.checks.append(self._check_blank_frames(rec, samples))
             report.checks.append(self._check_ocr(rec, samples))
+
+            vmap = self.config.visual_map.get(seg_id, {})
+            if vmap.get("type") == "manim":
+                report.checks.append(self._check_layout(rec))
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
@@ -219,7 +256,7 @@ class Validator:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
-                        soft_checks = {"recording_exists", "ocr_scan", "freeze_ratio"}
+                        soft_checks = {"recording_exists", "ocr_scan", "freeze_ratio", "layout"}
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
@@ -391,7 +428,11 @@ class Validator:
             self._manim_lint_cache = result
             return result
 
-        issues = _lint_manim_text_usage(scenes)
+        issues = _lint_manim_text_usage(
+            scenes,
+            min_font_size=self.config.manim_min_font_size,
+            unsafe_unicode=self.config.manim_unsafe_unicode,
+        )
         result = CheckResult(
             "manim_scene_lint",
             not issues,
@@ -399,6 +440,28 @@ class Validator:
         )
         self._manim_lint_cache = result
         return result
+
+    def _check_layout(self, path: Path) -> CheckResult:
+        """Run overlap/spacing/edge layout checks on a Manim video recording."""
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+        except Exception:
+            return CheckResult("layout", True, ["tesseract not installed — layout check skipped"])
+
+        try:
+            from docgen.manim_layout import LayoutValidator
+            lv = LayoutValidator(self.config)
+            report = lv.validate_video(path)
+            if report.passed:
+                return CheckResult("layout", True, ["No layout issues detected"])
+            details = [
+                f"[{i.kind}] {i.description} at {i.timestamp_sec:.1f}s"
+                for i in report.issues[:10]
+            ]
+            return CheckResult("layout", False, details)
+        except Exception as exc:
+            return CheckResult("layout", True, [f"Layout check error (skipped): {exc}"])
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 

@@ -79,6 +79,14 @@ class Composer:
             print(f"    SKIP: missing {video_path}")
             return False
 
+        if video_path.exists() and audio.exists():
+            if video_path.stat().st_mtime < audio.stat().st_mtime - 1:
+                print(
+                    f"    WARNING: visual ({video_path.name}) was last modified before audio "
+                    f"({audio.name}). The visual may be stale. "
+                    "Re-render the visual source after regenerating TTS."
+                )
+
         out = self._output_path(seg_id)
         out.parent.mkdir(parents=True, exist_ok=True)
 

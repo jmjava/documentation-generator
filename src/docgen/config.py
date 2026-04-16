@@ -86,13 +86,32 @@ class Config:
 
     @property
     def manim_quality(self) -> str:
-        return self.raw.get("manim", {}).get("quality", "720p30")
+        return self.raw.get("manim", {}).get("quality", "1080p30")
+
+    @property
+    def manim_font(self) -> str:
+        """Font family used for all Manim Text() calls (default: Liberation Sans)."""
+        return str(self.raw.get("manim", {}).get("font", "Liberation Sans"))
+
+    @property
+    def manim_min_font_size(self) -> int:
+        """Minimum font size enforced in Manim scene lint (default: 14)."""
+        return int(self.raw.get("manim", {}).get("min_font_size", 14))
 
     @property
     def manim_path(self) -> str | None:
         """Optional absolute/relative path to the Manim executable."""
         value = self.raw.get("manim", {}).get("manim_path")
         return str(value) if value else None
+
+    @property
+    def manim_unsafe_unicode(self) -> list[str]:
+        """Unicode characters that trigger Pango font fallback."""
+        default = ["\u2192", "\u2190", "\u2194", "\u203a", "\u2039",
+                   "\u2260", "\u2264", "\u2265", "\u2014", "\u2013",
+                   "\u2018", "\u2019", "\u201c", "\u201d", "\u2022",
+                   "\u2026"]
+        return self.raw.get("manim", {}).get("unsafe_unicode", default)
 
     @property
     def vhs_config(self) -> dict[str, Any]:

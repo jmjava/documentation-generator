@@ -36,6 +36,34 @@ def test_manim_source_uses_configured_quality_dir(tmp_path: Path) -> None:
     assert resolved == target / "Scene01.mp4"
 
 
+def test_stale_visual_warning_when_video_older_than_audio(tmp_path: Path, capsys, monkeypatch) -> None:
+    """Compose should warn when visual file is older than audio file."""
+    cfg = {
+        "dirs": {"terminal": "terminal", "audio": "audio", "recordings": "recordings", "animations": "animations"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "vhs", "source": "01-demo.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    audio = tmp_path / "audio" / "01-demo.mp3"
+    video = tmp_path / "terminal" / "rendered" / "01-demo.mp4"
+    video.parent.mkdir(parents=True, exist_ok=True)
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    video.write_text("video", encoding="utf-8")
+    audio.write_text("audio", encoding="utf-8")
+    now = time.time()
+    os.utime(video, (now - 100, now - 100))
+    os.utime(audio, (now, now))
+
+    composer = Composer(c)
+    monkeypatch.setattr(composer, "_probe_duration", lambda _p: 10.0)
+    monkeypatch.setattr(composer, "_run_ffmpeg", lambda _cmd: None)
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+    composer._compose_simple("01", video, strict=False)
+    out = capsys.readouterr().out
+    assert "visual may be stale" in out
+
+
 def test_stale_vhs_warning_printed(tmp_path: Path, capsys) -> None:
     cfg = {
         "dirs": {"terminal": "terminal", "audio": "audio", "recordings": "recordings", "animations": "animations"},

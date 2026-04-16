@@ -3,10 +3,25 @@
 from __future__ import annotations
 
 import re
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
+
+
+def _probe_duration(path: Path) -> float | None:
+    """Return the duration of an audio file in seconds, or None on failure."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        return float(out.stdout.strip())
+    except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+        return None
 
 
 def markdown_to_tts_plain(text: str) -> str:
@@ -52,7 +67,6 @@ class TTSGenerator:
         narration_dir = self.config.narration_dir
         audio_dir = self.config.audio_dir
 
-        # Find narration file
         candidates = list(narration_dir.glob(f"*{seg_id}*.md")) if narration_dir.exists() else []
         if not candidates:
             print(f"[tts] No narration file found for segment {seg_id}, skipping")
@@ -71,11 +85,11 @@ class TTSGenerator:
         import openai
 
         audio_dir.mkdir(parents=True, exist_ok=True)
-        out_path = audio_dir / f"{seg_id}.mp3"
 
-        # Find the output name matching the narration filename stem
         stem = src.stem
         out_path = audio_dir / f"{stem}.mp3"
+
+        old_duration = _probe_duration(out_path) if out_path.exists() else None
 
         print(f"[tts] Generating audio for {seg_id} ({len(plain)} chars) -> {out_path}")
 
@@ -88,3 +102,17 @@ class TTSGenerator:
         )
         response.stream_to_file(str(out_path))
         print(f"[tts] Wrote {out_path}")
+
+        new_duration = _probe_duration(out_path)
+        if old_duration is not None and new_duration is not None and old_duration > 0:
+            change_pct = ((new_duration - old_duration) / old_duration) * 100
+            print(
+                f"[tts] {seg_id}: {old_duration:.1f}s -> {new_duration:.1f}s "
+                f"({change_pct:+.1f}%)"
+            )
+            if abs(change_pct) > 5:
+                print(
+                    f"[tts] WARNING: {seg_id} duration changed by {change_pct:+.1f}% — "
+                    "scenes and timestamps need regeneration. "
+                    "Run `docgen timestamps` and `docgen manim` to update."
+                )

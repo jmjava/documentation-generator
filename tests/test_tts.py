@@ -1,6 +1,8 @@
-"""Tests for docgen.tts markdown stripping."""
+"""Tests for docgen.tts markdown stripping and duration change detection."""
 
-from docgen.tts import markdown_to_tts_plain
+from unittest.mock import patch
+
+from docgen.tts import _probe_duration, markdown_to_tts_plain
 
 
 def test_strip_headings():
@@ -45,3 +47,15 @@ def test_strip_horizontal_rules():
 def test_passthrough_plain():
     text = "This is a normal sentence about Tekton pipelines."
     assert markdown_to_tts_plain(text) == text
+
+
+def test_probe_duration_returns_none_for_missing_file(tmp_path):
+    result = _probe_duration(tmp_path / "nonexistent.mp3")
+    assert result is None
+
+
+@patch("docgen.tts.subprocess.run")
+def test_probe_duration_returns_float(mock_run):
+    mock_run.return_value = type("R", (), {"stdout": "12.345\n"})()
+    result = _probe_duration(__import__("pathlib").Path("/tmp/test.mp3"))
+    assert result == 12.345

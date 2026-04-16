@@ -357,10 +357,16 @@ class TestValidateSegmentIntegration:
 # ── Manim scene lint ───────────────────────────────────────────────────
 
 class TestManimSceneLint:
-    def _configure_manim(self, cfg_dir: Path, scenes_source: str) -> Config:
+    def _configure_manim(self, cfg_dir: Path, scenes_source: str, extra_cfg: dict | None = None) -> Config:
         cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
         cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
         cfg_raw.setdefault("manim", {})["scenes"] = ["Scene01"]
+        if extra_cfg:
+            for k, v in extra_cfg.items():
+                if isinstance(v, dict) and k in cfg_raw:
+                    cfg_raw[k].update(v)
+                else:
+                    cfg_raw[k] = v
         (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
         (cfg_dir / "animations" / "scenes.py").write_text(scenes_source, encoding="utf-8")
         return Config.from_yaml(cfg_dir / "docgen.yaml")
@@ -395,9 +401,68 @@ C_BLUE = "#2979ff"
 
 class Demo(Scene):
     def construct(self):
-        Text("Some label", font_size=14, color=C_BLUE)
+        Text("Some label", font_size=16, color=C_BLUE)
         Text("Heading", font_size=36, color=WHITE)
 """.strip(),
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert check["passed"], check["details"]
+
+    def test_flags_small_font_size(self, cfg_dir):
+        """Font sizes below the configured minimum should be flagged."""
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+
+class Demo(Scene):
+    def construct(self):
+        Text("Tiny text", font_size=8)
+        Text("OK text", font_size=16)
+""".strip(),
+            extra_cfg={"manim": {"min_font_size": 14}},
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert not check["passed"]
+        details = " ".join(check["details"])
+        assert "font_size=8" in details
+        assert "below minimum" in details
+
+    def test_flags_unsafe_unicode(self, cfg_dir):
+        """Unsafe unicode characters in scene source should be flagged."""
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+
+class Demo(Scene):
+    def construct(self):
+        Text("arrow \u2192 here", font_size=16)
+""".strip(),
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert not check["passed"]
+        details = " ".join(check["details"])
+        assert "Unsafe unicode" in details
+
+    def test_no_unsafe_unicode_when_disabled(self, cfg_dir):
+        """When unsafe_unicode is empty list, no unicode warnings should be raised."""
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+
+class Demo(Scene):
+    def construct(self):
+        Text("arrow \u2192 here", font_size=16)
+""".strip(),
+            extra_cfg={"manim": {"unsafe_unicode": []}},
         )
         v = Validator(config)
         report = v.validate_segment("01")

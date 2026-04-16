@@ -28,14 +28,37 @@ class ManimRunner:
             print(f"[manim] scenes.py not found at {scenes_file}")
             return
 
+        self._check_font()
+
         quality_args, quality_label = self._quality_args()
         manim_bin = self._resolve_manim_binary()
         if not manim_bin:
             return
 
-        print(f"[manim] Rendering at {quality_label}")
+        font = self.config.manim_font
+        print(f"[manim] Rendering at {quality_label}, font={font}")
         for s in scenes:
             self._render_one(manim_bin, scenes_file, s, quality_args)
+
+    def _check_font(self) -> None:
+        """Verify the configured font is installed on the system."""
+        font = self.config.manim_font
+        try:
+            result = subprocess.run(
+                ["fc-list", font],
+                capture_output=True, text=True, timeout=10,
+            )
+            if not result.stdout.strip():
+                print(
+                    f"[manim] WARNING: font '{font}' not found by fc-list. "
+                    "Pango may substitute a different font. "
+                    f"Install it (e.g. `apt install fonts-liberation`) or set "
+                    f"`manim.font` in docgen.yaml to an available font."
+                )
+            else:
+                print(f"[manim] Font '{font}' verified via fc-list")
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
 
     def _render_one(
         self,

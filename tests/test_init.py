@@ -96,6 +96,9 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert cfg["segments"]["all"] == ["01", "02"]
     assert cfg["segment_names"]["01"] == "01-intro"
     assert cfg["vhs"]["render_timeout_sec"] == 120
+    assert cfg["manim"]["quality"] == "1080p30"
+    assert cfg["manim"]["font"] == "Liberation Sans"
+    assert cfg["manim"]["min_font_size"] == 14
     assert "test-project" in cfg["tts"]["instructions"]
 
     assert len(created) >= 7

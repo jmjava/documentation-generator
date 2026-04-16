@@ -256,7 +256,9 @@ def _write_config(plan: InitPlan) -> str:
         "segment_names": segment_names,
         "visual_map": visual_map,
         "manim": {
-            "quality": "720p30",
+            "quality": "1080p30",
+            "font": "Liberation Sans",
+            "min_font_size": 14,
             "scenes": [f"Scene{s['id']}" for s in plan.segments],
             "manim_path": "",
         },
