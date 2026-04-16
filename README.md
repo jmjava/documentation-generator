@@ -55,12 +55,13 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen vhs [--tape 02-quickstart.tape] [--strict]` | Render VHS terminal recordings |
+| `docgen tape-lint [--tape 02-quickstart.tape]` | Lint tapes for commands likely to hang in VHS |
 | `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate index.html, pages.yml, .gitattributes, .gitignore |
-| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs]` | Run full pipeline |
+| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs] [--retry-manim]` | Run full pipeline (optionally auto-retry Manim after FREEZE GUARD) |
 | `docgen rebuild-after-audio` | Recompose + validate + concat |
 
 ## Configuration
@@ -80,6 +81,7 @@ vhs:
   typing_ms_per_char: 55    # typing estimate used by sync-vhs
   max_typing_sec: 3.0       # per block cap for typing estimate
   min_sleep_sec: 0.05       # floor for rewritten Sleep values
+  render_timeout_sec: 120   # per-tape timeout for `docgen vhs`
 
 pipeline:
   sync_vhs_after_timestamps: false  # opt-in: run sync-vhs automatically in generate-all/rebuild-after-audio
@@ -91,6 +93,28 @@ compose:
 
 If you edit a `.tape` file, run `docgen vhs` before `docgen compose` so compose does not use stale rendered terminal video.
 
+### VHS safety: avoid real long-running commands in tapes
+
+VHS executes commands in a real shell session. For demos, prefer simulated output with `echo`
+instead of invoking real services or model inference in the tape itself.
+
+Example:
+
+```tape
+Type "echo '$ python -m myapp run --image sample.png'"
+Enter
+Sleep 1s
+Type "echo '[myapp] Loading model... done (2.1s)'"
+Enter
+```
+
+Helpful checks:
+
+```bash
+docgen tape-lint           # flag risky commands in all tapes
+docgen vhs --strict        # fail if VHS output includes shell/runtime errors
+```
+
 To auto-align tape pacing with generated narration:
 
 ```bash
@@ -99,6 +123,12 @@ docgen sync-vhs --dry-run
 docgen sync-vhs
 docgen vhs
 docgen compose
+```
+
+If `compose` fails with `FREEZE GUARD` after fresh timestamps, retry Manim once automatically:
+
+```bash
+docgen generate-all --retry-manim
 ```
 ## System dependencies
 

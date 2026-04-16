@@ -102,6 +102,7 @@ class Config:
             "typing_ms_per_char": 35,
             "max_typing_sec": 3.0,
             "min_sleep_sec": 0.2,
+            "render_timeout_sec": 120,
         }
         defaults.update(self.raw.get("vhs", {}))
         return defaults
@@ -127,6 +128,10 @@ class Config:
     @property
     def min_sleep_sec(self) -> float:
         return float(self.vhs_config.get("min_sleep_sec", 0.2))
+
+    @property
+    def vhs_render_timeout_sec(self) -> int:
+        return int(self.vhs_config.get("render_timeout_sec", 120))
 
     @property
     def sync_vhs_after_timestamps(self) -> bool:
