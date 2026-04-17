@@ -135,3 +135,20 @@ def test_binary_paths_and_compose_config(tmp_path):
     assert c.playwright_timeout_sec == 240
     assert c.playwright_default_url == "http://localhost:3300"
     assert c.playwright_default_viewport == (1366, 768)
+
+
+def test_playwright_test_speed_factor_defaults(tmp_path):
+    p = tmp_path / "docgen.yaml"
+    p.write_text("{}", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.playwright_test_min_speed_factor == 0.25
+    assert c.playwright_test_max_speed_factor == 4.0
+
+
+def test_playwright_test_speed_factor_overrides(tmp_path):
+    cfg = {"playwright_test": {"min_speed_factor": 0.3, "max_speed_factor": 3.5}}
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.playwright_test_min_speed_factor == 0.3
+    assert c.playwright_test_max_speed_factor == 3.5

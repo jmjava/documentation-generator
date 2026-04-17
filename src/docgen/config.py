@@ -192,6 +192,29 @@ class Config:
         width = int(raw.get("width", 1920))
         height = int(raw.get("height", 1080))
         return width, height
+
+    # -- Playwright test video (visual_map type: playwright_test) ---------------
+
+    @property
+    def playwright_test_config(self) -> dict[str, Any]:
+        """YAML `playwright_test:` block — test runner dirs, speed limits, etc."""
+        defaults: dict[str, Any] = {
+            "min_speed_factor": 0.25,
+            "max_speed_factor": 4.0,
+        }
+        raw = self.raw.get("playwright_test")
+        if isinstance(raw, dict):
+            defaults.update(raw)
+        return defaults
+
+    @property
+    def playwright_test_min_speed_factor(self) -> float:
+        return float(self.playwright_test_config.get("min_speed_factor", 0.25))
+
+    @property
+    def playwright_test_max_speed_factor(self) -> float:
+        return float(self.playwright_test_config.get("max_speed_factor", 4.0))
+
     # -- Compose ----------------------------------------------------------------
 
     @property

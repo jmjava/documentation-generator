@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import subprocess
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -215,6 +217,7 @@ class Validator:
         self, seg_id: str, max_drift_override: float | None = None
     ) -> dict[str, Any]:
         report = ValidationReport(segment=seg_id)
+        max_drift = max_drift_override or self.config.max_drift_sec
         rec = self._find_recording(seg_id)
 
         if rec and _is_lfs_pointer(rec):
@@ -223,7 +226,6 @@ class Validator:
             )
         elif rec:
             report.checks.append(self._check_streams(rec))
-            max_drift = max_drift_override or self.config.max_drift_sec
             report.checks.append(self._check_drift(rec, max_drift))
 
             samples = _sample_frames(rec, interval_sec=2.0)
@@ -241,6 +243,10 @@ class Validator:
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
 
+        vmap = self.config.visual_map.get(seg_id, {})
+        if vmap.get("type") == "playwright_test":
+            report.checks.extend(self._playwright_test_checks(seg_id, vmap, rec, max_drift))
+
         return report.to_dict()
 
     def run_pre_push(self) -> None:
@@ -256,7 +262,13 @@ class Validator:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
-                        soft_checks = {"recording_exists", "ocr_scan", "freeze_ratio", "layout"}
+                        soft_checks = {
+                            "recording_exists",
+                            "ocr_scan",
+                            "freeze_ratio",
+                            "layout",
+                            "playwright_test_speed",
+                        }
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
@@ -537,3 +549,349 @@ class Validator:
         for mp4 in d.glob(f"*{seg_id}*.mp4"):
             return mp4
         return None
+
+    # ── Playwright test video (visual_map type: playwright_test) ───────────
+
+    def _playwright_test_checks(
+        self,
+        seg_id: str,
+        vmap: dict[str, Any],
+        rec: Path | None,
+        max_drift: float,
+    ) -> list[CheckResult]:
+        return [
+            self._playwright_test_context(seg_id, vmap, rec),
+            self._playwright_test_trace_status(seg_id, vmap),
+            self._playwright_test_event_alignment(seg_id, vmap),
+            self._playwright_test_speed(seg_id, vmap),
+            self._playwright_test_sync_map_duration(seg_id, vmap, max_drift),
+        ]
+
+    def _resolve_project_path(self, rel: str) -> Path:
+        p = Path(rel)
+        return p if p.is_absolute() else (self.config.base_dir / p)
+
+    def _playwright_narration_anchors(self, vmap: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = vmap.get("anchors")
+        if isinstance(raw, list):
+            return [x for x in raw if isinstance(x, dict)]
+        ev = vmap.get("events")
+        if isinstance(ev, list) and ev and isinstance(ev[0], dict):
+            if any(isinstance(x, dict) and "narration_anchor" in x for x in ev):
+                return [x for x in ev if isinstance(x, dict) and "narration_anchor" in x]
+        return []
+
+    def _playwright_events_json_path(self, seg_id: str, vmap: dict[str, Any]) -> Path | None:
+        for key in ("events_file", "events_json", "trace_events_path"):
+            val = vmap.get(key)
+            if val:
+                return self._resolve_project_path(str(val))
+        seg_name = self.config.resolve_segment_name(seg_id)
+        for candidate in (
+            self.config.terminal_dir / "rendered" / f"{seg_name}_events.json",
+            self.config.terminal_dir / "rendered" / f"{seg_id}_events.json",
+            self.config.terminal_dir / "rendered" / f"{seg_name}-events.json",
+        ):
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _playwright_sync_map_path(self, seg_id: str, vmap: dict[str, Any]) -> Path | None:
+        val = vmap.get("sync_map") or vmap.get("sync_map_file")
+        if val:
+            return self._resolve_project_path(str(val))
+        seg_name = self.config.resolve_segment_name(seg_id)
+        for candidate in (
+            self.config.terminal_dir / "rendered" / f"{seg_name}_sync_map.json",
+            self.config.terminal_dir / "rendered" / f"{seg_id}_sync_map.json",
+            self.config.terminal_dir / "rendered" / f"sync_map_{seg_id}.json",
+        ):
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _playwright_trace_path(self, vmap: dict[str, Any]) -> Path | None:
+        val = vmap.get("trace")
+        if not val:
+            return None
+        p = self._resolve_project_path(str(val))
+        return p if p.exists() else None
+
+    def _load_playwright_events_payload(self, path: Path) -> tuple[dict[str, Any] | None, list[Any]]:
+        """Return (optional wrapper dict, timeline list). Timeline = action events array."""
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None, []
+
+        if isinstance(raw, list):
+            return None, raw
+        if isinstance(raw, dict):
+            timeline = raw.get("events")
+            if isinstance(timeline, list):
+                return raw, timeline
+            timeline = raw.get("timeline")
+            if isinstance(timeline, list):
+                return raw, timeline
+            return raw, []
+        return None, []
+
+    def _count_action_events(self, timeline: list[Any]) -> int:
+        n = 0
+        for item in timeline:
+            if isinstance(item, dict) and item.get("action"):
+                n += 1
+        return n
+
+    def _playwright_test_context(
+        self, seg_id: str, vmap: dict[str, Any], rec: Path | None
+    ) -> CheckResult:
+        test_id = str(vmap.get("test", "")).strip() or "(no test id)"
+        src = str(vmap.get("source", "")).strip() or "(no source)"
+        rec_s = str(rec.resolve()) if rec else "(no recording)"
+        details = [
+            f"segment={seg_id}",
+            f"test={test_id}",
+            f"visual_source={src}",
+            f"recording={rec_s}",
+        ]
+        sync_path = self._playwright_sync_map_path(seg_id, vmap)
+        ev_path = self._playwright_events_json_path(seg_id, vmap)
+        if sync_path:
+            details.append(f"sync_map={sync_path}")
+        if ev_path:
+            details.append(f"events_json={ev_path}")
+        trace = self._playwright_trace_path(vmap)
+        if trace:
+            details.append(f"trace={trace}")
+        return CheckResult("playwright_test_context", True, details)
+
+    def _playwright_test_trace_status(self, seg_id: str, vmap: dict[str, Any]) -> CheckResult:
+        ev_path = self._playwright_events_json_path(seg_id, vmap)
+        if ev_path and ev_path.exists():
+            try:
+                raw = json.loads(ev_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                return CheckResult(
+                    "playwright_test_trace",
+                    False,
+                    [f"events JSON unreadable: {exc}"],
+                )
+            if isinstance(raw, dict):
+                status = str(raw.get("test_status") or raw.get("outcome") or "").strip().lower()
+                if status in ("failed", "error"):
+                    err = raw.get("error") or raw.get("error_message") or "unknown"
+                    return CheckResult(
+                        "playwright_test_trace",
+                        False,
+                        [f"Test outcome is {status!r}: {err}"],
+                    )
+                if status in ("passed", "ok", "success"):
+                    return CheckResult("playwright_test_trace", True, [f"Test outcome: {status}"])
+
+        trace = self._playwright_trace_path(vmap)
+        if not trace:
+            return CheckResult("playwright_test_trace", True, ["No trace.zip configured (skipped)"])
+
+        try:
+            with zipfile.ZipFile(trace, "r") as zf:
+                for name in zf.namelist():
+                    if not name.endswith(".json"):
+                        continue
+                    if name.count("/") > 2:
+                        continue
+                    try:
+                        info = zf.getinfo(name)
+                    except KeyError:
+                        continue
+                    if info.file_size > 2_000_000:
+                        continue
+                    with zf.open(name) as fh:
+                        chunk = fh.read(400_000).decode("utf-8", errors="ignore")
+                    if re.search(r'"fatalError"\s*:\s*"[^"]+', chunk):
+                        return CheckResult(
+                            "playwright_test_trace",
+                            False,
+                            [f"fatalError marker found inside {trace.name}:{name}"],
+                        )
+        except zipfile.BadZipFile as exc:
+            return CheckResult("playwright_test_trace", True, [f"Could not read trace zip ({exc})"])
+
+        return CheckResult(
+            "playwright_test_trace",
+            True,
+            [f"Trace present ({trace.name}); no explicit failure markers detected"],
+        )
+
+    def _playwright_test_event_alignment(self, seg_id: str, vmap: dict[str, Any]) -> CheckResult:
+        anchors = self._playwright_narration_anchors(vmap)
+        ev_path = self._playwright_events_json_path(seg_id, vmap)
+        if not anchors:
+            return CheckResult(
+                "playwright_test_events",
+                True,
+                ["No narration anchors configured (skipped)"],
+            )
+        if not ev_path or not ev_path.exists():
+            return CheckResult(
+                "playwright_test_events",
+                False,
+                [
+                    f"Anchors configured ({len(anchors)}) but no events timeline file found "
+                    f"(set events_file or add {self.config.resolve_segment_name(seg_id)}_events.json)",
+                ],
+            )
+
+        _meta, timeline = self._load_playwright_events_payload(ev_path)
+        if not isinstance(timeline, list):
+            return CheckResult("playwright_test_events", False, ["Events file has no timeline array"])
+        if not timeline and _meta is None:
+            return CheckResult("playwright_test_events", False, ["Events JSON is empty or invalid"])
+        n_events = self._count_action_events(timeline)
+        n_anchor = len(anchors)
+        if n_events == n_anchor:
+            return CheckResult(
+                "playwright_test_events",
+                True,
+                [f"Trace action events={n_events} matches narration anchors={n_anchor}"],
+            )
+        return CheckResult(
+            "playwright_test_events",
+            False,
+            [
+                f"Trace action events={n_events} does not match narration anchors={n_anchor} "
+                "(expected equal counts for 1:1 anchor alignment)",
+            ],
+        )
+
+    def _playwright_test_speed(self, seg_id: str, vmap: dict[str, Any]) -> CheckResult:
+        sync_path = self._playwright_sync_map_path(seg_id, vmap)
+        if not sync_path or not sync_path.exists():
+            return CheckResult("playwright_test_speed", True, ["No sync_map.json (skipped)"])
+
+        try:
+            data = json.loads(sync_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return CheckResult("playwright_test_speed", True, [f"sync_map unreadable ({exc})"])
+
+        lo = float(self.config.playwright_test_min_speed_factor)
+        hi = float(self.config.playwright_test_max_speed_factor)
+        segs = data.get("speed_segments")
+        if not isinstance(segs, list):
+            return CheckResult("playwright_test_speed", True, ["sync_map has no speed_segments (skipped)"])
+
+        warnings: list[str] = []
+        for i, seg in enumerate(segs):
+            if not isinstance(seg, dict):
+                continue
+            try:
+                factor = float(seg["factor"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if factor < lo - 1e-6 or factor > hi + 1e-6:
+                start = seg.get("start", "?")
+                end = seg.get("end", "?")
+                warnings.append(
+                    f"WARN: speed factor {factor:.3f} outside [{lo}, {hi}] "
+                    f"(segment {i}, video {start}s–{end}s)",
+                )
+
+        if warnings:
+            return CheckResult("playwright_test_speed", True, warnings[:12])
+        return CheckResult(
+            "playwright_test_speed",
+            True,
+            [f"All {len(segs)} speed segment(s) within [{lo}, {hi}]"],
+        )
+
+    def _find_segment_audio(self, seg_id: str) -> Path | None:
+        d = self.config.audio_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.mp3"
+        if exact.exists():
+            return exact
+        for mp3 in d.glob(f"{seg_id}-*.mp3"):
+            return mp3
+        for mp3 in d.glob(f"*{seg_id}*.mp3"):
+            return mp3
+        return None
+
+    @staticmethod
+    def _ffprobe_duration(path: Path) -> float | None:
+        try:
+            out = subprocess.run(
+                [
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "csv=p=0", str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return float(out.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, OSError):
+            return None
+
+    def _playwright_test_sync_map_duration(
+        self, seg_id: str, vmap: dict[str, Any], max_drift: float
+    ) -> CheckResult:
+        """Ensure last sync anchor lies within narration audio duration (+ drift)."""
+        sync_path = self._playwright_sync_map_path(seg_id, vmap)
+        if not sync_path or not sync_path.exists():
+            return CheckResult(
+                "playwright_test_sync_duration",
+                True,
+                ["No sync_map.json (skipped narration span check)"],
+            )
+
+        try:
+            data = json.loads(sync_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return CheckResult("playwright_test_sync_duration", True, [f"sync_map unreadable ({exc})"])
+
+        anchors = data.get("anchors")
+        if not isinstance(anchors, list) or not anchors:
+            return CheckResult(
+                "playwright_test_sync_duration",
+                True,
+                ["sync_map has no anchors list (skipped)"],
+            )
+
+        last_n = None
+        for a in anchors:
+            if isinstance(a, dict):
+                try:
+                    last_n = float(a["narration_t"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+        if last_n is None:
+            return CheckResult(
+                "playwright_test_sync_duration",
+                True,
+                ["No narration_t values in sync_map anchors"],
+            )
+
+        audio = self._find_segment_audio(seg_id)
+        if not audio:
+            return CheckResult(
+                "playwright_test_sync_duration",
+                True,
+                ["No narration audio file (skipped span check)"],
+            )
+
+        audio_dur = self._ffprobe_duration(audio)
+        if audio_dur is None:
+            return CheckResult("playwright_test_sync_duration", True, ["Could not probe audio duration"])
+
+        passed = last_n <= audio_dur + max_drift
+        details = [
+            f"Last anchor narration_t={last_n:.2f}s, narration audio={audio_dur:.2f}s "
+            f"(max_slack={max_drift}s)",
+        ]
+        if not passed:
+            details.append(
+                "Last sync anchor extends past narration audio; re-run sync or extend TTS.",
+            )
+        return CheckResult("playwright_test_sync_duration", passed, details)
