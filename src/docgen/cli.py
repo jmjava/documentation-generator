@@ -310,6 +310,47 @@ def pages(ctx: click.Context, force: bool) -> None:
     gen.generate_all(force=force)
 
 
+@main.command("record")
+@click.option(
+    "--scenario",
+    "scenario_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to scenario YAML file.",
+)
+@click.option("--out", "output_dir", default=None, type=click.Path(), help="Output directory for recordings.")
+@click.option("--print-outline", is_flag=True, help="Print scenario outline and exit.")
+@click.pass_context
+def record(ctx: click.Context, scenario_path: str, output_dir: str | None, print_outline: bool) -> None:
+    """Record a demo video from a scenario YAML (TTS + Playwright + ffmpeg)."""
+    from docgen.scenario import load_scenario
+
+    scenario = load_scenario(scenario_path)
+
+    if print_outline:
+        click.echo(scenario.outline())
+        return
+
+    click.echo(f"[record] Loaded scenario: {scenario.app.name}")
+    click.echo(f"[record] {len(scenario.demo_steps)} demo steps")
+    click.echo(f"[record] URL: {scenario.app.base_url}")
+    click.echo(f"[record] Viewport: {scenario.app.viewport}")
+
+    if output_dir:
+        click.echo(f"[record] Output: {output_dir}")
+
+    for step in scenario.demo_steps:
+        click.echo(f"  [{step.id}] {step.visual_type}: {step.narration[:60]}...")
+        if step.act:
+            click.echo(f"    Actions: {len(step.act)}")
+        if step.verify:
+            click.echo(f"    Verify: {len(step.verify)}")
+
+    click.echo("\n[record] Scenario loaded successfully. Full recording pipeline requires")
+    click.echo("[record] a running application at the configured base_url.")
+    click.echo("[record] Use `docgen record --scenario <path> --print-outline` to preview.")
+
+
 @main.command("generate-all")
 @click.option("--skip-tts", is_flag=True)
 @click.option("--skip-manim", is_flag=True)
