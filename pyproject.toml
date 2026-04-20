@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 manim = ["manim>=0.18"]
+playwright = ["playwright>=1.40"]
 dev = [
     "pytest>=7.0",
     "pytest-cov",
