@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "docgen"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reusable demo generation pipeline: TTS, Manim, VHS, ffmpeg composition, validation, GitHub Pages publishing"
 readme = "README.md"
 requires-python = ">=3.10"

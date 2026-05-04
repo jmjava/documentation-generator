@@ -56,6 +56,7 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen vhs [--tape 02-quickstart.tape] [--strict] [--timeout 120]` | Render VHS terminal recordings |
 | `docgen playwright --script scripts/capture.py --url http://localhost:3000 --source demo.mp4` | Capture browser demo video with Playwright script |
+| `docgen demo-function --manifest <path> --output-dir <dir> [--cache-dir <dir>] [--no-narration]` | Render one short, single-purpose video per function from a declarative manifest |
 | `docgen tape-lint [--tape 02-quickstart.tape]` | Lint tapes for commands likely to hang in VHS |
 | `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
@@ -132,6 +133,32 @@ Script contract:
   `DOCGEN_PLAYWRIGHT_WIDTH`, `DOCGEN_PLAYWRIGHT_HEIGHT`, and optional segment metadata
 - must write an MP4 to the requested output path
 - should use headless Playwright for CI compatibility
+### Per-function video docs (`docgen demo-function`)
+
+`docgen demo-function` renders **one short, single-purpose MP4 per function** —
+the docs-site analogue of a single Playwright `test('…')` describing one
+behavior. Inputs are declarative: either a `*.docgen.yaml` sidecar or a
+`@pytest.mark.docgen(...)` decorator on a Python test (read statically via
+`ast` — never imported / `exec`'d). Outputs are five files in `--output-dir`:
+`rendered.mp4` (real ISO MP4), `poster.png`, `fragment.txt` (`fn-<slug>`),
+`manifest.json` (snapshot), and `cache-status.txt` (`hit` / `miss`).
+
+```bash
+docgen demo-function \
+  --manifest examples/lesson_compile.docgen.yaml \
+  --output-dir /tmp/out \
+  --cache-dir /tmp/docgen-cache
+```
+
+Exit codes: `0` success, `1` invalid manifest / render failure, `2` missing
+`ffmpeg` / `playwright`, `78` neutral skip (placeholder manifest with no
+`url` — useful in CI). When `OPENAI_API_KEY` is set, the intent line is
+narrated via `gpt-4o-mini-tts` and muxed onto the video; pass
+`--no-narration` to skip TTS even if the key is set. See
+[`examples/lesson_compile.docgen.yaml`](examples/lesson_compile.docgen.yaml)
+and [`examples/sample_test.py`](examples/sample_test.py) for both input
+shapes.
+
 ### VHS safety: avoid real long-running commands in tapes
 
 VHS executes commands in a real shell session. For demos, prefer simulated output with `echo`
