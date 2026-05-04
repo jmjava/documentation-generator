@@ -51,6 +51,76 @@ def test_capture_runs_script_and_outputs_mp4(tmp_path: Path) -> None:
     assert output.read_bytes() == b"fake-mp4"
 
 
+def test_capture_transcodes_webm_bytes_in_mp4_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """F1: scripts that copy WebM bytes into a .mp4 path get transcoded.
+
+    Real Playwright `record_video_dir` always emits WebM. Many capture
+    scripts `shutil.copy` the .webm file into the .mp4 path the validator
+    expects; the runner now sniffs the EBML header and transcodes in
+    place so consumers always see a real ISO MP4 at the requested path.
+    """
+    cfg = _write_cfg(tmp_path)
+    runner = PlaywrightRunner(cfg)
+    script = tmp_path / "capture.py"
+    script.write_text(
+        (
+            "import os\n"
+            "from pathlib import Path\n"
+            "out = Path(os.environ['DOCGEN_PLAYWRIGHT_OUTPUT'])\n"
+            "out.parent.mkdir(parents=True, exist_ok=True)\n"
+            # EBML magic bytes — fake Playwright's WebM-into-mp4-path behavior.
+            "out.write_bytes(b'\\x1a\\x45\\xdf\\xa3' + b'rest of webm payload')\n"
+        ),
+        encoding="utf-8",
+    )
+
+    transcode_calls = []
+
+    def _fake_transcode(src: Path, dst: Path) -> None:
+        transcode_calls.append((src, dst))
+        Path(dst).write_bytes(b"\x00\x00\x00\x18ftypisom....fake-mp4")
+
+    monkeypatch.setattr(
+        "docgen.playwright_runner._transcode_webm_to_mp4", _fake_transcode
+    )
+
+    out = runner.capture(script=str(script), source="webm-in-mp4.mp4")
+    assert out.exists()
+    assert len(transcode_calls) == 1
+    assert b"ftyp" in out.read_bytes()
+
+
+def test_capture_passes_through_real_mp4_unchanged(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A real ISO MP4 must NOT be transcoded (back-compat for F1)."""
+    cfg = _write_cfg(tmp_path)
+    runner = PlaywrightRunner(cfg)
+    script = tmp_path / "capture.py"
+    script.write_text(
+        (
+            "import os\n"
+            "from pathlib import Path\n"
+            "out = Path(os.environ['DOCGEN_PLAYWRIGHT_OUTPUT'])\n"
+            "out.parent.mkdir(parents=True, exist_ok=True)\n"
+            "out.write_bytes(b'\\x00\\x00\\x00\\x18ftypisomalready-mp4')\n"
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_transcode(src: Path, dst: Path) -> None:  # pragma: no cover
+        raise AssertionError("real MP4 should not be transcoded")
+
+    monkeypatch.setattr(
+        "docgen.playwright_runner._transcode_webm_to_mp4", _fake_transcode
+    )
+
+    out = runner.capture(script=str(script), source="real.mp4")
+    assert b"ftyp" in out.read_bytes()
+
+
 def test_capture_builds_env_from_options(tmp_path: Path, monkeypatch) -> None:
     cfg = _write_cfg(tmp_path)
     runner = PlaywrightRunner(cfg)
