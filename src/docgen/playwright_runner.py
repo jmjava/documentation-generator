@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,51 @@ if TYPE_CHECKING:
 
 class PlaywrightError(RuntimeError):
     """Raised when Playwright capture fails."""
+
+
+# EBML / Matroska / WebM files start with these four bytes.
+_EBML_MAGIC = b"\x1a\x45\xdf\xa3"
+
+
+def _looks_like_webm(path: Path) -> bool:
+    """Return True if the file's header is EBML (WebM/Matroska)."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == _EBML_MAGIC
+    except OSError:
+        return False
+
+
+def _transcode_webm_to_mp4(src: Path, dst: Path) -> None:
+    """Transcode `src` (WebM) into `dst` (real MP4, libx264, +faststart).
+
+    Used to fix F1: scripts that copy `.webm` bytes into the requested
+    `.mp4` path now get a real ISO MP4 emitted by docgen, so downstream
+    consumers don't have to know about the WebM-suffix mismatch.
+    """
+    if shutil.which("ffmpeg") is None:
+        raise PlaywrightError(
+            "Playwright produced WebM but ffmpeg is not on PATH; "
+            "cannot transcode to MP4. Install ffmpeg or have the script "
+            "emit an ISO MP4 directly."
+        )
+    tmp_dst = dst.with_suffix(dst.suffix + ".tmp.mp4")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", str(src),
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-c:a", "aac",
+        str(tmp_dst),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise PlaywrightError(
+            f"ffmpeg failed transcoding WebM → MP4: {proc.stderr[-400:]}"
+        )
+    tmp_dst.replace(dst)
 
 
 class PlaywrightRunner:
@@ -134,6 +180,16 @@ class PlaywrightRunner:
             raise PlaywrightError(
                 f"Playwright script finished but output is missing: {output_path}{hint}"
             )
+
+        # F1: Playwright's record_video_dir always writes WebM, but consumers
+        # historically `shutil.copy` those bytes into a .mp4 path to satisfy
+        # filename-based validators. Detect that by sniffing the file header
+        # (suffix is unreliable) and transcode in place when the path claims
+        # to be MP4. Files that are already real MP4 (or have a non-mp4
+        # suffix) pass through untouched.
+        if output_path.suffix.lower() == ".mp4" and _looks_like_webm(output_path):
+            _transcode_webm_to_mp4(output_path, output_path)
+
         return output_path
 
     def _resolve_path(self, value: Path | str) -> Path:
