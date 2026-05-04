@@ -171,6 +171,53 @@ def playwright(
     click.echo(f"[playwright] captured: {video}")
 
 
+@main.command("demo-function")
+@click.option(
+    "--manifest",
+    "manifest_arg",
+    required=True,
+    help="Path to *.docgen.yaml sidecar OR <path>.py::<test_name> for @pytest.mark.docgen.",
+)
+@click.option(
+    "--output-dir",
+    "output_dir_arg",
+    required=True,
+    type=click.Path(file_okay=False),
+    help="Directory to write rendered.mp4, poster.png, fragment.txt, manifest.json, cache-status.txt.",
+)
+@click.option(
+    "--cache-dir",
+    "cache_dir_arg",
+    default=None,
+    type=click.Path(file_okay=False),
+    help="Optional cache directory keyed by sha256(identifier+intent+fixtures).",
+)
+@click.option(
+    "--no-narration",
+    is_flag=True,
+    help="Skip TTS even if OPENAI_API_KEY is set.",
+)
+@click.pass_context
+def demo_function(
+    ctx: click.Context,
+    manifest_arg: str,
+    output_dir_arg: str,
+    cache_dir_arg: str | None,
+    no_narration: bool,
+) -> None:
+    """Render a single per-function demo video from a declarative manifest."""
+    from docgen.demo_function import run_cli
+
+    code = run_cli(
+        manifest_arg=manifest_arg,
+        output_dir_arg=output_dir_arg,
+        cache_dir_arg=cache_dir_arg,
+        no_narration=no_narration,
+    )
+    if code != 0:
+        raise SystemExit(code)
+
+
 @main.command("tape-lint")
 @click.option("--tape", default=None, help="Lint a single tape name or pattern.")
 @click.pass_context
