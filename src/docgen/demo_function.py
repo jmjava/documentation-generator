@@ -65,6 +65,8 @@ SUPPORTED_ACTION_KINDS = (
 
 CACHED_ARTIFACTS = ("rendered.mp4", "poster.png", "fragment.txt", "manifest.json")
 
+_PLAYWRIGHT_SPEC_SUFFIXES = frozenset({".ts", ".tsx", ".mts", ".cts"})
+
 
 class ManifestError(ValueError):
     """Raised when a manifest is malformed or violates the documented schema."""
@@ -213,21 +215,44 @@ class Manifest:
 # ---------------------------------------------------------------------------
 
 
-def load_manifest(spec: str | Path) -> Manifest:
-    """Load a manifest from either a YAML sidecar path or `path.py::test_name`.
+def load_manifest(
+    spec: str | Path,
+    *,
+    grep: str | None = None,
+) -> Manifest:
+    """Load a manifest from YAML, `path.py::test_name`, or a Playwright spec path.
+
+    Playwright TypeScript (``.ts`` / ``.tsx`` / ``.mts`` / ``.cts``):
+
+    - ``spec.ts::Test title`` — same as ``--manifest spec.ts --grep "Test title"``.
+    - ``spec.ts`` + ``--grep`` — selects the matching test for annotation discovery.
+    - ``spec.ts`` alone — tries ``spec.docgen.yaml`` sidecar, else parses
+      ``test.info().annotations`` with ``type: 'docgen'`` (must match exactly
+      one test unless ``grep`` is set).
 
     Raises `ManifestError` for invalid manifests, `FileNotFoundError` if the
     path does not exist.
     """
     if isinstance(spec, Path):
-        return _load_yaml_sidecar(spec)
+        p = spec.resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"manifest not found: {p}")
+        if _is_playwright_spec_path(p):
+            return _load_playwright_ts_manifest(p, test_title=None, grep=grep)
+        return _load_yaml_sidecar(p)
     text = str(spec)
     if "::" in text:
-        path_part, _, test_name = text.partition("::")
-        py_path = Path(path_part)
-        if not py_path.exists():
-            raise FileNotFoundError(f"manifest not found: {py_path}")
-        return _load_pytest_marker(py_path, test_name)
+        path_part, _, tail = text.partition("::")
+        path_obj = Path(path_part)
+        if not path_obj.exists():
+            raise FileNotFoundError(f"manifest not found: {path_obj}")
+        if _is_playwright_spec_path(path_obj):
+            return _load_playwright_ts_manifest(
+                path_obj,
+                test_title=tail.strip(),
+                grep=None,
+            )
+        return _load_pytest_marker(path_obj, tail)
     p = Path(text)
     if not p.exists():
         raise FileNotFoundError(f"manifest not found: {p}")
@@ -235,7 +260,329 @@ def load_manifest(spec: str | Path) -> Manifest:
         raise ManifestError(
             "Python manifest must use 'path.py::test_name' syntax to select a test"
         )
+    if _is_playwright_spec_path(p):
+        return _load_playwright_ts_manifest(p, test_title=None, grep=grep)
     return _load_yaml_sidecar(p)
+
+
+def _is_playwright_spec_path(path: Path) -> bool:
+    return path.suffix.lower() in _PLAYWRIGHT_SPEC_SUFFIXES
+
+
+def _playwright_sidecar_paths(spec_path: Path) -> list[Path]:
+    """Candidate sibling manifests for ``foo.spec.ts`` (short + long stem)."""
+    spec_path = spec_path.resolve()
+    parent = spec_path.parent
+    stem = spec_path.stem  # e.g. ``lesson.spec`` for ``lesson.spec.ts``
+    names = [f"{stem}.docgen.yaml"]
+    if stem.endswith(".spec"):
+        names.append(f"{stem[:-len('.spec')]}.docgen.yaml")
+    # De-dupe while preserving order
+    seen: set[str] = set()
+    out: list[Path] = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(parent / n)
+    return out
+
+
+def _find_playwright_sidecar(spec_path: Path) -> Path | None:
+    for p in _playwright_sidecar_paths(spec_path):
+        if p.exists():
+            return p
+    return None
+
+
+def _load_playwright_ts_manifest(
+    spec_path: Path,
+    *,
+    test_title: str | None,
+    grep: str | None,
+) -> Manifest:
+    """Resolve manifest for a Node ``@playwright/test`` spec file."""
+    spec_path = spec_path.resolve()
+    effective_grep = (test_title or "").strip() if test_title else None
+    if effective_grep is None and grep:
+        effective_grep = grep.strip() or None
+
+    sidecar = _find_playwright_sidecar(spec_path)
+    if sidecar is not None:
+        manifest = _load_yaml_sidecar(sidecar)
+        manifest.fn_source_path = spec_path
+        if manifest.kind == "playwright":
+            if manifest.pw_spec is None:
+                manifest.pw_spec = spec_path
+            if manifest.pw_grep is None and effective_grep:
+                manifest.pw_grep = effective_grep
+            if manifest.pw_spec and manifest.pw_grep is None:
+                raise ManifestError(
+                    f"{sidecar.name}: demonstration.grep is required when using a "
+                    f"TypeScript manifest entry (or pass --grep / path.ts::title)"
+                )
+        return manifest
+
+    raw = _parse_ts_docgen_contract(spec_path, grep=effective_grep)
+    return _coerce(raw, source_path=spec_path)
+
+
+def _parse_ts_docgen_contract(spec_path: Path, *, grep: str | None) -> dict[str, Any]:
+    """Extract JSON contract from ``test.info().annotations`` docgen entries."""
+    src = spec_path.read_text(encoding="utf-8")
+    bindings = _ts_docgen_annotation_bindings(src)
+    if not bindings:
+        raise ManifestError(
+            f"no docgen annotation found in {spec_path.name} "
+            f"(expected test.info().annotations with type 'docgen', or add "
+            f"{_playwright_sidecar_paths(spec_path)[-1].name})"
+        )
+
+    if grep:
+        exact = [b for b in bindings if b.test_title == grep]
+        if exact:
+            matches = exact
+        else:
+            matches = [b for b in bindings if grep in b.test_title]
+        if not matches:
+            raise ManifestError(
+                f"no test matched --grep {grep!r} in {spec_path.name} "
+                f"(available: {[b.test_title for b in bindings]})"
+            )
+        if len(matches) > 1:
+            raise ManifestError(
+                f"ambiguous --grep {grep!r}: matched {[b.test_title for b in matches]}"
+            )
+        chosen = matches[0]
+    else:
+        if len(bindings) > 1:
+            titles = [b.test_title for b in bindings]
+            raise ManifestError(
+                f"multiple docgen annotations in {spec_path.name} without --grep "
+                f"or path.ts::title (tests: {titles}). Add a sibling "
+                f"{_playwright_sidecar_paths(spec_path)[0].name} "
+                "or pass --grep."
+            )
+        chosen = bindings[0]
+
+    desc = chosen.description_json
+    if not isinstance(desc, str):
+        raise ManifestError("internal: docgen description must be str")
+    try:
+        if desc.lstrip().startswith("{"):
+            contract = _json_from_js_object_literal(desc)
+        else:
+            contract = json.loads(desc)
+    except json.JSONDecodeError as exc:
+        raise ManifestError(
+            f"docgen annotation JSON is invalid near line {chosen.line}: {exc}"
+        ) from exc
+    if not isinstance(contract, dict):
+        raise ManifestError("docgen annotation description must be a JSON object")
+
+    demo = contract.get("demonstration")
+    if isinstance(demo, dict) and demo.get("kind") == "playwright":
+        # Declarative ``url`` + ``actions`` uses the in-process Python driver; only
+        # add ``spec``/``grep`` for Node ``npx playwright test`` when there is no ``url``.
+        if not demo.get("url"):
+            if not demo.get("spec"):
+                demo = dict(demo)
+                demo["spec"] = str(spec_path)
+            if not demo.get("grep"):
+                demo = dict(demo)
+                demo["grep"] = chosen.test_title
+            contract = dict(contract)
+            contract["demonstration"] = demo
+    return contract
+
+
+@dataclass
+class _TsDocgenBinding:
+    test_title: str
+    description_json: str
+    line: int
+
+
+def _ts_docgen_annotation_bindings(src: str) -> list[_TsDocgenBinding]:
+    """Find ``type: 'docgen'`` payloads inside each ``test('title', ...)`` block."""
+    out: list[_TsDocgenBinding] = []
+    # Playwright tests usually start at beginning of line; avoid matching `latest`.
+    for m in re.finditer(
+        r"(?:^|\n)\s*test\s*(?:\.(?:only|skip|fixme))?\s*\(\s*(['\"])((?:\\.|(?!\1).)*)\1",
+        src,
+        re.MULTILINE,
+    ):
+        raw_title = m.group(2)
+        try:
+            test_title = bytes(raw_title, "utf-8").decode("unicode_escape")
+        except UnicodeDecodeError:
+            test_title = raw_title
+        line_no = src.count("\n", 0, m.start()) + 1
+        start = m.end()
+        next_m = re.search(
+            r"(?:^|\n)\s*test\s*(?:\.(?:only|skip|fixme))?\s*\(\s*['\"]",
+            src[start + 1 :],
+            re.MULTILINE,
+        )
+        block_end = start + 1 + next_m.start() if next_m else len(src)
+        block = src[start:block_end]
+        if not re.search(r"type\s*:\s*['\"]docgen['\"]", block, re.IGNORECASE):
+            continue
+
+        desc_json = _ts_extract_docgen_description_json(block)
+        if desc_json is None:
+            continue
+        out.append(
+            _TsDocgenBinding(
+                test_title=test_title,
+                description_json=desc_json,
+                line=line_no,
+            )
+        )
+    return out
+
+
+def _ts_extract_docgen_description_json(block: str) -> str | None:
+    """Return JSON text from ``description:`` after ``type: 'docgen'`` in *block*."""
+    idx = 0
+    while True:
+        m_type = re.search(
+            r"type\s*:\s*['\"]docgen['\"]\s*,\s*description\s*:\s*",
+            block[idx:],
+            re.IGNORECASE,
+        )
+        if not m_type:
+            return None
+        pos = idx + m_type.end()
+        rest = block[pos:].lstrip()
+
+        low = rest[:20].lower()
+        if low.startswith("json.stringify"):
+            open_paren = rest.find("(")
+            if open_paren == -1:
+                idx = pos
+                continue
+            j = open_paren + 1
+            while j < len(rest) and rest[j] in " \t\n\r":
+                j += 1
+            if j >= len(rest) or rest[j] != "{":
+                idx = pos
+                continue
+            end_obj = _ts_find_matching_brace(rest, j)
+            if end_obj == -1:
+                idx = pos
+                continue
+            return _strip_js_comments(rest[j : end_obj + 1])
+
+        q = rest[0] if rest else ""
+        if q in "'\"":
+            end = 1
+            escaped = False
+            while end < len(rest):
+                ch = rest[end]
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == q:
+                    raw = rest[1:end]
+                    try:
+                        return bytes(raw, "utf-8").decode("unicode_escape")
+                    except UnicodeDecodeError:
+                        return raw
+                end += 1
+            return None
+        idx = pos
+
+
+def _ts_find_matching_brace(s: str, open_idx: int) -> int:
+    """Return index of ``}`` matching ``{`` at *open_idx*, or -1."""
+    if open_idx >= len(s) or s[open_idx] != "{":
+        return -1
+    depth = 0
+    i = open_idx
+    in_str: str | None = None
+    escaped = False
+    while i < len(s):
+        ch = s[i]
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == in_str:
+                in_str = None
+            i += 1
+            continue
+        if ch in "'\"`":
+            in_str = ch
+            i += 1
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _strip_js_comments(fragment: str) -> str:
+    """Remove // and /* */ comments from a JS object literal fragment (best-effort)."""
+    out: list[str] = []
+    k = 0
+    n = len(fragment)
+    in_str: str | None = None
+    while k < n:
+        ch = fragment[k]
+        if in_str:
+            if ch == "\\" and k + 1 < n:
+                out.append(ch)
+                out.append(fragment[k + 1])
+                k += 2
+                continue
+            out.append(ch)
+            if ch == in_str:
+                in_str = None
+            k += 1
+            continue
+        if ch in "'\"":
+            in_str = ch
+            out.append(ch)
+            k += 1
+            continue
+        if ch == "/" and k + 1 < n:
+            nxt = fragment[k + 1]
+            if nxt == "/":
+                k += 2
+                while k < n and fragment[k] not in "\n\r":
+                    k += 1
+                continue
+            if nxt == "*":
+                k += 2
+                while k + 1 < n and not (fragment[k] == "*" and fragment[k + 1] == "/"):
+                    k += 1
+                k = min(k + 2, n)
+                continue
+        out.append(ch)
+        k += 1
+    return "".join(out)
+
+
+def _json_from_js_object_literal(fragment: str) -> dict[str, Any]:
+    """Parse a JS-style object literal (possibly with trailing commas) as JSON."""
+    cleaned = _strip_trailing_commas_json(_strip_js_comments(fragment))
+    return json.loads(cleaned)
+
+
+def _strip_trailing_commas_json(s: str) -> str:
+    """Remove trailing commas before ``}`` and ``]`` (common in TS/JS)."""
+    prev = None
+    while prev != s:
+        prev = s
+        s = re.sub(r",(\s*})", r"\1", s)
+        s = re.sub(r",(\s*])", r"\1", s)
+    return s
 
 
 def _load_yaml_sidecar(path: Path) -> Manifest:
@@ -348,11 +695,12 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
             elif not pw_spec.is_absolute():
                 pw_spec = Path.cwd() / pw_spec
                 pw_spec = pw_spec.resolve()
-            if grep_raw is None or not str(grep_raw).strip():
-                raise ManifestError(
-                    "demonstration.grep is required when demonstration.spec is set"
-                )
+        if grep_raw is not None and str(grep_raw).strip():
             pw_grep = str(grep_raw).strip()
+        if pw_spec is not None and not pw_grep:
+            raise ManifestError(
+                "demonstration.grep is required when demonstration.spec is set"
+            )
         if pw_cwd_raw is not None:
             pw_cwd = Path(str(pw_cwd_raw).strip())
             if not pw_cwd.is_absolute() and source_path is not None:
@@ -1264,6 +1612,7 @@ def run_cli(
     manifest_arg: str,
     output_dir_arg: str,
     *,
+    grep: str | None = None,
     cache_dir_arg: str | None = None,
     no_narration: bool = False,
     stderr=None,
@@ -1280,7 +1629,7 @@ def run_cli(
         stdout = sys.stdout
 
     try:
-        manifest = load_manifest(manifest_arg)
+        manifest = load_manifest(manifest_arg, grep=grep)
     except FileNotFoundError as exc:
         print(f"[demo-function] {exc}", file=stderr)
         return EXIT_INVALID
