@@ -592,6 +592,29 @@ def _load_yaml_sidecar(path: Path) -> Manifest:
     return _coerce(raw, source_path=path)
 
 
+def manifest_from_mapping(
+    raw: dict[str, Any],
+    *,
+    source_path: Path | None = None,
+) -> Manifest:
+    """Build a validated `Manifest` from the same mapping shape as a ``*.docgen.yaml``.
+
+    For programmatic use when you are not loading YAML from disk and not using a
+    Playwright ``.ts`` spec or ``path.py::test_name``. Typical cases:
+
+    - **CLI / VHS** — ``demonstration.kind: cli`` and ``demonstration.tape`` pointing
+      at a ``.tape`` file (no Playwright involved).
+    - **Declarative browser** — ``demonstration.kind: playwright`` with ``url`` and
+      ``actions`` (docgen drives Playwright from Python; no Node ``@playwright/test``).
+
+    ``source_path`` resolves relative paths inside the manifest (fixtures, tape,
+    optional ``spec``/``cwd``) the same way as a sidecar file next to your assets.
+
+    Raises `ManifestError` if the mapping violates the schema.
+    """
+    return _coerce(raw, source_path=source_path)
+
+
 def _load_pytest_marker(path: Path, test_name: str) -> Manifest:
     """Read `@pytest.mark.docgen(...)` decorator on `test_name` via `ast`.
 
@@ -1676,6 +1699,7 @@ __all__ = [
     "RenderResult",
     "NarrationResult",
     "load_manifest",
+    "manifest_from_mapping",
     "render",
     "run_cli",
     "generate_capture_script",
