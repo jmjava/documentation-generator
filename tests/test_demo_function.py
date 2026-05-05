@@ -25,6 +25,7 @@ from docgen.demo_function import (
     _render_action,
     generate_capture_script,
     load_manifest,
+    manifest_from_mapping,
     run_cli,
 )
 
@@ -170,6 +171,22 @@ def test_cli_kind_requires_tape() -> None:
     }
     with pytest.raises(ManifestError, match="demonstration.tape is required"):
         _coerce(raw)
+
+
+def test_manifest_from_mapping_cli(tmp_path: Path) -> None:
+    """Programmatic manifest for VHS (no Playwright test files)."""
+    tape = tmp_path / "demo.tape"
+    tape.write_text("Output out.mp4\n", encoding="utf-8")
+    sidecar = tmp_path / "side.docgen.yaml"
+    raw = {
+        "identifier": "cli:demo",
+        "intent": "Shows the CLI.",
+        "demonstration": {"kind": "cli", "tape": "demo.tape"},
+        "output_budget": {"duration_seconds": 15, "resolution": "1280x720"},
+    }
+    m = manifest_from_mapping(raw, source_path=sidecar)
+    assert m.kind == "cli"
+    assert m.cli_tape == tape.resolve()
 
 
 def test_playwright_spec_requires_grep(tmp_path: Path) -> None:
