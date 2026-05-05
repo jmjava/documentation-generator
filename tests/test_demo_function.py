@@ -162,6 +162,45 @@ def test_invalid_kind() -> None:
         _coerce(raw)
 
 
+def test_cli_kind_requires_tape() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "cli"},
+    }
+    with pytest.raises(ManifestError, match="demonstration.tape is required"):
+        _coerce(raw)
+
+
+def test_playwright_spec_requires_grep(tmp_path: Path) -> None:
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text("//", encoding="utf-8")
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "spec": str(spec)},
+    }
+    with pytest.raises(ManifestError, match="demonstration.grep is required"):
+        _coerce(raw, source_path=tmp_path / "m.docgen.yaml")
+
+
+def test_playwright_spec_xor_url(tmp_path: Path) -> None:
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text("//", encoding="utf-8")
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {
+            "kind": "playwright",
+            "spec": str(spec),
+            "grep": "my test",
+            "url": "http://x",
+        },
+    }
+    with pytest.raises(ManifestError, match="either demonstration.spec"):
+        _coerce(raw, source_path=tmp_path / "m.docgen.yaml")
+
+
 def test_duration_hard_cap() -> None:
     raw = {
         "identifier": "x:y",
@@ -286,18 +325,21 @@ def test_fragment_id_format() -> None:
 
 
 def test_cache_key_stable_and_changes_with_input(tmp_path: Path) -> None:
+    """Cache key = sha256(fn_source_sha + intent_sha + fixture_sha) (issue #47)."""
+    src = tmp_path / "source.txt"
+    src.write_text("fn", encoding="utf-8")
     raw1 = {
         "identifier": "x:y",
         "intent": "first",
         "demonstration": {"kind": "playwright", "url": "http://x"},
     }
+    m1a = _coerce(raw1, source_path=src)
+    m1b = _coerce(raw1, source_path=src)
     raw2 = dict(raw1, intent="second")
-    k1 = _coerce(raw1).cache_key
-    k1_again = _coerce(raw1).cache_key
-    k2 = _coerce(raw2).cache_key
-    assert k1 == k1_again
-    assert k1 != k2
-    assert len(k1) == 16
+    m2 = _coerce(raw2, source_path=src)
+    assert m1a.cache_key == m1b.cache_key
+    assert m1a.cache_key != m2.cache_key
+    assert len(m1a.cache_key) == 16
 
 
 def test_cache_key_includes_fixture_contents(tmp_path: Path) -> None:
@@ -378,21 +420,40 @@ def _ffmpeg_present() -> bool:
     return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
 
 
-@pytest.mark.skipif(not _ffmpeg_present(), reason="ffmpeg / ffprobe not installed")
-def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
-    """End-to-end render using kind=cli (synthesizes a black video).
+def _vhs_present() -> bool:
+    return shutil.which("vhs") is not None
 
-    Covers acceptance criteria #1, #2, #3, #4, #5, #6, #7, #11 (no narration).
+
+@pytest.mark.skipif(
+    not _ffmpeg_present() or not _vhs_present(),
+    reason="ffmpeg / ffprobe / vhs not installed",
+)
+def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
+    """End-to-end render using kind=cli (VHS tape → MP4).
+
+    Covers assertion burn-in, caching, and artifact layout (no narration).
     """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    raw = {
-        "identifier": "course-builder/src/lessons/compileLesson.ts:compileLesson",
-        "intent": "Compiles a lesson into checkpoints.",
-        "demonstration": {"kind": "cli"},
-        "output_budget": {"duration_seconds": 1, "resolution": "320x240"},
-        "assertions_to_surface": ["lesson.status === 'compiled'"],
-    }
-    m = _coerce(raw)
+    tape = tmp_path / "demo.tape"
+    tape.write_text(
+        'Output rendered/cli-demo.mp4\n'
+        'Set Shell "bash --norc --noprofile"\n'
+        "Set Width 320\n"
+        "Set Height 240\n"
+        "Sleep 300ms\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "m.docgen.yaml"
+    manifest_path.write_text(
+        _yaml_manifest_text(
+            demonstration={
+                "kind": "cli",
+                "tape": "demo.tape",
+            },
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(manifest_path)
 
     out_dir = tmp_path / "out"
     cache_dir = tmp_path / "cache"
@@ -427,18 +488,35 @@ def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
         assert (out2 / name).exists()
 
 
-@pytest.mark.skipif(not _ffmpeg_present(), reason="ffmpeg / ffprobe not installed")
+@pytest.mark.skipif(
+    not _ffmpeg_present() or not _vhs_present(),
+    reason="ffmpeg / ffprobe / vhs not installed",
+)
 def test_render_warns_when_openai_key_missing(tmp_path: Path, monkeypatch, capsys) -> None:
-    """Acceptance #11 (first half): no key → warning + visual-only video."""
+    """No OPENAI_API_KEY → warning + visual-only video."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    raw = {
-        "identifier": "x:y",
-        "intent": "test",
-        "demonstration": {"kind": "cli"},
-        "output_budget": {"duration_seconds": 1, "resolution": "320x240"},
-    }
-    m = _coerce(raw)
-    df.render(m, tmp_path / "out")
+    tape = tmp_path / "demo.tape"
+    tape.write_text(
+        'Output rendered/cli-demo.mp4\n'
+        'Set Shell "bash --norc --noprofile"\n'
+        "Set Width 320\n"
+        "Set Height 240\n"
+        "Sleep 300ms\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "m.docgen.yaml"
+    manifest_path.write_text(
+        _yaml_manifest_text(
+            demonstration={
+                "kind": "cli",
+                "tape": "demo.tape",
+            },
+            output_budget={"duration_seconds": 1, "resolution": "320x240"},
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(manifest_path)
+    df.render(m, tmp_path / "out", no_narration=False)
     err = capsys.readouterr().err
     assert "OPENAI_API_KEY not set" in err
 

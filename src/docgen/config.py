@@ -382,3 +382,13 @@ class Config:
         raise FileNotFoundError(
             f"Could not find {_YAML_FILENAME} in any parent of {start or os.getcwd()}"
         )
+
+    @classmethod
+    def minimal(cls, base_dir: str | Path | None = None) -> "Config":
+        """Minimal config when no ``docgen.yaml`` exists (standalone tools).
+
+        Relative tape paths and Playwright discovery resolve under ``base_dir``
+        (defaults to the current working directory).
+        """
+        base = Path(base_dir or os.getcwd()).resolve()
+        return cls(yaml_path=base / _YAML_FILENAME, base_dir=base, raw={})
