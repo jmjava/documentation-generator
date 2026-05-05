@@ -205,12 +205,19 @@ def playwright(
     is_flag=True,
     help="Skip TTS even if OPENAI_API_KEY is set.",
 )
+@click.option(
+    "--grep",
+    "grep_arg",
+    default=None,
+    help="Playwright test title filter when --manifest is a .ts/.tsx spec (or overrides YAML).",
+)
 @click.pass_context
 def demo_function(
     ctx: click.Context,
     manifest_arg: str,
     output_dir_arg: str | None,
     output_dir_legacy: str | None,
+    grep_arg: str | None,
     cache_dir_arg: str | None,
     no_narration: bool,
 ) -> None:
@@ -224,6 +231,7 @@ def demo_function(
     code = run_cli(
         manifest_arg=manifest_arg,
         output_dir_arg=out,
+        grep=grep_arg,
         cache_dir_arg=cache_dir_arg,
         no_narration=no_narration,
     )

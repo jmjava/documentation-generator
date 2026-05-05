@@ -561,3 +561,176 @@ def test_thing():
     assert [act.kind for act in a.actions] == [act.kind for act in b.actions]
     assert a.resolution == b.resolution
     assert a.duration_seconds == b.duration_seconds
+
+
+# ---------------------------------------------------------------------------
+# Playwright TypeScript: sidecar + inline docgen annotation
+# ---------------------------------------------------------------------------
+
+
+def test_ts_sidecar_loads_and_sets_spec_grep(tmp_path: Path) -> None:
+    spec = tmp_path / "lesson.spec.ts"
+    spec.write_text("// placeholder\n", encoding="utf-8")
+    side = tmp_path / "lesson.docgen.yaml"
+    side.write_text(
+        _yaml_manifest_text(
+            demonstration={
+                "kind": "playwright",
+                "grep": "compiles",
+            },
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(spec)
+    assert m.pw_spec == spec.resolve()
+    assert m.pw_grep == "compiles"
+    assert m.fn_source_path == spec.resolve()
+
+
+def test_ts_sidecar_alternate_name_lesson_docgen_yaml(tmp_path: Path) -> None:
+    """``lesson.spec.ts`` may pair with ``lesson.docgen.yaml`` (not only ``lesson.spec.docgen.yaml``)."""
+    spec = tmp_path / "lesson.spec.ts"
+    spec.write_text("//\n", encoding="utf-8")
+    alt = tmp_path / "lesson.docgen.yaml"
+    alt.write_text(
+        _yaml_manifest_text(
+            demonstration={
+                "kind": "playwright",
+                "grep": "g",
+            },
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(spec)
+    assert m.pw_grep == "g"
+
+
+def test_ts_sidecar_requires_grep(tmp_path: Path) -> None:
+    spec = tmp_path / "x.spec.ts"
+    spec.write_text("//\n", encoding="utf-8")
+    side = tmp_path / "x.docgen.yaml"
+    side.write_text(
+        _yaml_manifest_text(
+            demonstration={"kind": "playwright", "url": "http://127.0.0.1/"},
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ManifestError, match=r"demonstration\.grep is required"):
+        load_manifest(spec)
+
+
+def test_ts_inline_json_stringify_contract(tmp_path: Path) -> None:
+    spec = tmp_path / "api.spec.ts"
+    spec.write_text(
+        r'''
+import { test, expect } from "@playwright/test";
+
+test("does the thing", async ({ page }) => {
+  test.info().annotations.push({
+    type: "docgen",
+    description: JSON.stringify({
+      "identifier": "pkg/Foo.ts:bar",
+      "intent": "Runs the demo.",
+      "demonstration": {
+        "kind": "playwright",
+        "url": "http://127.0.0.1:3000/",
+        "actions": [{ "kind": "click", "selector": "#go" }],
+      },
+      "output_budget": { "duration_seconds": 10, "resolution": "800x600" },
+    }),
+  });
+  await page.goto("http://127.0.0.1:3000/");
+});
+''',
+        encoding="utf-8",
+    )
+    m = load_manifest(spec)
+    assert m.identifier == "pkg/Foo.ts:bar"
+    assert m.intent == "Runs the demo."
+    assert m.url == "http://127.0.0.1:3000/"
+    assert m.pw_spec is None
+    assert m.pw_grep is None
+    assert m.fn_source_path == spec.resolve()
+    assert m.resolution == "800x600"
+
+
+def test_ts_path_with_title_same_as_grep(tmp_path: Path) -> None:
+    spec = tmp_path / "api.spec.ts"
+    spec.write_text(
+        r'''
+import { test } from "@playwright/test";
+
+test("Alpha case", async () => {
+  test.info().annotations.push({
+    type: "docgen",
+    description: JSON.stringify({
+      "identifier": "a:b",
+      "intent": "i",
+      "demonstration": { "kind": "playwright", "url": "http://x/", "actions": [] },
+    }),
+  });
+});
+
+test("Beta", async () => {
+  test.info().annotations.push({
+    type: "docgen",
+    description: JSON.stringify({
+      "identifier": "c:d",
+      "intent": "j",
+      "demonstration": { "kind": "playwright", "url": "http://y/", "actions": [] },
+    }),
+  });
+});
+''',
+        encoding="utf-8",
+    )
+    m = load_manifest(f"{spec}::Alpha case")
+    assert m.identifier == "a:b"
+    m2 = load_manifest(spec, grep="Alpha case")
+    assert m2.identifier == "a:b"
+
+
+def test_ts_multiple_docgen_requires_grep(tmp_path: Path) -> None:
+    spec = tmp_path / "multi.spec.ts"
+    spec.write_text(
+        r'''
+import { test } from "@playwright/test";
+
+test("one", async () => {
+  test.info().annotations.push({
+    type: "docgen",
+    description: JSON.stringify({
+      "identifier": "a:b",
+      "intent": "i",
+      "demonstration": { "kind": "playwright", "url": "http://x/", "actions": [] },
+    }),
+  });
+});
+
+test("two", async () => {
+  test.info().annotations.push({
+    type: "docgen",
+    description: JSON.stringify({
+      "identifier": "c:d",
+      "intent": "j",
+      "demonstration": { "kind": "playwright", "url": "http://y/", "actions": [] },
+    }),
+  });
+});
+''',
+        encoding="utf-8",
+    )
+    with pytest.raises(ManifestError, match="multiple docgen"):
+        load_manifest(spec)
+
+
+def test_run_cli_passes_grep_to_ts_manifest(tmp_path: Path) -> None:
+    spec = tmp_path / "z.spec.ts"
+    spec.write_text("//\n", encoding="utf-8")
+    from unittest.mock import patch
+
+    with patch.object(df, "load_manifest") as lm:
+        lm.side_effect = ManifestError("stop early")
+        code = run_cli(str(spec), str(tmp_path / "out"), grep="pick me", no_narration=True)
+    assert code == df.EXIT_INVALID
+    lm.assert_called_once_with(str(spec), grep="pick me")
