@@ -2,10 +2,11 @@
 
 This module implements `docgen demo-function`, which renders one short MP4 per
 function from a declarative manifest (either a `*.docgen.yaml` sidecar or a
-`@pytest.mark.docgen(...)` decorator on a Python test). The output is one
-function → one ≤60s clip with a one-sentence narration, a poster frame, a
-stable URL fragment, and a JSON manifest snapshot — designed for downstream
-docs sites that want one video per function.
+`@pytest.mark.docgen(...)` decorator on a Python test). Playwright **can**
+instead run an annotated `@playwright/test` spec plus `--grep`, or `kind: cli`
+can point at a VHS `.tape` file. The output is one function → one ≤60s clip
+with a one-sentence narration, a poster frame, on-screen assertion captions, a
+stable URL fragment, and a JSON manifest snapshot.
 
 Exit codes (used by `docgen.cli:demo_function`):
     0   render succeeded; all five artifacts written
@@ -34,6 +35,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import yaml
+
+from docgen.config import Config
 
 # Exit code for "neutral skip" on placeholder manifests. Mirrors Tekton's
 # documented Skip exit code so CI pipelines do not treat placeholder-shaped
@@ -132,6 +135,15 @@ class Manifest:
     duration_seconds: int = DEFAULT_DURATION_SECONDS
     resolution: str = DEFAULT_RESOLUTION
     source_path: Path | None = None
+    # File whose bytes define the demo "function" for caching (spec, tape, or manifest).
+    fn_source_path: Path | None = None
+    # Playwright test recording (npx @playwright/test). When set, `actions` / `url` are unused.
+    pw_spec: Path | None = None
+    pw_grep: str | None = None
+    pw_cwd: Path | None = None
+    pw_base_url: str | None = None
+    # CLI / VHS demo: path to a `.tape` file (relative paths resolve near manifest).
+    cli_tape: Path | None = None
 
     @property
     def viewport(self) -> tuple[int, int]:
@@ -146,20 +158,36 @@ class Manifest:
 
     @property
     def cache_key(self) -> str:
-        h = hashlib.sha256()
-        h.update(self.identifier.encode("utf-8"))
-        h.update(b"\x00")
-        h.update(self.intent.encode("utf-8"))
-        h.update(b"\x00")
-        for fixture in sorted(self.fixtures):
-            h.update(fixture.encode("utf-8"))
-            h.update(b"\x00")
-        # Concat fixture contents (relative to source_path's parent if known).
+        """sha256(fn_source_sha + intent_sha + fixture_sha), first 16 hex chars."""
+        if self.fn_source_path and self.fn_source_path.exists():
+            fn_src = hashlib.sha256(self.fn_source_path.read_bytes()).hexdigest()
+        else:
+            blob = "|".join(
+                (
+                    self.identifier,
+                    self.kind,
+                    self.url or "",
+                    str(self.pw_spec or ""),
+                    self.pw_grep or "",
+                    str(self.cli_tape or ""),
+                    json.dumps([a.__dict__ for a in self.actions], sort_keys=True),
+                )
+            )
+            fn_src = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+        intent_sha = hashlib.sha256(self.intent.encode("utf-8")).hexdigest()
+        fix = hashlib.sha256()
         for fixture in sorted(self.fixtures):
             content = self._read_fixture_bytes(fixture)
             if content is not None:
-                h.update(content)
-                h.update(b"\x00")
+                fix.update(content)
+            fix.update(b"\x00")
+        fixture_sha = fix.hexdigest()
+        h = hashlib.sha256()
+        h.update(fn_src.encode("ascii"))
+        h.update(b"\x00")
+        h.update(intent_sha.encode("ascii"))
+        h.update(b"\x00")
+        h.update(fixture_sha.encode("ascii"))
         return h.hexdigest()[:16]
 
     def _read_fixture_bytes(self, fixture: str) -> bytes | None:
@@ -298,6 +326,49 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
     if url is not None:
         url = str(url).strip() or None
 
+    spec_raw = demonstration.get("spec")
+    grep_raw = demonstration.get("grep")
+    pw_cwd_raw = demonstration.get("cwd")
+    pw_base_url = demonstration.get("base_url")
+    if pw_base_url is not None:
+        pw_base_url = str(pw_base_url).strip() or None
+
+    tape_raw = demonstration.get("tape")
+
+    pw_spec: Path | None = None
+    pw_grep: str | None = None
+    pw_cwd: Path | None = None
+    cli_tape: Path | None = None
+
+    if kind == "playwright":
+        if spec_raw is not None:
+            pw_spec = Path(str(spec_raw).strip())
+            if not pw_spec.is_absolute() and source_path is not None:
+                pw_spec = (source_path.parent / pw_spec).resolve()
+            elif not pw_spec.is_absolute():
+                pw_spec = Path.cwd() / pw_spec
+                pw_spec = pw_spec.resolve()
+            if grep_raw is None or not str(grep_raw).strip():
+                raise ManifestError(
+                    "demonstration.grep is required when demonstration.spec is set"
+                )
+            pw_grep = str(grep_raw).strip()
+        if pw_cwd_raw is not None:
+            pw_cwd = Path(str(pw_cwd_raw).strip())
+            if not pw_cwd.is_absolute() and source_path is not None:
+                pw_cwd = (source_path.parent / pw_cwd).resolve()
+            elif not pw_cwd.is_absolute():
+                pw_cwd = (Path.cwd() / pw_cwd).resolve()
+
+    if kind == "cli":
+        if tape_raw is None or not str(tape_raw).strip():
+            raise ManifestError("demonstration.tape is required for kind: cli")
+        cli_tape = Path(str(tape_raw).strip())
+        if not cli_tape.is_absolute() and source_path is not None:
+            cli_tape = (source_path.parent / cli_tape).resolve()
+        elif not cli_tape.is_absolute():
+            cli_tape = (Path.cwd() / cli_tape).resolve()
+
     actions_raw = demonstration.get("actions") or []
     if not isinstance(actions_raw, list):
         raise ManifestError("demonstration.actions must be a list")
@@ -337,6 +408,26 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
             f"output_budget.resolution must match WxH (e.g. 1280x720), got: '{resolution}'"
         )
 
+    fn_source_path: Path | None = source_path
+    if pw_spec is not None:
+        fn_source_path = pw_spec
+    elif cli_tape is not None:
+        fn_source_path = cli_tape
+
+    if kind == "playwright" and pw_spec is not None:
+        if url:
+            raise ManifestError(
+                "use either demonstration.spec (Playwright test) or demonstration.url, not both"
+            )
+        if actions:
+            raise ManifestError(
+                "demonstration.actions must be empty when demonstration.spec is set"
+            )
+    if kind == "cli" and cli_tape is not None and actions:
+        raise ManifestError(
+            "demonstration.actions must be empty for kind: cli (drive the demo via the .tape)"
+        )
+
     return Manifest(
         identifier=str(raw["identifier"]).strip(),
         intent=str(raw["intent"]).strip(),
@@ -348,6 +439,12 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
         duration_seconds=duration,
         resolution=resolution,
         source_path=source_path,
+        fn_source_path=fn_source_path,
+        pw_spec=pw_spec,
+        pw_grep=pw_grep,
+        pw_cwd=pw_cwd,
+        pw_base_url=pw_base_url,
+        cli_tape=cli_tape,
     )
 
 
@@ -582,6 +679,134 @@ def _mux_audio(video: Path, audio: Path, dst: Path) -> None:
         raise RuntimeError(f"ffmpeg mux failed: {proc.stderr[-400:]}")
 
 
+def _probe_video_duration_sec(path: Path) -> float | None:
+    _ensure_ffprobe()
+    proc = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        return float(proc.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _vtt_from_assertions(lines: list[str], *, total_sec: float) -> str:
+    """Build WebVTT with timed cues spread across the clip."""
+    n = len(lines)
+    if n == 0:
+        return "WEBVTT\n\n"
+    total_sec = max(1.0, total_sec)
+    chunk = total_sec / n
+    parts = ["WEBVTT", ""]
+
+    def fmt(ts: float) -> str:
+        h = int(ts // 3600)
+        m = int((ts % 3600) // 60)
+        s = ts % 60
+        return f"{h:02d}:{m:02d}:{s:06.3f}"
+
+    for i, text in enumerate(lines):
+        a = i * chunk
+        b = total_sec if i == n - 1 else (i + 1) * chunk
+        parts.append(str(i + 1))
+        parts.append(f"{fmt(a)} --> {fmt(b)}")
+        parts.append(text.replace("&", "&amp;").replace("<", "&lt;"))
+        parts.append("")
+    return "\n".join(parts) + "\n"
+
+
+def _video_has_audio_stream(path: Path) -> bool:
+    _ensure_ffprobe()
+    proc = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index",
+            "-of", "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return bool(proc.stdout.strip())
+
+
+def _burn_assertion_captions(
+    video_in: Path,
+    video_out: Path,
+    assertions: list[str],
+    *,
+    work_dir: Path,
+) -> None:
+    """Overlay `assertions` as bottom subtitles (WebVTT via ffmpeg)."""
+    if not assertions:
+        shutil.copy2(video_in, video_out)
+        return
+    _ensure_ffmpeg()
+    dur = _probe_video_duration_sec(video_in) or 30.0
+    vtt_path = work_dir / "assertions.vtt"
+    vtt_path.write_text(
+        _vtt_from_assertions(assertions, total_sec=dur),
+        encoding="utf-8",
+    )
+    # Escape for ffmpeg filtergraph: colons, backslashes
+    sub_path = str(vtt_path.resolve()).replace("\\", "\\\\").replace(":", "\\:")
+    if _video_has_audio_stream(video_in):
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(video_in),
+            "-vf", f"subtitles={sub_path}",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(video_out),
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(video_in),
+            "-vf", f"subtitles={sub_path}",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-an",
+            "-movflags", "+faststart",
+            str(video_out),
+        ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg assertion burn-in failed: {proc.stderr[-500:]}"
+        )
+
+
+def _trim_video_head(path: Path, *, max_seconds: float) -> None:
+    """Trim in place when duration exceeds ``max_seconds`` (copy streams)."""
+    dur = _probe_video_duration_sec(path)
+    if dur is None or dur <= max_seconds + 0.05:
+        return
+    _ensure_ffmpeg()
+    tmp = path.with_suffix(path.suffix + ".trim.tmp.mp4")
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", "0",
+        "-t", str(max_seconds),
+        "-i", str(path),
+        "-c", "copy",
+        "-movflags", "+faststart",
+        str(tmp),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg trim failed: {proc.stderr[-400:]}")
+    tmp.replace(path)
+
+
 # ---------------------------------------------------------------------------
 # Narration
 # ---------------------------------------------------------------------------
@@ -658,7 +883,8 @@ def render(
         stderr = sys.stderr
     output_dir = Path(output_dir).resolve()
 
-    if manifest.kind == "playwright" and not manifest.url:
+    is_pw_actions = manifest.kind == "playwright" and manifest.pw_spec is None
+    if is_pw_actions and not manifest.url:
         raise PlaceholderManifest(
             f"manifest is a placeholder (no demonstration.url): "
             f"{manifest.identifier}"
@@ -692,17 +918,32 @@ def render(
 
         if manifest.kind == "playwright":
             visual_mp4 = tmp_path / "visual.mp4"
-            _drive_playwright(
-                manifest,
-                output_path=visual_mp4,
-                work_dir=tmp_path,
-                stderr=stderr,
-            )
+            if manifest.pw_spec is not None:
+                _run_playwright_test_video(
+                    manifest,
+                    output_path=visual_mp4,
+                    work_dir=tmp_path,
+                )
+            else:
+                _drive_playwright(
+                    manifest,
+                    output_path=visual_mp4,
+                    work_dir=tmp_path,
+                    stderr=stderr,
+                )
         elif manifest.kind == "cli":
             visual_mp4 = tmp_path / "visual.mp4"
-            _render_cli_placeholder(manifest, visual_mp4)
+            _render_cli_vhs(manifest, visual_mp4)
         else:
             raise ManifestError(f"unsupported demonstration.kind: '{manifest.kind}'")
+
+        visual_captioned = tmp_path / "visual_captioned.mp4"
+        _burn_assertion_captions(
+            visual_mp4,
+            visual_captioned,
+            list(manifest.assertions_to_surface),
+            work_dir=tmp_path,
+        )
 
         narration: NarrationResult | None = None
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -726,9 +967,14 @@ def render(
                 narration = None
 
         if narration is not None:
-            _mux_audio(visual_mp4, narration.audio_path, rendered_mp4)
+            _mux_audio(visual_captioned, narration.audio_path, rendered_mp4)
         else:
-            shutil.move(str(visual_mp4), str(rendered_mp4))
+            shutil.move(str(visual_captioned), str(rendered_mp4))
+
+        _trim_video_head(
+            rendered_mp4,
+            max_seconds=float(manifest.duration_seconds),
+        )
 
         _extract_poster(rendered_mp4, poster_png)
 
@@ -817,7 +1063,7 @@ def _drive_playwright(
     work_dir: Path,
     stderr,
 ) -> None:
-    """Drive Playwright directly (no shelled-out user script)."""
+    """Drive declarative actions via Playwright sync_api (Python)."""
     try:
         from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -874,6 +1120,113 @@ def _drive_playwright(
     _transcode_to_mp4(captured_video, output_path, width=width, height=height)
 
 
+def _run_playwright_test_video(
+    manifest: Manifest,
+    *,
+    output_path: Path,
+    work_dir: Path,
+) -> None:
+    """Run ``npx playwright test`` on a spec with ``--grep`` and capture WebM → MP4."""
+    if manifest.pw_spec is None or not manifest.pw_grep:
+        raise ManifestError("internal: spec/grep required for Playwright test mode")
+
+    if shutil.which("npx") is None:
+        raise ToolingMissingError(
+            "npx not found on PATH (needed for Playwright test recording)",
+            install_hint="Install Node.js so `npx` is available.",
+        )
+
+    spec = manifest.pw_spec.resolve()
+    if not spec.exists():
+        raise ManifestError(f"demonstration.spec not found: {spec}")
+
+    out_pw = work_dir / "playwright-output"
+    out_pw.mkdir(parents=True, exist_ok=True)
+    width, height = manifest.viewport
+    timeout_ms = min(max(manifest.duration_seconds, 5) * 1000 + 10_000, 120_000)
+
+    cmd: list[str] = [
+        "npx",
+        "playwright",
+        "test",
+        str(spec),
+        "-g",
+        manifest.pw_grep,
+        f"--timeout={int(timeout_ms)}",
+        "--video=on",
+        f"--viewport-size={width},{height}",
+        f"--output-dir={out_pw}",
+        "--reporter=line",
+    ]
+    if manifest.pw_base_url:
+        cmd.append(f"--base-url={manifest.pw_base_url}")
+
+    cwd = (manifest.pw_cwd or spec.parent).resolve()
+
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        timeout=max(60, int(timeout_ms / 1000) + 30),
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "")[-800:]
+        raise RuntimeError(
+            f"playwright test failed (exit {proc.returncode}): {tail}"
+        )
+
+    webms = sorted(out_pw.rglob("*.webm"))
+    if not webms:
+        raise RuntimeError(
+            f"playwright test produced no .webm under {out_pw}"
+        )
+    raw_video = max(webms, key=lambda p: p.stat().st_size)
+
+    _transcode_to_mp4(raw_video, output_path, width=width, height=height)
+
+
+def _render_cli_vhs(
+    manifest: Manifest,
+    output_path: Path,
+) -> None:
+    """Render a VHS tape via ``VHSRunner`` and normalize to the manifest viewport MP4."""
+    from docgen.vhs import VHSRunner
+
+    tape = manifest.cli_tape
+    if tape is None:
+        raise ManifestError("internal: cli_tape required for kind cli")
+
+    cfg_base = manifest.source_path.parent if manifest.source_path else tape.parent
+    cfg = Config.minimal(cfg_base)
+    runner = VHSRunner(cfg)
+    result = runner.render_tape_at(tape, strict=False)
+    if not result.success:
+        detail = "; ".join(result.errors) if result.errors else "unknown error"
+        raise RuntimeError(f"VHS tape render failed: {detail}")
+
+    text = tape.read_text(encoding="utf-8")
+    rel_out: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("output "):
+            rest = stripped.split(None, 1)
+            if len(rest) > 1:
+                rel_out = rest[1].strip().strip('"').strip("'")
+            break
+    if not rel_out:
+        raise ManifestError(
+            f"VHS tape must contain an `Output ...` line (found none in {tape.name})"
+        )
+
+    produced = (tape.parent / rel_out).resolve()
+    if not produced.exists():
+        raise RuntimeError(f"VHS did not produce expected file: {produced}")
+
+    width, height = manifest.viewport
+    _transcode_to_mp4(produced, output_path, width=width, height=height)
+
+
 def _execute_actions(page: Any, actions: Iterable[Action]) -> None:
     """Run `actions` against a live Playwright `page`. Mirrors `_render_action`."""
     for action in actions:
@@ -900,30 +1253,6 @@ def _execute_actions(page: Any, actions: Iterable[Action]) -> None:
             page.screenshot(path=str(p["path"]))
         else:
             raise ManifestError(f"unsupported action kind: '{action.kind}'")
-
-
-def _render_cli_placeholder(manifest: Manifest, output_path: Path) -> None:
-    """Synthesize a tiny visual MP4 for `kind: cli` manifests via ffmpeg.
-
-    `cli` support is intentionally minimal in v1 — it produces a black
-    background at the requested resolution for `duration_seconds`. Downstream
-    consumers can extend this for terminal-style demos later.
-    """
-    _ensure_ffmpeg()
-    width, height = manifest.viewport
-    duration = max(1, int(manifest.duration_seconds))
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "lavfi",
-        "-i", f"color=c=black:s={width}x{height}:d={duration}:r=30",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        str(output_path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(f"ffmpeg cli render failed: {proc.stderr[-400:]}")
 
 
 # ---------------------------------------------------------------------------

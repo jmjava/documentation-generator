@@ -152,3 +152,9 @@ def test_playwright_test_speed_factor_overrides(tmp_path):
     c = Config.from_yaml(p)
     assert c.playwright_test_min_speed_factor == 0.3
     assert c.playwright_test_max_speed_factor == 3.5
+
+
+def test_minimal_config(tmp_path):
+    c = Config.minimal(tmp_path)
+    assert c.base_dir == tmp_path.resolve()
+    assert c.terminal_dir == c.base_dir / "terminal"

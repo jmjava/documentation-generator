@@ -179,11 +179,19 @@ def playwright(
     help="Path to *.docgen.yaml sidecar OR <path>.py::<test_name> for @pytest.mark.docgen.",
 )
 @click.option(
-    "--output-dir",
+    "--output",
     "output_dir_arg",
-    required=True,
+    default=None,
     type=click.Path(file_okay=False),
-    help="Directory to write rendered.mp4, poster.png, fragment.txt, manifest.json, cache-status.txt.",
+    help="Output directory for rendered.mp4, poster.png, fragment.txt, manifest.json.",
+)
+@click.option(
+    "--output-dir",
+    "output_dir_legacy",
+    default=None,
+    type=click.Path(file_okay=False),
+    hidden=True,
+    help="Deprecated alias for --output.",
 )
 @click.option(
     "--cache-dir",
@@ -201,16 +209,21 @@ def playwright(
 def demo_function(
     ctx: click.Context,
     manifest_arg: str,
-    output_dir_arg: str,
+    output_dir_arg: str | None,
+    output_dir_legacy: str | None,
     cache_dir_arg: str | None,
     no_narration: bool,
 ) -> None:
     """Render a single per-function demo video from a declarative manifest."""
     from docgen.demo_function import run_cli
 
+    out = output_dir_arg or output_dir_legacy
+    if not out:
+        raise click.UsageError("Missing required option '--output' (directory for rendered artifacts).")
+
     code = run_cli(
         manifest_arg=manifest_arg,
-        output_dir_arg=output_dir_arg,
+        output_dir_arg=out,
         cache_dir_arg=cache_dir_arg,
         no_narration=no_narration,
     )

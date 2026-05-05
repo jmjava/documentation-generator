@@ -122,6 +122,30 @@ class VHSRunner:
 
         return [self._lint_one(path) for path in tapes]
 
+    def render_tape_at(
+        self,
+        tape_path: Path,
+        *,
+        strict: bool = False,
+        timeout_sec: int | None = None,
+    ) -> VHSResult:
+        """Render a single tape file at an arbitrary path (used by ``demo-function``)."""
+        tape_path = Path(tape_path).resolve()
+        if not tape_path.exists():
+            return VHSResult(
+                tape=str(tape_path),
+                success=False,
+                errors=[f"tape not found: {tape_path}"],
+            )
+        effective_timeout = timeout_sec
+        if effective_timeout is None:
+            effective_timeout = (
+                self.render_timeout_sec
+                if self.render_timeout_sec is not None
+                else self.config.vhs_render_timeout_sec
+            )
+        return self._render_one(tape_path, strict, max(1, int(effective_timeout)))
+
     @staticmethod
     def _clean_env() -> dict[str, str]:
         """Build a minimal environment that produces a clean VHS recording.
