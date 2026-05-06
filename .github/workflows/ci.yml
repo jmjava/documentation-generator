@@ -24,7 +24,7 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     env:
-      # Repository secret (Settings → Secrets → Actions). Unset on fork PRs from outside forks.
+      # Repository secret (Settings → Secrets → Actions). Empty for PRs from forks without secrets.
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     strategy:
       matrix:
