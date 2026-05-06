@@ -38,6 +38,8 @@ pytest                        # unit tests
 pytest tests/e2e/ -x          # end-to-end (Playwright, needs `playwright install chromium`)
 ```
 
+On **Linux**, VHS-backed tests (e.g. `demo_function` CLI render) need **`ttyd`** and a display (**`xvfb-run -a pytest …`** or a real X session). CI installs `ttyd`, `xvfb`, and `ffmpeg` via apt (see `.github/workflows/ci.yml`).
+
 ## Quick start
 
 ```bash
