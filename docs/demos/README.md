@@ -70,3 +70,5 @@ docgen --config docgen.yaml validate --pre-push
 ```
 
 Upstream consumer dogfood (separate clone) is described in `milestones/upstream-dogfood.md` at the repo root.
+
+The **Playwright + Vite** dogfood fixture under `fixtures/playwright-vite-dogfood/` runs in CI (see `.github/workflows/ci.yml`).

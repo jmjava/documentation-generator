@@ -32,3 +32,5 @@ cd docs/demos
 docgen --config docgen.yaml discover-tests
 docgen --config docgen.yaml discover-tests --merge-catalog
 ```
+
+This fixture is also exercised in **GitHub Actions** (`.github/workflows/ci.yml`, job `playwright-vite-dogfood`).
