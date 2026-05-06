@@ -135,8 +135,6 @@ def ensure_ffmpeg_ffprobe_on_path() -> None:
 
 
 def _ensure_linux_ffmpeg_static() -> None:
-    import shutil
-
     root = bin_cache_root() / "linux-ffmpeg"
     root.mkdir(parents=True, exist_ok=True)
     marker = root / ".ready"
@@ -167,8 +165,6 @@ def _ensure_linux_ffmpeg_static() -> None:
 
 
 def _ensure_macos_ffmpeg_zips() -> None:
-    import shutil
-
     d = bin_cache_root() / "mac-ffmpeg"
     d.mkdir(parents=True, exist_ok=True)
     ffmpeg_bin = d / "ffmpeg"
