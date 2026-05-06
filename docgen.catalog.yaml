@@ -1,5 +1,16 @@
 catalog_schema_version: 1
-updated_at: '2026-05-06T19:38:58Z'
+updated_at: '2026-05-06T20:27:45Z'
 docgen_version: 0.2.0
 repo_root: .
-entries: []
+entries:
+- id: pw-d330a6619721b3e5
+  kind: playwright_node
+  test:
+    spec: fixtures/playwright-vite-dogfood/smoke.spec.ts
+    title: home page shows dogfood heading
+    project: null
+  fingerprints:
+    tracked_paths:
+    - fixtures/playwright-vite-dogfood/smoke.spec.ts
+    inputs:
+      fixtures/playwright-vite-dogfood/smoke.spec.ts: 6620ca5a5197a75dbb4c635e73f1ade26ccc6514d1990dd8449d3be90cb12c37

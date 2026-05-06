@@ -25,12 +25,24 @@ docgen --config docgen.yaml catalog init         # once; creates ../../docgen.ca
 docgen --config docgen.yaml catalog stale
 ```
 
-Discovery and catalog merge (Node Playwright projects under the repo root):
+Discovery and catalog merge (**requires** the Vite + Playwright fixture installed — see below):
 
 ```bash
-cd docs/demos
+cd fixtures/playwright-vite-dogfood && npm ci && npx playwright install chromium
+cd ../../docs/demos
+docgen --config docgen.yaml discover-tests
 docgen --config docgen.yaml discover-tests --merge-catalog
 docgen --config docgen.yaml catalog refresh
+```
+
+The fixture lives at **`fixtures/playwright-vite-dogfood/`** (`vite`, `@playwright/test`, **`smoke.spec.ts`** at the fixture root). `docgen.yaml` lists it under **`discover_tests.roots`**.
+
+To run Playwright directly:
+
+```bash
+cd fixtures/playwright-vite-dogfood
+npm ci && npx playwright install chromium
+npm run test:e2e
 ```
 
 Optional narration draft for segment 07 (requires `OPENAI_API_KEY`):

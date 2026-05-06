@@ -13,6 +13,7 @@ env_file: ../../.env
 discover_tests:
   roots:
     - "."
+    - "fixtures/playwright-vite-dogfood"
 
 narration_from_source:
   model: gpt-4o-mini

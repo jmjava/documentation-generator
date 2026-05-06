@@ -34,7 +34,7 @@ Work in order; stop and checkpoint when a step is big enough to ship alone.
 ## 3 — Narration + catalog loop on real content
 
 - [ ] **`docgen narration-generate --segment 07`** (or chosen id) **dry-run** then write; review `narration/*.md`.
-- [ ] **`docgen discover-tests --merge-catalog`** (from repo root with config) if you want catalog entries for Node tests; **`docgen catalog refresh`** after edits.
+- [x] **`docgen discover-tests --merge-catalog`** (from repo root with config) if you want catalog entries for Node tests; **`docgen catalog refresh`** after edits. *(See `fixtures/playwright-vite-dogfood` + `npm ci`.)*
 
 ---
 
