@@ -2,7 +2,7 @@
 
 Reusable Python library and CLI for producing narrated demo videos from Markdown, Manim animations, and VHS terminal recordings.
 
-# Video documentation for this project was generated with the libary
+# Video documentation for this project was generated with the library
 https://jmjava.github.io/documentation-generator/
 
 ## Features
