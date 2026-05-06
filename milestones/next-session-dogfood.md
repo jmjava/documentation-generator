@@ -1,4 +1,6 @@
-# Next session — dogfood a full run (documentation-generator on itself)
+# Next session — in-repo dogfood (documentation-generator on itself)
+
+**In-repo** = this repository’s **`docs/demos`** tree. For a **second repo** that installs docgen as a library, see **[upstream dogfood](upstream-dogfood.md)**.
 
 Goal: **`docs/demos`** exercises the **new** paths (catalog, discovery, `narration_from_source`, optional `playwright_test` compose) and you can run **`docgen generate-all`** (or a defined subset) end-to-end with documented prerequisites, then **`validate --pre-push`** green.
 
