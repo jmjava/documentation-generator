@@ -24,6 +24,14 @@ EVERMEET_FFMPEG_ZIP = "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip"
 EVERMEET_FFPROBE_ZIP = "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip"
 
 
+def _safe_tar_extractall(archive: tarfile.TarFile, path: Path) -> None:
+    """Avoid tarfile deprecation (PEP 706) on Python 3.12+."""
+    if sys.version_info >= (3, 12):
+        archive.extractall(path, filter="data")
+    else:
+        archive.extractall(path)
+
+
 def bin_cache_root() -> Path:
     return Path(__file__).resolve().parent / ".bin-cache"
 
@@ -97,7 +105,7 @@ def ensure_vhs_on_path() -> None:
             zf.extractall(tdir)
     else:
         with tarfile.open(dl, "r:gz") as tf:
-            tf.extractall(tdir)
+            _safe_tar_extractall(tf, tdir)
     dl.unlink(missing_ok=True)
 
     exe: Path | None = None
@@ -155,7 +163,7 @@ def _ensure_linux_ffmpeg_static() -> None:
         archive = root / "dist.tar.xz"
         _download(url, archive)
         with tarfile.open(archive, "r:xz") as tf:
-            tf.extractall(root)
+            _safe_tar_extractall(tf, root)
         archive.unlink(missing_ok=True)
         inner = next(root.glob("ffmpeg-*-static"))
         _chmod_plus_x(inner / "ffmpeg")

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -24,6 +26,25 @@ ERROR_PATTERNS = [
     r"bash: ",
     r"error:",
 ]
+
+def _vhs_subprocess_argv(vhs_bin: str, tape_path: Path) -> list[str]:
+    """Headless Linux (e.g. GitHub Actions) has no DISPLAY; VHS needs Xvfb when available."""
+    argv = [vhs_bin, str(tape_path)]
+    if not sys.platform.startswith("linux"):
+        return argv
+    if (os.environ.get("DISPLAY") or "").strip():
+        return argv
+    try:
+        if os.geteuid() == 0:
+            # xvfb-run + bundled Chrome as uid 0 hits sandbox policy; GHA uses non-root `runner`.
+            return argv
+    except AttributeError:
+        pass
+    xvfb = shutil.which("xvfb-run")
+    if xvfb:
+        return [xvfb, "-a", *argv]
+    return argv
+
 
 _CLEAN_BASHRC = """\
 # Minimal bashrc for VHS recordings — no prompt stacking, no git helpers.
@@ -206,7 +227,7 @@ class VHSRunner:
         start = time.monotonic()
         try:
             proc = subprocess.run(
-                [vhs_bin, str(tape_path)],
+                _vhs_subprocess_argv(vhs_bin, tape_path),
                 capture_output=True,
                 text=True,
                 timeout=max(1, int(timeout_sec)),
@@ -227,7 +248,6 @@ class VHSRunner:
         finally:
             fake_home = env.get("HOME", "")
             if fake_home and "vhs_home_" in fake_home:
-                import shutil
                 shutil.rmtree(fake_home, ignore_errors=True)
 
         combined = proc.stdout + "\n" + proc.stderr
