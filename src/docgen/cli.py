@@ -703,7 +703,10 @@ def discover_tests(
 
     tests = discover_all_node_playwright_tests(rr, scan_roots)
     if not tests:
-        click.echo("[discover-tests] no tests parsed (is `npx playwright test --list` working?)")
+        click.echo(
+            "[discover-tests] no tests parsed (is `npx playwright test --list` working?)",
+            err=True,
+        )
 
     if format == "json":
         click.echo(json_lib.dumps([asdict(t) for t in tests], indent=2))
@@ -743,13 +746,16 @@ def discover_tests(
             data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
         n = merge_entries(data, [t.catalog_entry() for t in tests], replace_existing=False)
         if dry_run:
-            click.echo(f"[discover-tests] --dry-run: would merge {n} new catalog entr(y/ies)")
+            click.echo(
+                f"[discover-tests] --dry-run: would merge {n} new catalog entr(y/ies)",
+                err=True,
+            )
             return
         if n == 0:
-            click.echo("[discover-tests] catalog unchanged (no new entry ids)")
+            click.echo("[discover-tests] catalog unchanged (no new entry ids)", err=True)
             return
         save_catalog(cat_path, data)
-        click.echo(f"[discover-tests] merged {n} new entr(y/ies) → {cat_path}")
+        click.echo(f"[discover-tests] merged {n} new entr(y/ies) → {cat_path}", err=True)
 
 
 @main.group("self")

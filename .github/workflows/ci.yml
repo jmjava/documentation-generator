@@ -95,15 +95,11 @@ jobs:
         run: |
           set -euo pipefail
           cd docs/demos
-          docgen --config docgen.yaml discover-tests --format=json | python3 - <<'PY'
-          import json, sys
-          data = json.load(sys.stdin)
-          assert len(data) >= 1, "expected at least one discovered Playwright test"
-          assert any(
-              "smoke.spec.ts" in (t.get("spec_path") or "")
-              for t in data
-          ), f"expected smoke.spec.ts in discovery output: {data!r}"
-          PY
+          docgen --config docgen.yaml discover-tests --format=json | python3 -c "import json,sys; r=sys.stdin.read().strip(); \
+            assert r, 'empty stdout from discover-tests'; \
+            d=json.loads(r); \
+            assert len(d)>=1, d; \
+            assert any('smoke.spec.ts' in (x.get('spec_path') or '') for x in d), d"
 
   smoke:
     name: smoke (config + lint + tts dry-run)

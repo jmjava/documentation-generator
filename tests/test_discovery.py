@@ -72,6 +72,46 @@ def test_stable_id_stable() -> None:
     assert a.stable_id() == b.stable_id()
 
 
+def test_discover_tests_json_stdout_is_pure_when_no_tests(tmp_path: Path) -> None:
+    """Machine-readable formats must not prefix stderr warnings on stdout (breaks ``| jq``)."""
+    from click.testing import CliRunner
+    from unittest.mock import patch
+
+    from docgen.cli import main
+
+    import json
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "playwright.config.ts").write_text("export default {}", encoding="utf-8")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"devDependencies": {"@playwright/test": "^1.0.0"}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"segments": {"default": ["01"], "all": ["01"]}}),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    with patch("docgen.test_discovery.discover_all_node_playwright_tests", return_value=[]):
+        r = runner.invoke(
+            main,
+            [
+                "--config",
+                str(tmp_path / "docgen.yaml"),
+                "discover-tests",
+                "--repo-root",
+                str(tmp_path),
+                "--format=json",
+            ],
+        )
+    assert r.exit_code == 0, r.stdout + r.stderr
+    parsed = json.loads(r.stdout.strip())
+    assert parsed == []
+    assert r.stderr is not None
+    assert "no tests parsed" in r.stderr
+
+
 def test_discover_tests_merge_catalog_cli(tmp_path: Path) -> None:
     from click.testing import CliRunner
     from unittest.mock import patch
