@@ -181,6 +181,89 @@ def test_compose_playwright_runs_capture_when_source_missing(tmp_path: Path, mon
     assert calls == ["01"]
 
 
+def test_playwright_test_video_path_repo_relative(tmp_path: Path) -> None:
+    cfg = {
+        "dirs": {
+            "terminal": "terminal",
+            "audio": "audio",
+            "recordings": "recordings",
+            "animations": "animations",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "visual_map": {
+            "01": {"type": "playwright_test", "test": "e2e/foo.spec.ts", "source": "test-results/v/run.webm"},
+        },
+    }
+    c = _write_cfg(tmp_path, cfg)
+    rel = tmp_path / "test-results" / "v" / "run.webm"
+    rel.parent.mkdir(parents=True, exist_ok=True)
+    rel.write_text("webm", encoding="utf-8")
+
+    composer = Composer(c)
+    resolved = composer._playwright_test_video_path(c.visual_map["01"])
+    assert resolved == rel
+
+
+def test_playwright_test_video_path_terminal_rendered_fallback(tmp_path: Path) -> None:
+    cfg = {
+        "dirs": {
+            "terminal": "terminal",
+            "audio": "audio",
+            "recordings": "recordings",
+            "animations": "animations",
+        },
+        "segments": {"default": ["03"], "all": ["03"]},
+        "visual_map": {
+            "03": {
+                "type": "playwright_test",
+                "test": "tests/e2e/test_demo.py::test_flow",
+                "source": "videos/demo.webm",
+            },
+        },
+    }
+    c = _write_cfg(tmp_path, cfg)
+    vid = tmp_path / "terminal" / "rendered" / "videos" / "demo.webm"
+    vid.parent.mkdir(parents=True, exist_ok=True)
+    vid.write_text("webm", encoding="utf-8")
+
+    composer = Composer(c)
+    resolved = composer._playwright_test_video_path(c.visual_map["03"])
+    assert resolved == vid
+
+
+def test_compose_playwright_test_muxes_existing_video(tmp_path: Path, monkeypatch) -> None:
+    cfg = {
+        "dirs": {
+            "terminal": "terminal",
+            "audio": "audio",
+            "recordings": "recordings",
+            "animations": "animations",
+        },
+        "segments": {"default": ["03"], "all": ["03"]},
+        "segment_names": {"03": "03-demo"},
+        "visual_map": {
+            "03": {
+                "type": "playwright_test",
+                "test": "tests/e2e/test_demo.py::test_flow",
+                "source": "videos/demo.webm",
+            },
+        },
+    }
+    c = _write_cfg(tmp_path, cfg)
+    vid = tmp_path / "terminal" / "rendered" / "videos" / "demo.webm"
+    vid.parent.mkdir(parents=True, exist_ok=True)
+    vid.write_bytes(b"webm")
+    audio = tmp_path / "audio" / "03-demo.mp3"
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    audio.write_bytes(b"mp3")
+
+    composer = Composer(c)
+    monkeypatch.setattr(composer, "_probe_duration", lambda _p: 10.0)
+    monkeypatch.setattr(composer, "_run_ffmpeg", lambda _cmd: None)
+    ok = composer.compose_segments(["03"], strict=True)
+    assert ok == 1
+
+
 def test_compose_playwright_skip_on_capture_error(tmp_path: Path, monkeypatch) -> None:
     cfg = {
         "dirs": {

@@ -132,8 +132,14 @@ def generate_narration_via_llm(
     model: str,
     segment_name: str,
     revision_notes: str = "",
+    *,
+    temperature: float = 0.7,
 ) -> str:
-    """Call OpenAI to generate a narration draft from source docs + guidance."""
+    """Call OpenAI to generate a narration draft from source docs + guidance.
+
+    ``guidance`` is **caller-supplied** (e.g. project-owner hints from ``docgen.yaml``), not
+    text returned from a prior model call.
+    """
     import openai
 
     user_parts = [
@@ -144,7 +150,7 @@ def generate_narration_via_llm(
         "--- END SOURCE DOCUMENTATION ---",
     ]
     if guidance:
-        user_parts += ["", "--- USER GUIDANCE ---", guidance, "--- END USER GUIDANCE ---"]
+        user_parts += ["", "--- PROJECT OWNER HINTS ---", guidance, "--- END PROJECT OWNER HINTS ---"]
     if revision_notes:
         user_parts += [
             "",
@@ -160,7 +166,7 @@ def generate_narration_via_llm(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "\n".join(user_parts)},
         ],
-        temperature=0.7,
+        temperature=float(temperature),
     )
     return response.choices[0].message.content or ""
 
@@ -213,6 +219,50 @@ def create_app(config: Any | None = None) -> Flask:
         files = scan_md_files(root, excludes)
         tree = build_file_tree(files)
         return jsonify({"tree": tree, "files": files, "repo_root": str(root)})
+
+    @app.route("/api/discover-tests")
+    def api_discover_tests():
+        """List Node Playwright tests and optional suggested ``visual_map`` YAML (same logic as CLI)."""
+        from dataclasses import asdict
+
+        cfg = _cfg()
+        if not cfg:
+            return jsonify({"error": "no_config", "tests": []}), 400
+        from docgen.test_discovery import (
+            discover_all_node_playwright_tests,
+            find_playwright_config,
+            format_suggested_visual_map_yaml,
+            node_playwright_project_ready,
+            parse_playwright_config_insights,
+        )
+
+        rr = cfg.repo_root.resolve()
+        roots = list(cfg.discover_tests_scan_roots)
+        ready = [r for r in roots if node_playwright_project_ready(r)]
+        tests = discover_all_node_playwright_tests(rr, roots) if ready else []
+        insights: dict[str, Any] = {}
+        cfg_path_note = ""
+        for root in roots:
+            pcfg = find_playwright_config(root)
+            if pcfg:
+                insights = dict(parse_playwright_config_insights(pcfg))
+                try:
+                    cfg_path_note = str(pcfg.resolve().relative_to(rr))
+                except ValueError:
+                    cfg_path_note = str(pcfg.resolve())
+                break
+        if cfg_path_note:
+            insights["_config_path"] = cfg_path_note
+        suggest = format_suggested_visual_map_yaml(tests) if tests else ""
+        return jsonify(
+            {
+                "tests": [asdict(t) for t in tests],
+                "suggested_visual_map_yaml": suggest,
+                "insights": insights,
+                "scan_roots": [str(r) for r in roots],
+                "ready_roots": [str(r) for r in ready],
+            }
+        )
 
     # -- API: read file content ------------------------------------------------
 

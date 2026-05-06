@@ -65,10 +65,48 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen pages [--force]` | Generate index.html, pages.yml, .gitattributes, .gitignore |
 | `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs] [--retry-manim]` | Run full pipeline (optionally auto-retry Manim after FREEZE GUARD) |
 | `docgen rebuild-after-audio` | Recompose + validate + concat |
+| `docgen self catalog-issue-template [--path]` | Print bundled GitHub issue template for catalog CI (works after `pip install docgen`) |
+| `docgen catalog init [--force]` | Create ``docgen.catalog.yaml`` at repo root (see `Config.catalog_file_path`) |
+| `docgen catalog stale [--quiet]` | Exit 1 if any entry needs regen (fingerprints / env overrides / pins), else 0 |
+| `docgen catalog refresh [--clear-pins]` | Recompute all ``fingerprints.inputs`` and save the catalog |
+| `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force]` | Generate narration ``.md`` from repo sources + **owner** hints (OpenAI); see ``narration_from_source`` in YAML |
+| `docgen discover-tests` | List Node ``@playwright/test`` cases (`--format` yaml, json, catalog). With ``docgen.yaml``, scans ``discover_tests.roots`` (default ``["."]``). ``--repo-root`` limits discovery to one directory (repo root for paths still comes from config). Flags: ``--suggest-visual-map``, ``--write-suggest-visual-map PATH``, ``--playwright-insights``, ``--merge-catalog`` |
+
+**Reusable GitHub Actions:** [`.github/workflows/reusable-docgen-catalog.yml`](.github/workflows/reusable-docgen-catalog.yml) — install docgen from a git ref, `catalog init`, then `catalog stale` and expose `needs_regen` for caller jobs.
 
 ## Configuration
 
 Create a `docgen.yaml` in your demos directory. See [examples/minimal-bundle/docgen.yaml](examples/minimal-bundle/docgen.yaml) for a starting point.
+
+**Discovery catalog (stable path):** the on-disk catalog for incremental regeneration defaults to **`docgen.catalog.yaml` at the repository root** (the same root used for `repo_root`: nearest `.git` ancestor, or the `repo_root:` setting in `docgen.yaml`). Commit it in consuming repos so discover/narrate/render steps can skip unchanged sources. Override with `catalog.file` (relative paths are resolved from repo root; absolute paths are allowed).
+
+**When the catalog is referenced:** planned narrate/render commands will call `entry_should_run()` (see `docgen.source_catalog`) per entry — stale fingerprints or explicit overrides mean “run”; otherwise skip. **Updating the catalog** should be an explicit step in the same job after a successful regen (refresh fingerprints, then save), not a side effect of unrelated commands.
+
+**Overrides (per consuming repo):** (1) **CI / dispatch** — set `DOCGEN_CATALOG_FORCE_IDS=id1,id2` so GitHub Actions can force specific entries without editing YAML; map `workflow_dispatch` inputs to that env var. (2) **Repo pin** — on a catalog entry set `policy: { regenerate: true }`; the pipeline regens that entry, then run `docgen catalog refresh --clear-pins` and commit. (3) **Global** — set `DOCGEN_CATALOG_FORCE_ALL=1` so `docgen catalog stale` treats every entry as stale. GitHub Actions remains a good driver; the improvement is **layering** env pins for ad-hoc reruns and **policy** pins for “must regen next main run” without churning the whole catalog.
+
+**Narration from source (owner hints):** under `narration_from_source` in `docgen.yaml`, the **project owner** lists optional `hints` (strings). Those hints are **not** from OpenAI — they steer the model (audience, terminology, what to avoid). OpenAI **generates** the narration `.md` from your repo **context** (`context.paths` / `context.globs`, relative to `repo_root`) plus those hints; the result is what `docgen tts` reads. See `docgen.narrate_from_source`.
+
+```yaml
+narration_from_source:
+  model: gpt-4o-mini
+  temperature: 0.65
+  max_context_bytes: 120000
+  hints:
+    - "Audience: contributors new to this repo."
+    - "Do not mention unreleased product codenames."
+  context:
+    paths:
+      - README.md
+    globs:
+      - "src/**/*.py"
+  segments:
+    "01":
+      hints:
+        - "This segment covers the install wizard only."
+      context:
+        paths:
+          - docs/install.md
+```
 
 Useful pipeline options:
 
@@ -92,6 +130,9 @@ playwright:
   default_viewport:         # fallback viewport when visual_map entry omits viewport
     width: 1920
     height: 1080
+
+catalog:
+  file: docs/docgen.catalog.yaml   # optional; default is <repo_root>/docgen.catalog.yaml
 
 pipeline:
   sync_vhs_after_timestamps: false  # opt-in: run sync-vhs automatically in generate-all/rebuild-after-audio
@@ -202,6 +243,20 @@ docgen generate-all --retry-manim
 - **tesseract-ocr** — OCR validation
 - **VHS** — terminal recording (charmbracelet/vhs)
 - **Manim** — animation rendering (optional, install with `pip install docgen[manim]`)
+
+## Downstream: open a tracking issue in a parent repo
+
+After **`pip install docgen`**, the catalog CI checklist ships **inside the package**. Use the CLI (or pipe straight to `gh`):
+
+```bash
+# Print absolute path (pass to gh --body-file)
+docgen self catalog-issue-template --path
+
+# Or pipe body to stdin
+docgen self catalog-issue-template | gh issue create --repo OWNER/REPO --title "Implement docgen catalog workflow in CI" --body-file -
+```
+
+From a **git clone** of this repository you can still run **`./scripts/gh-issue-catalog-workflow.sh owner/repo`** (uses `src/docgen/templates/...`, or falls back to `docgen self catalog-issue-template --path` if the template is not in the tree).
 
 ## Milestone spec
 

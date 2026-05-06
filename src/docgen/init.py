@@ -311,6 +311,9 @@ def _write_config(plan: InitPlan) -> str:
                 "**/.venv/**",
             ],
         },
+        "discover_tests": {
+            "roots": ["."],
+        },
     }
 
     if plan.env_file_rel:
@@ -324,7 +327,8 @@ def _write_config(plan: InitPlan) -> str:
         "# Edit this file to match your project structure, then run:\n"
         "#   docgen generate-all       # full pipeline\n"
         "#   docgen wizard             # interactive GUI\n"
-        "#   docgen validate           # check recordings\n\n"
+        "#   docgen validate           # check recordings\n"
+        "#   docgen discover-tests     # list Playwright tests; --suggest-visual-map for docgen.yaml\n\n"
     )
     path.write_text(
         header + yaml.dump(config, default_flow_style=False, sort_keys=False),
@@ -539,4 +543,14 @@ def print_summary(plan: InitPlan, created: list[str]) -> None:
     click.echo("    docgen generate-all        # full pipeline (needs Manim, VHS, ffmpeg)")
     click.echo()
     click.echo("  Edit docgen.yaml to customize segments, visual sources, and TTS settings.")
+    try:
+        from docgen.test_discovery import node_playwright_project_ready
+
+        if node_playwright_project_ready(plan.repo_root):
+            click.echo()
+            click.secho("  Playwright:", fg="cyan")
+            click.echo("    docgen discover-tests --suggest-visual-map")
+            click.echo("    docgen discover-tests --merge-catalog   # after tuning docgen.yaml paths")
+    except Exception:
+        pass
     click.echo()

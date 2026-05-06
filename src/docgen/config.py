@@ -357,6 +357,51 @@ class Config:
             cur = cur.parent
         return self.base_dir.resolve()
 
+    @property
+    def discover_tests_scan_roots(self) -> list[Path]:
+        """Directories to scan for Node Playwright projects (each may have its own ``package.json``).
+
+        YAML (``discover_tests.roots``) lists paths **relative to** :meth:`repo_root`. Default is a
+        single entry ``["."]`` (repo root). Monorepos can set e.g. ``[".", "apps/web"]``.
+        """
+        rr = self.repo_root.resolve()
+        block = self.raw.get("discover_tests")
+        if not isinstance(block, dict):
+            return [rr]
+        roots = block.get("roots")
+        if not roots:
+            return [rr]
+        out: list[Path] = []
+        for r in roots:
+            p = (rr / str(r).strip()).resolve()
+            out.append(p)
+        return out
+
+    @property
+    def catalog_file_path(self) -> Path:
+        """YAML catalog of discovered sources (``docgen catalog`` / future discover-tests).
+
+        **Default (stable across projects):** ``<repo_root>/docgen.catalog.yaml`` where
+        ``repo_root`` is the same path as :meth:`repo_root` (nearest ``.git`` directory,
+        or the ``repo_root:`` key in ``docgen.yaml``). Keeping the catalog at the repo
+        root avoids moving it when ``docgen.yaml`` lives under ``docs/demos/`` etc., and
+        gives CI one canonical file to commit for incremental regeneration.
+
+        **Override:** set ``catalog.file`` to an absolute path, or a path **relative to
+        ``repo_root``** (not relative to ``docgen.yaml``'s directory).
+
+        .. code-block:: yaml
+
+            catalog:
+              file: docs/docgen.catalog.yaml   # under repo_root
+        """
+        root = self.repo_root
+        cat = self.raw.get("catalog")
+        if isinstance(cat, dict) and cat.get("file"):
+            p = Path(str(cat["file"]))
+            return p.resolve() if p.is_absolute() else (root / p).resolve()
+        return (root / "docgen.catalog.yaml").resolve()
+
     # -- Factory methods -------------------------------------------------------
 
     @classmethod

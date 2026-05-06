@@ -1,12 +1,13 @@
 """Tests for docgen.validate — freeze ratio, blank frames, compose guard.
 
 These tests generate synthetic videos with cv2/numpy so they don't
-depend on any external recordings or tesseract.
+depend on any external recordings or tesseract. Compose-guard cases that
+shell out to ``ffmpeg`` rely on ``tests/conftest.py`` to install static
+ffmpeg/ffprobe into ``tests/.bin-cache/`` when needed.
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,9 +19,6 @@ import yaml
 from docgen.compose import ComposeError, Composer
 from docgen.config import Config
 from docgen.validate import Validator, _sample_frames
-
-_has_ffmpeg = shutil.which("ffmpeg") is not None
-requires_ffmpeg = pytest.mark.skipif(not _has_ffmpeg, reason="ffmpeg not installed")
 
 
 # ── Helpers: create synthetic test videos ─────────────────────────────
@@ -256,7 +254,6 @@ class TestComposeGuard:
         assert c.check_freeze_ratio(100.0, 0.0) == pytest.approx(1.0)
         assert c.check_freeze_ratio(0.0, 50.0) == pytest.approx(0.0)
 
-    @requires_ffmpeg
     def test_compose_rejects_short_video(self, config, cfg_dir):
         """Compose in strict mode should raise when video is way shorter than audio."""
         audio = cfg_dir / "audio" / "01-test.mp3"
@@ -269,7 +266,6 @@ class TestComposeGuard:
         with pytest.raises(ComposeError, match="FREEZE GUARD"):
             c._compose_simple("01", video, strict=True)
 
-    @requires_ffmpeg
     def test_compose_allows_matching_durations(self, config, cfg_dir):
         """Compose should succeed when video roughly matches audio."""
         audio = cfg_dir / "audio" / "01-test.mp3"
@@ -282,7 +278,6 @@ class TestComposeGuard:
         result = c._compose_simple("01", video, strict=True)
         assert result is True
 
-    @requires_ffmpeg
     def test_compose_nonstrict_warns(self, config, cfg_dir, capsys):
         """Non-strict mode prints a warning but doesn't raise."""
         audio = cfg_dir / "audio" / "01-test.mp3"
@@ -336,7 +331,6 @@ class TestValidateSegmentIntegration:
         with pytest.raises(SystemExit):
             v.run_pre_push()
 
-    @requires_ffmpeg
     def test_static_video_does_not_fail_pre_push(self, config, cfg_dir):
         """freeze_ratio is a soft check — static (non-black) video only warns."""
         vid = cfg_dir / "recordings" / "01-test.mp4"

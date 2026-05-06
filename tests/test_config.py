@@ -158,3 +158,58 @@ def test_minimal_config(tmp_path):
     c = Config.minimal(tmp_path)
     assert c.base_dir == tmp_path.resolve()
     assert c.terminal_dir == c.base_dir / "terminal"
+
+
+def test_catalog_file_path_default_is_repo_root(tmp_path):
+    """Catalog defaults to repo root so it stays stable if docgen.yaml lives in a subdir."""
+    (tmp_path / ".git").mkdir()
+    demos = tmp_path / "docs" / "demos"
+    demos.mkdir(parents=True)
+    (demos / "docgen.yaml").write_text("{}", encoding="utf-8")
+    c = Config.from_yaml(demos / "docgen.yaml")
+    assert c.catalog_file_path == (tmp_path / "docgen.catalog.yaml").resolve()
+
+
+def test_catalog_file_path_override_relative_to_repo_root(tmp_path):
+    (tmp_path / ".git").mkdir()
+    demos = tmp_path / "docs" / "demos"
+    demos.mkdir(parents=True)
+    cfg = {"catalog": {"file": "metadata/docgen-catalog.yaml"}}
+    (demos / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(demos / "docgen.yaml")
+    assert c.catalog_file_path == (tmp_path / "metadata" / "docgen-catalog.yaml").resolve()
+
+
+def test_catalog_file_path_override_absolute(tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    target = elsewhere / "my-catalog.yaml"
+    demos = tmp_path / "docs" / "demos"
+    demos.mkdir(parents=True)
+    cfg = {"catalog": {"file": str(target)}}
+    (demos / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(demos / "docgen.yaml")
+    assert c.catalog_file_path == target.resolve()
+
+
+def test_discover_tests_scan_roots_default(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"segments": {"default": ["01"], "all": ["01"]}}),
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.discover_tests_scan_roots == [tmp_path.resolve()]
+
+
+def test_discover_tests_scan_roots_monorepo(tmp_path):
+    (tmp_path / ".git").mkdir()
+    apps = tmp_path / "apps" / "web"
+    apps.mkdir(parents=True)
+    cfg = {
+        "segments": {"default": ["01"], "all": ["01"]},
+        "discover_tests": {"roots": [".", "apps/web"]},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.discover_tests_scan_roots == [tmp_path.resolve(), apps.resolve()]

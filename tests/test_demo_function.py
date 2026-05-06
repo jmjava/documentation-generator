@@ -2,15 +2,15 @@
 
 Most tests here are pure-data: they exercise manifest loading, validation,
 action rendering, fragment/cache-key stability, and CLI exit-code mapping
-without launching Playwright or ffmpeg. The few tests that need actual
-rendering are guarded with `pytest.importorskip` / `shutil.which` checks so
-the suite passes on CI runners without Playwright or ffmpeg installed.
+without launching Playwright or ffmpeg. VHS+ffmpeg render tests rely on
+``tests/conftest.py`` + ``tests/_render_tools_bootstrap.py`` to put tooling on
+PATH (see repo ``tests/.bin-cache/``). Playwright e2e tests use the same hook
+for browser binaries.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -433,18 +433,6 @@ def test_run_cli_missing_manifest_file(tmp_path: Path, capsys) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ffmpeg_present() -> bool:
-    return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
-
-
-def _vhs_present() -> bool:
-    return shutil.which("vhs") is not None
-
-
-@pytest.mark.skipif(
-    not _ffmpeg_present() or not _vhs_present(),
-    reason="ffmpeg / ffprobe / vhs not installed",
-)
 def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
     """End-to-end render using kind=cli (VHS tape → MP4).
 
@@ -454,7 +442,7 @@ def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
     tape = tmp_path / "demo.tape"
     tape.write_text(
         'Output rendered/cli-demo.mp4\n'
-        'Set Shell "bash --norc --noprofile"\n'
+        "Set Shell bash\n"
         "Set Width 320\n"
         "Set Height 240\n"
         "Sleep 300ms\n",
@@ -505,17 +493,13 @@ def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
         assert (out2 / name).exists()
 
 
-@pytest.mark.skipif(
-    not _ffmpeg_present() or not _vhs_present(),
-    reason="ffmpeg / ffprobe / vhs not installed",
-)
 def test_render_warns_when_openai_key_missing(tmp_path: Path, monkeypatch, capsys) -> None:
     """No OPENAI_API_KEY → warning + visual-only video."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     tape = tmp_path / "demo.tape"
     tape.write_text(
         'Output rendered/cli-demo.mp4\n'
-        'Set Shell "bash --norc --noprofile"\n'
+        "Set Shell bash\n"
         "Set Width 320\n"
         "Set Height 240\n"
         "Sleep 300ms\n",

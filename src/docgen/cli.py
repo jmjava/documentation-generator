@@ -354,6 +354,73 @@ def lint(ctx: click.Context, segment: str | None) -> None:
         raise SystemExit(1)
 
 
+@main.command("narration-generate")
+@click.option("--segment", required=True, help="Segment id (e.g. 01); output name uses segment_names if set.")
+@click.option(
+    "--extra-path",
+    "extra_paths",
+    multiple=True,
+    type=str,
+    help="Repo-root-relative source file to include (repeatable). Adds to narration_from_source.context.paths.",
+)
+@click.option(
+    "--hint",
+    "extra_hints",
+    multiple=True,
+    type=str,
+    help="Project-owner hint for the model (repeatable). Adds to YAML hints.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print generated markdown to stdout; do not write narration/*.md.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite an existing narration file for this segment.",
+)
+@click.pass_context
+def narration_generate(
+    ctx: click.Context,
+    segment: str,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    dry_run: bool,
+    force: bool,
+) -> None:
+    """Generate narration ``.md`` from repo sources + owner hints via OpenAI chat.
+
+    Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
+    Requires ``OPENAI_API_KEY`` unless using a future offline stub.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+
+    from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
+
+    cfg = ctx.obj["config"]
+    try:
+        body = generate_narration_markdown(
+            cfg,
+            segment,
+            extra_paths=list(extra_paths),
+            extra_hints=list(extra_hints),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if dry_run:
+        click.echo(body)
+        return
+
+    try:
+        out = write_narration_markdown(cfg, segment, body, force=force)
+    except FileExistsError as exc:
+        raise click.ClickException(f"{exc} (use --force)") from exc
+    click.echo(f"[narration-generate] wrote {out}")
+
+
 @main.command()
 @click.option("--config-name", "concat_name", default=None, help="Concat config name.")
 @click.pass_context
@@ -421,3 +488,293 @@ def rebuild_after_audio(ctx: click.Context, skip_tape_sync: bool) -> None:
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
     pipeline.run(skip_tts=True, skip_tape_sync=skip_tape_sync)
+
+
+@main.group("catalog")
+@click.pass_context
+def catalog_cmd(ctx: click.Context) -> None:
+    """Create, inspect, and update ``docgen.catalog.yaml`` (incremental regen metadata)."""
+    if ctx.obj.get("config") is None:
+        raise click.ClickException(
+            "No docgen.yaml found (use --config PATH). Catalog commands need a project config."
+        )
+
+
+@catalog_cmd.command("init")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Write a fresh catalog file; with --force and an existing file, keep entries but reset header metadata.",
+)
+@click.pass_context
+def catalog_init(ctx: click.Context, force: bool) -> None:
+    """Create ``docgen.catalog.yaml`` if missing (default: under repo root)."""
+    from docgen import __version__ as docgen_version
+    from docgen.source_catalog import load_catalog, new_catalog, save_catalog
+
+    cfg = ctx.obj["config"]
+    path = cfg.catalog_file_path
+    if path.exists() and not force:
+        click.echo(f"[catalog] already exists: {path}")
+        return
+    if path.exists() and force:
+        try:
+            old = load_catalog(path)
+            data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
+            data["entries"] = old.get("entries", [])
+        except (OSError, ValueError):
+            data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
+    else:
+        data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
+    save_catalog(path, data)
+    click.echo(f"[catalog] wrote {path}")
+
+
+@catalog_cmd.command("stale")
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="No per-id lines; only set exit code.",
+)
+@click.pass_context
+def catalog_stale(ctx: click.Context, quiet: bool) -> None:
+    """Exit 1 if any catalog entry needs regeneration, else 0.
+
+    Honors ``DOCGEN_CATALOG_FORCE_IDS``, ``DOCGEN_CATALOG_FORCE_ALL``, and per-entry
+    ``policy.regenerate`` (see ``docgen.source_catalog``).
+    """
+    from docgen.source_catalog import (
+        entry_should_run,
+        force_ids_from_env,
+        global_force_from_env,
+        load_catalog,
+    )
+
+    cfg = ctx.obj["config"]
+    path = cfg.catalog_file_path
+    if not path.exists():
+        click.echo(f"[catalog] missing: {path} — run `docgen catalog init`", err=True)
+        raise SystemExit(1)
+    data = load_catalog(path)
+    gf = global_force_from_env()
+    fids = force_ids_from_env()
+    stale_ids: list[str] = []
+    for entry in data.get("entries", []):
+        if not isinstance(entry, dict):
+            continue
+        eid = str(entry.get("id", ""))
+        if entry_should_run(entry, cfg.repo_root, global_force=gf, force_ids=fids):
+            stale_ids.append(eid or "(no id)")
+    if not quiet:
+        for sid in stale_ids:
+            click.echo(f"stale: {sid}")
+    if stale_ids:
+        raise SystemExit(1)
+    click.echo("[catalog] nothing stale")
+    raise SystemExit(0)
+
+
+@catalog_cmd.command("refresh")
+@click.option(
+    "--clear-pins",
+    is_flag=True,
+    help="Clear ``policy.regenerate`` / ``regenerate`` pins after refreshing fingerprints.",
+)
+@click.pass_context
+def catalog_refresh(ctx: click.Context, clear_pins: bool) -> None:
+    """Recompute ``fingerprints.inputs`` for every entry and save the catalog."""
+    from docgen.source_catalog import (
+        clear_regenerate_pin,
+        load_catalog,
+        refresh_entry_fingerprints,
+        save_catalog,
+    )
+
+    cfg = ctx.obj["config"]
+    path = cfg.catalog_file_path
+    if not path.exists():
+        raise click.ClickException(f"Missing catalog: {path} — run `docgen catalog init`")
+    data = load_catalog(path)
+    n = 0
+    for entry in data.get("entries", []):
+        if not isinstance(entry, dict):
+            continue
+        refresh_entry_fingerprints(entry, cfg.repo_root)
+        if clear_pins:
+            if clear_regenerate_pin(entry):
+                n += 1
+    save_catalog(path, data)
+    msg = f"[catalog] refreshed fingerprints → {path}"
+    if clear_pins and n:
+        msg += f" (cleared {n} regenerate pin(s))"
+    click.echo(msg)
+
+
+@main.command("discover-tests")
+@click.option(
+    "--repo-root",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Repository root (Node project). Default: config repo_root when docgen.yaml is loaded.",
+)
+@click.option(
+    "--format",
+    type=click.Choice(["yaml", "json", "catalog"]),
+    default="yaml",
+    help="yaml: list; json: machine list; catalog: entry dicts for merge.",
+)
+@click.option(
+    "--merge-catalog",
+    is_flag=True,
+    help="Append new catalog entries (requires docgen.yaml for catalog path).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="With --merge-catalog: print actions only, do not write catalog.",
+)
+@click.option(
+    "--suggest-visual-map",
+    is_flag=True,
+    help="After the list, print a suggested docgen.yaml ``visual_map`` block (``playwright_test``).",
+)
+@click.option(
+    "--visual-map-start",
+    type=str,
+    default="90",
+    show_default=True,
+    help="First numeric segment key for --suggest-visual-map (e.g. 90 → 90, 91, …).",
+)
+@click.option(
+    "--write-suggest-visual-map",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+    default=None,
+    help="Write --suggest-visual-map output to this file instead of printing it.",
+)
+@click.option(
+    "--playwright-insights",
+    is_flag=True,
+    help="Print best-effort fields parsed from the first ``playwright.config.*`` found (JSON).",
+)
+@click.pass_context
+def discover_tests(
+    ctx: click.Context,
+    repo_root: str | None,
+    format: str,
+    merge_catalog: bool,
+    dry_run: bool,
+    suggest_visual_map: bool,
+    visual_map_start: str,
+    write_suggest_visual_map: Path | None,
+    playwright_insights: bool,
+) -> None:
+    """List Node ``@playwright/test`` cases via ``playwright test --list`` (no tests executed)."""
+    from dataclasses import asdict
+    import json as json_lib
+
+    from docgen import __version__ as docgen_version
+    from docgen.source_catalog import load_catalog, merge_entries, new_catalog, save_catalog
+    from docgen.test_discovery import (
+        discover_all_node_playwright_tests,
+        discover_tests_yaml_lines,
+        find_playwright_config,
+        format_suggested_visual_map_yaml,
+        node_playwright_project_ready,
+        parse_playwright_config_insights,
+    )
+
+    cfg = ctx.obj.get("config")
+    if cfg is not None:
+        rr = cfg.repo_root.resolve()
+        scan_roots = [Path(repo_root).resolve()] if repo_root else list(cfg.discover_tests_scan_roots)
+    else:
+        if repo_root is None:
+            raise click.ClickException("Pass --repo-root or run with docgen.yaml (--config).")
+        rr = Path(repo_root).resolve()
+        scan_roots = [rr]
+
+    ready = [r for r in scan_roots if node_playwright_project_ready(r)]
+    if not ready:
+        roots_msg = ", ".join(str(r) for r in scan_roots)
+        raise click.ClickException(
+            "No Node @playwright/test project under any scan root "
+            f"(need playwright.config.* and @playwright/test in package.json): {roots_msg}"
+        )
+
+    tests = discover_all_node_playwright_tests(rr, scan_roots)
+    if not tests:
+        click.echo("[discover-tests] no tests parsed (is `npx playwright test --list` working?)")
+
+    if format == "json":
+        click.echo(json_lib.dumps([asdict(t) for t in tests], indent=2))
+    elif format == "catalog":
+        click.echo(json_lib.dumps([t.catalog_entry() for t in tests], indent=2))
+    else:
+        click.echo(discover_tests_yaml_lines(tests), nl=False)
+
+    if playwright_insights:
+        ins: dict[str, object] = {}
+        for root in scan_roots:
+            pcfg = find_playwright_config(root)
+            if pcfg:
+                ins = parse_playwright_config_insights(pcfg)
+                ins["_config_path"] = str(pcfg.resolve().relative_to(rr)) if pcfg.is_relative_to(rr) else str(pcfg)
+                break
+        click.echo(json_lib.dumps(ins, indent=2))
+
+    suggest_body = ""
+    if suggest_visual_map or write_suggest_visual_map is not None:
+        suggest_body = format_suggested_visual_map_yaml(tests, segment_key_start=visual_map_start)
+    if write_suggest_visual_map is not None:
+        write_suggest_visual_map.parent.mkdir(parents=True, exist_ok=True)
+        write_suggest_visual_map.write_text(suggest_body, encoding="utf-8")
+        click.echo(f"[discover-tests] wrote suggested visual_map → {write_suggest_visual_map}")
+    elif suggest_visual_map and suggest_body:
+        click.echo("\n---\n")
+        click.echo(suggest_body, nl=False)
+
+    if merge_catalog:
+        if cfg is None:
+            raise click.ClickException("--merge-catalog requires docgen.yaml (use --config).")
+        cat_path = cfg.catalog_file_path
+        if cat_path.exists():
+            data = load_catalog(cat_path)
+        else:
+            data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
+        n = merge_entries(data, [t.catalog_entry() for t in tests], replace_existing=False)
+        if dry_run:
+            click.echo(f"[discover-tests] --dry-run: would merge {n} new catalog entr(y/ies)")
+            return
+        if n == 0:
+            click.echo("[discover-tests] catalog unchanged (no new entry ids)")
+            return
+        save_catalog(cat_path, data)
+        click.echo(f"[discover-tests] merged {n} new entr(y/ies) → {cat_path}")
+
+
+@main.group("self")
+def self_cmd() -> None:
+    """Resources bundled with the installed package (works after ``pip install docgen``)."""
+
+
+@self_cmd.command("catalog-issue-template")
+@click.option(
+    "--path",
+    "path_only",
+    is_flag=True,
+    help="Print only the absolute path to the template file (for gh --body-file).",
+)
+def self_catalog_issue_template(path_only: bool) -> None:
+    """Emit the catalog CI workflow GitHub issue template (markdown).
+
+    Pipe to ``gh issue create --body-file -`` or use ``--path`` with ``--body-file``.
+    """
+    from docgen.bundled import catalog_workflow_issue_template_path, read_catalog_workflow_issue_template
+
+    p = catalog_workflow_issue_template_path()
+    if not p.is_file():
+        raise click.ClickException(f"Bundled template missing from package install: {p}")
+    if path_only:
+        click.echo(str(p.resolve()))
+    else:
+        click.echo(read_catalog_workflow_issue_template(), nl=False)

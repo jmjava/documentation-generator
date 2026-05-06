@@ -23,6 +23,7 @@ build/
 Thumbs.db
 
 .pytest_cache/
+tests/.bin-cache/
 .coverage
 htmlcov/
 .mypy_cache/

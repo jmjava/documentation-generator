@@ -158,8 +158,9 @@ class VHSRunner:
 
         Strategy: build PATH from scratch with only the venv bin + system dirs.
         Redirect HOME to a temp dir with a minimal .bashrc.
-        Tapes MUST use ``Set Shell "bash --norc --noprofile"`` to skip
-        all user/system startup files unconditionally.
+        Tapes should use ``Set Shell bash`` (VHS invokes bash with ``--norc``
+        / ``--noprofile`` internally). Avoid ``Set Shell "bash ..."`` custom
+        invocations; recent VHS rejects them as invalid shells.
         """
         fake_home = tempfile.mkdtemp(prefix="vhs_home_")
         Path(fake_home, ".bashrc").write_text(_CLEAN_BASHRC)

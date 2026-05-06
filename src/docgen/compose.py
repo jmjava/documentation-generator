@@ -47,6 +47,16 @@ class Composer:
                     print(f"    SKIP: playwright capture failed ({exc})")
                     video_path = Path("")
                 ok = video_path.exists() and self._compose_simple(seg_id, video_path, strict=strict)
+            elif vtype == "playwright_test":
+                # Pre-recorded test video (WebM/MP4). Optional sync_map retiming is not applied
+                # here yet — see milestones/milestone-4-playwright-test-video.md issue 4.
+                video_path = self._playwright_test_video_path(vmap)
+                if self._playwright_test_has_sync_map(seg_id, vmap):
+                    print(
+                        "    NOTE: playwright_test has sync_map; retimed compose is not "
+                        "implemented yet — using raw visual (see docgen compose roadmap)."
+                    )
+                ok = self._compose_simple(seg_id, video_path, strict=strict)
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -267,6 +277,40 @@ class Composer:
         if not src:
             return self.config.terminal_dir / "rendered" / "playwright.mp4"
         return self.config.terminal_dir / "rendered" / src
+
+    def _playwright_test_video_path(self, vmap: dict[str, Any]) -> Path:
+        """Resolve `visual_map.source` for type playwright_test.
+
+        Tries ``repo_root / source`` first (e.g. Playwright ``test-results/...``),
+        then ``terminal/rendered / source`` for dogfood layouts.
+        """
+        src = str(vmap.get("source", "")).strip()
+        if not src:
+            return self.config.terminal_dir / "rendered" / "playwright-test.mp4"
+        p = Path(src)
+        if p.is_absolute():
+            return p
+        under_repo = self.config.base_dir / src
+        if under_repo.exists():
+            return under_repo
+        return self.config.terminal_dir / "rendered" / src
+
+    def _playwright_test_has_sync_map(self, seg_id: str, vmap: dict[str, Any]) -> bool:
+        """True if a sync_map is configured (convention matches validate.py)."""
+        val = vmap.get("sync_map") or vmap.get("sync_map_file")
+        if val:
+            p = Path(str(val))
+            path = p if p.is_absolute() else (self.config.base_dir / p)
+            return path.exists()
+        seg_name = self.config.resolve_segment_name(seg_id)
+        for candidate in (
+            self.config.terminal_dir / "rendered" / f"{seg_name}_sync_map.json",
+            self.config.terminal_dir / "rendered" / f"{seg_id}_sync_map.json",
+            self.config.terminal_dir / "rendered" / f"sync_map_{seg_id}.json",
+        ):
+            if candidate.exists():
+                return True
+        return False
 
     def _resolve_source(self, source: str) -> Path:
         for base in self._manim_video_dirs():

@@ -39,7 +39,7 @@ def test_scan_tape_for_risky_commands_detects_python_and_curl(tmp_path: Path) ->
     tape.write_text(
         '\n'.join(
             [
-                'Set Shell "bash --norc --noprofile"',
+                "Set Shell bash",
                 'Type "python app.py"',
                 "Enter",
                 'Type "curl http://localhost:8080/health"',
