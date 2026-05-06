@@ -1,5 +1,7 @@
 # Checklist — Playwright auto-discovery, Node-first, LLM narration
 
+**Canonical in-repo plan.** See [`milestones/README.md`](README.md) for how this relates to archived milestone docs.
+
 Goal: discover Playwright tests (Node primary, Python secondary), run or attach artifacts, generate narration markdown (OpenAI) from test + trace + repo context, and feed the existing docgen pipeline (`playwright_test` validators already exist; compose/runner still needed).
 
 Use this as a working checklist; reorder within a phase as dependencies land.
@@ -19,10 +21,10 @@ Use this as a working checklist; reorder within a phase as dependencies land.
 - [x] Detect Node Playwright: `playwright.config.*` + `@playwright/test` in `package.json` (`test_discovery.node_playwright_project_ready`).
 - [x] List tests via `npx playwright test --list` (JSON if present, else line reporter) — `discover_node_playwright_tests`.
 - [x] Stable ids + catalog entries — `NodePlaywrightTest.stable_id` / `catalog_entry()`; CLI `docgen discover-tests [--merge-catalog]`.
-- [ ] Resolve app root(s) for monorepos beyond `--repo-root` (config `test_roots[]` default list).
-- [ ] Read `webServer`, `baseURL`, artifact settings from Playwright config for doc defaults / LLM context.
-- [ ] Emit suggested `visual_map` YAML snippets into stdout or a file (today: `NodePlaywrightTest.suggested_visual_map_snippet` exists but not wired to CLI).
-- [ ] `docgen wizard` / `init` integration.
+- [x] Monorepo scan roots: **`discover_tests.roots`** in `docgen.yaml` + **`discover_all_node_playwright_tests`**; **`--repo-root`** still forces a single scan directory.
+- [x] Best-effort Playwright config hints: **`parse_playwright_config_insights`**, CLI **`--playwright-insights`** (extend for richer TS parsing as needed).
+- [x] Suggested **`visual_map`**: CLI **`--suggest-visual-map`** / **`--write-suggest-visual-map`**, **`format_suggested_visual_map_yaml`**.
+- [x] Entry points: **`GET /api/discover-tests`**, **`docgen init`** scaffolds **`discover_tests`**; full wizard UI (pick test → narrate → save) still open.
 - [x] Unit tests: `tests/test_discovery.py`.
 
 ### Vite-oriented checks
@@ -68,9 +70,9 @@ Use this as a working checklist; reorder within a phase as dependencies land.
 
 ## Phase E — Wizard & init
 
-- [ ] `docgen init`: optional scaffold when Playwright detected (suggested segments + placeholder narration)
-- [ ] Wizard API + UI: list discovered tests → pick test → generate narration → preview → save
-- [ ] Wire env / model from existing `env_file` and OpenAI patterns (`wizard.generate_narration_via_llm` style)
+- [ ] `docgen init`: richer scaffold when Playwright detected (suggested segments + placeholder narration beyond `discover_tests` block).
+- [ ] Wizard **UI**: discovery → pick test → generate narration → preview → save (API exists for listing + suggested YAML).
+- [ ] Wire env / model from existing `env_file` and OpenAI patterns (`wizard.generate_narration_via_llm` style) in discovery UI.
 
 ---
 
@@ -85,7 +87,7 @@ Use this as a working checklist; reorder within a phase as dependencies land.
 ## References in this repo
 
 - Issue sketch: `issues/playwright-test-integration/07-auto-discovery.md`
-- Architecture / `visual_map`: `milestones/milestone-4-playwright-test-video.md`
+- Architecture / `visual_map` (historical spec): `milestones/archive/milestone-4-playwright-test-video.md`
 - Validators: `src/docgen/validate.py` (`playwright_test_*`), `tests/test_validate_playwright.py`
 - Node invoke precedent: `src/docgen/demo_function.py` (`npx playwright test`, sidecar manifests)
 - Existing LLM narration pattern: `src/docgen/wizard.py` (`generate_narration_via_llm`)

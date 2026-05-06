@@ -40,6 +40,8 @@ pytest tests/e2e/ -x          # end-to-end (Playwright, needs `playwright instal
 
 On **Linux**, VHS-backed tests (e.g. `demo_function` CLI render) need **`ttyd`** and a display (**`xvfb-run -a pytest …`** or a real X session). CI installs `ttyd`, `xvfb`, and `ffmpeg` via apt (see `.github/workflows/ci.yml`).
 
+**Roadmap:** [milestones/README.md](milestones/README.md) (active checklist + archived milestone notes).
+
 ## Quick start
 
 ```bash

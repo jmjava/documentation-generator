@@ -49,7 +49,7 @@ class Composer:
                 ok = video_path.exists() and self._compose_simple(seg_id, video_path, strict=strict)
             elif vtype == "playwright_test":
                 # Pre-recorded test video (WebM/MP4). Optional sync_map retiming is not applied
-                # here yet — see milestones/milestone-4-playwright-test-video.md issue 4.
+                # here yet — see milestones/archive/milestone-4-playwright-test-video.md issue 4.
                 video_path = self._playwright_test_video_path(vmap)
                 if self._playwright_test_has_sync_map(seg_id, vmap):
                     print(
