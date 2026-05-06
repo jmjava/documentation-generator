@@ -27,6 +27,21 @@ ERROR_PATTERNS = [
     r"error:",
 ]
 
+def _find_xvfb_run() -> str | None:
+    """Resolve ``xvfb-run``; ``shutil.which`` can miss ``/usr/bin`` on trimmed PATH."""
+    candidates: list[str] = []
+    hit = shutil.which("xvfb-run")
+    if hit:
+        candidates.append(hit)
+    for p in ("/usr/bin/xvfb-run", "/usr/local/bin/xvfb-run"):
+        if p not in candidates:
+            candidates.append(p)
+    for c in candidates:
+        if Path(c).is_file() and os.access(c, os.X_OK):
+            return c
+    return None
+
+
 def _vhs_subprocess_argv(vhs_bin: str, tape_path: Path) -> list[str]:
     """Headless Linux (e.g. GitHub Actions) has no DISPLAY; VHS needs Xvfb when available."""
     argv = [vhs_bin, str(tape_path)]
@@ -40,7 +55,7 @@ def _vhs_subprocess_argv(vhs_bin: str, tape_path: Path) -> list[str]:
             return argv
     except AttributeError:
         pass
-    xvfb = shutil.which("xvfb-run")
+    xvfb = _find_xvfb_run()
     if xvfb:
         return [xvfb, "-a", *argv]
     return argv

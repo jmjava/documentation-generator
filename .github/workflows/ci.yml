@@ -26,6 +26,8 @@ jobs:
     env:
       # Repository secret (Settings → Secrets → Actions). Empty for PRs from forks without secrets.
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Import ``docgen`` from the PR checkout, not only the copy under site-packages (avoids stale VHS fixes).
+      PYTHONPATH: ${{ github.workspace }}/src
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -58,7 +60,7 @@ jobs:
             backoff=$((backoff * 2))
             attempt=$((attempt + 1))
           done
-      - run: pip install ".[dev]"
+      - run: pip install --no-cache-dir ".[dev]"
       # VHS terminal capture needs a DISPLAY (headless Ubuntu has none by default).
       - run: xvfb-run -a pytest tests/ --ignore=tests/e2e -v --tb=short
 
@@ -84,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PYTHONPATH: ${{ github.workspace }}/src
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
