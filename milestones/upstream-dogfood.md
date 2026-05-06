@@ -4,12 +4,14 @@
 
 Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/demos` full run).
 
+**Designated consumer repo:** **`courseforge/course-builder`** — local clone: **`/home/ubuntu/github/courseforge/course-builder`**. All upstream dogfood work lands there; friction feeds back here.
+
 ---
 
-## 0 — Pick the guinea pig
+## 0 — Preconditions (course-builder)
 
-- [ ] Create or designate a **small repo** (public or org-private) whose only job is to host a `docs/demos`-style tree + CI; avoid coupling to a huge monolith at first.
-- [ ] Decide **install source**: PyPI release vs **git URL + SHA** (recommended until the next release carries your latest fixes).
+- [ ] Clone / sync **`courseforge/course-builder`** at **`/home/ubuntu/github/courseforge/course-builder`** (or your equivalent path; keep docs here aligned with reality).
+- [ ] Decide **install source** for docgen in that repo: PyPI release vs **`pip install "docgen @ git+https://github.com/jmjava/documentation-generator.git@<sha>"`** (recommended until PyPI carries the fixes you need).
 
 ---
 
@@ -46,4 +48,4 @@ Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/de
 ## Optional
 
 - [ ] Publish a **cookiecutter** / **GitHub template** repo that encodes upstream dogfood once it stabilizes.
-- [ ] Add a short **“Consumer quickstart”** section in this repo’s **README** linking to a canonical example upstream repo (after one exists).
+- [ ] Add a short **“Consumer quickstart”** section in this repo’s **README** linking to **`courseforge/course-builder`** once the integration is demonstrable.
