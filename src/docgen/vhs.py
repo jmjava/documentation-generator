@@ -240,6 +240,9 @@ class VHSRunner:
         success = proc.returncode == 0 and not errors
         if not success and proc.returncode != 0:
             errors.append(f"Exit code {proc.returncode}")
+            err_tail = (proc.stderr or "").strip()
+            if err_tail:
+                errors.append(f"stderr (tail): {err_tail[-800:]}")
         elapsed = time.monotonic() - start
         print(f"[vhs] Finished {tape_path.name} in {elapsed:.1f}s")
 
