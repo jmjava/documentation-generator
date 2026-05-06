@@ -1,5 +1,6 @@
 # docgen.yaml — dogfood: docgen's own demo videos
 # See: https://github.com/jmjava/documentation-generator
+# Command cheat sheet: README.md in this directory.
 #
 # This project uses docgen to produce demo videos about docgen itself.
 #   docgen generate-all       # full pipeline
@@ -8,6 +9,30 @@
 
 repo_root: ../..
 env_file: ../../.env
+
+discover_tests:
+  roots:
+    - "."
+
+narration_from_source:
+  model: gpt-4o-mini
+  hints:
+    - >
+      Project context: docgen is the documentation-generator CLI/library (see AGENTS.md).
+      Audience: engineers adopting docgen or reviewing its pipeline.
+  context:
+    paths:
+      - README.md
+      - AGENTS.md
+      - src/docgen/pipeline.py
+      - src/docgen/compose.py
+      - src/docgen/config.py
+  segments:
+    "07":
+      hints:
+        - >
+          This segment demonstrates visual_map type playwright_test with a short pre-recorded
+          WebM under terminal/rendered/. Keep the tone consistent with other demo segments.
 
 dirs:
   narration: narration
@@ -24,6 +49,7 @@ segments:
     - "04"
     - "05"
     - "06"
+    - "07"
   all: *all_segments
 
 segment_names:
@@ -33,10 +59,12 @@ segment_names:
   "04": 04-tts-pipeline
   "05": 05-compose-validate
   "06": 06-ci-integration
+  "07": 07-playwright-dogfood
 
 # Visual source mapping
 # 01, 03: Manim animations (architecture overview, wizard GUI walkthrough)
 # 02, 04, 05, 06: VHS terminal recordings (live docgen commands)
+# 07: playwright_test — pre-recorded WebM (dogfood; pipeline skips Manim/VHS capture for this id)
 visual_map:
   "01":
     type: manim
@@ -62,6 +90,10 @@ visual_map:
     type: vhs
     tape: 06-ci-integration.tape
     source: 06-ci-integration.mp4
+  "07":
+    type: playwright_test
+    test: dogfood/playwright_mux_placeholder.spec.ts
+    source: 07-playwright-dogfood.webm
 
 manim:
   quality: 720p30
@@ -129,6 +161,9 @@ pages:
     "06":
       title: "CI Integration"
       description: "Pre-push hooks and GitHub Actions for continuous validation."
+    "07":
+      title: "Playwright visual mux (dogfood)"
+      description: "Pre-recorded browser-style footage composed like Manim/VHS segments."
 
 wizard:
   llm_model: gpt-4o

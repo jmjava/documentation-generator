@@ -2,7 +2,7 @@
 
 **Upstream** here means a **separate repository** (application, course, or sample repo) that installs **docgen as a dependency** (`pip install docgen` or `pip install "docgen @ git+https://…"`), not the in-tree **`docs/demos`** path. Goal: prove the **library + CLI + CI contracts** work for a real consumer and capture friction for fixes here.
 
-Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/demos` full run).
+Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/demos` full run). The maintainer-facing command sequence for that tree lives in **`docs/demos/README.md`**.
 
 **Designated consumer repo:** **`courseforge/course-builder`** — local clone: **`/home/ubuntu/github/courseforge/course-builder`**. All upstream dogfood work lands there; friction feeds back here.
 

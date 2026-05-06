@@ -118,6 +118,8 @@ class VHSRunner:
         tape: str | None = None,
         strict: bool = False,
         timeout_sec: int | None = None,
+        *,
+        tapes: list[str] | None = None,
     ) -> list[VHSResult]:
         terminal_dir = self.config.terminal_dir
         if not terminal_dir.exists():
@@ -125,11 +127,19 @@ class VHSRunner:
             return []
 
         if tape:
-            tapes = [terminal_dir / tape] if (terminal_dir / tape).exists() else list(
+            tapes_paths = [terminal_dir / tape] if (terminal_dir / tape).exists() else list(
                 terminal_dir.glob(f"*{tape}*")
             )
+        elif tapes is not None:
+            tapes_paths = []
+            for name in tapes:
+                path = terminal_dir / name
+                if path.exists():
+                    tapes_paths.append(path)
+                else:
+                    tapes_paths.extend(sorted(terminal_dir.glob(f"*{name}*")))
         else:
-            tapes = sorted(terminal_dir.glob("*.tape"))
+            tapes_paths = sorted(terminal_dir.glob("*.tape"))
 
         results: list[VHSResult] = []
         effective_timeout = timeout_sec
@@ -139,7 +149,7 @@ class VHSRunner:
                 if self.render_timeout_sec is not None
                 else self.config.vhs_render_timeout_sec
             )
-        for t in tapes:
+        for t in tapes_paths:
             results.append(self._render_one(t, strict, effective_timeout))
         return results
 

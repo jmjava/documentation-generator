@@ -22,7 +22,7 @@ def _patch_pipeline_stages(monkeypatch, composer_cls, calls: list[str]) -> None:
         def __init__(self, _config) -> None:
             pass
 
-        def render(self, scene=None) -> None:
+        def render(self, scenes=None, *, scene=None) -> None:
             calls.append("manim")
 
     class FakeValidator:
@@ -92,6 +92,8 @@ def test_retry_manim_after_freeze_guard(tmp_path, monkeypatch) -> None:
         animations_dir=animations_dir,
         segments_all=["01"],
         sync_vhs_after_timestamps=False,
+        pipeline_manim_scene_names=lambda: ["Scene01"],
+        pipeline_vhs_tape_filenames=lambda: [],
     )
 
     Pipeline(cfg).run(skip_tts=True, skip_vhs=True, retry_manim_on_freeze=True)
@@ -122,6 +124,8 @@ def test_no_retry_when_flag_disabled(tmp_path, monkeypatch) -> None:
         animations_dir=animations_dir,
         segments_all=["01"],
         sync_vhs_after_timestamps=False,
+        pipeline_manim_scene_names=lambda: ["Scene01"],
+        pipeline_vhs_tape_filenames=lambda: [],
     )
 
     with pytest.raises(ComposeError, match="FREEZE GUARD"):

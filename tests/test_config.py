@@ -213,3 +213,42 @@ def test_discover_tests_scan_roots_monorepo(tmp_path):
     (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
     c = Config.from_yaml(tmp_path / "docgen.yaml")
     assert c.discover_tests_scan_roots == [tmp_path.resolve(), apps.resolve()]
+
+
+def test_pipeline_manim_scene_names_from_visual_map(tmp_path):
+    cfg = {
+        "segments": {"all": ["01", "07", "03"]},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "OverviewScene"},
+            "03": {"type": "manim", "scene": "WizardScene"},
+            "07": {"type": "playwright_test", "test": "e/x.spec.ts", "source": "v.webm"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.pipeline_manim_scene_names() == ["OverviewScene", "WizardScene"]
+
+
+def test_pipeline_vhs_tape_filenames_from_visual_map(tmp_path):
+    cfg = {
+        "segments": {"all": ["02", "07"]},
+        "visual_map": {
+            "02": {"type": "vhs", "tape": "02-init.tape", "source": "02-init.mp4"},
+            "07": {"type": "playwright_test", "test": "e/x.spec.ts", "source": "v.webm"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.pipeline_vhs_tape_filenames() == ["02-init.tape"]
+
+
+def test_pipeline_vhs_tape_derives_from_source_when_tape_missing(tmp_path):
+    cfg = {
+        "segments": {"all": ["02"]},
+        "visual_map": {
+            "02": {"type": "vhs", "source": "foo-bar.mp4"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.pipeline_vhs_tape_filenames() == ["foo-bar.tape"]

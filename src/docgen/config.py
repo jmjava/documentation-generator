@@ -57,6 +57,40 @@ class Config:
     def visual_map(self) -> dict[str, Any]:
         return self.raw.get("visual_map", {})
 
+    def pipeline_manim_scene_names(self) -> list[str]:
+        """Scene class names for ``segments.all`` entries whose ``visual_map`` type is ``manim``."""
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for seg_id in self.segments_all:
+            vm = self.visual_map.get(seg_id)
+            if not isinstance(vm, dict):
+                continue
+            if str(vm.get("type", "")).lower() != "manim":
+                continue
+            scene = str(vm.get("scene", "")).strip()
+            if scene and scene not in seen:
+                seen.add(scene)
+                ordered.append(scene)
+        return ordered
+
+    def pipeline_vhs_tape_filenames(self) -> list[str]:
+        """Tape filenames for ``segments.all`` entries whose ``visual_map`` type is ``vhs``."""
+        ordered: list[str] = []
+        for seg_id in self.segments_all:
+            vm = self.visual_map.get(seg_id)
+            if not isinstance(vm, dict):
+                continue
+            if str(vm.get("type", "")).lower() != "vhs":
+                continue
+            tape = str(vm.get("tape", "")).strip()
+            if not tape:
+                src = str(vm.get("source", "")).strip()
+                if src:
+                    tape = f"{Path(src).stem}.tape"
+            if tape:
+                ordered.append(tape)
+        return ordered
+
     @property
     def concat_map(self) -> dict[str, list[str]]:
         return self.raw.get("concat", {})

@@ -47,8 +47,8 @@ Use this as a working checklist; reorder within a phase as dependencies land.
 
 - [ ] Implement runner: invoke tests with video + trace per segment (or consume CI-produced artifacts via paths in `docgen.yaml`)
 - [x] `compose.py`: handle `vtype == "playwright_test"` — mux pre-recorded `source` with segment audio (`repo_root` path first, then `terminal/rendered/`). **Retiming from `sync_map` not implemented yet** (prints NOTE when sync_map present).
-- [ ] `pipeline.py`: run Playwright-test stages when `visual_map` contains `playwright_test`
-- [ ] Dogfood: one `visual_map` entry in this repo or `examples/` when stable
+- [x] `pipeline.py`: Manim/VHS capture stages only render scenes/tapes referenced by `visual_map` for active `segments.all`; `playwright_test` segments rely on pre-recorded video (no Manim/VHS pass).
+- [x] Dogfood: `docs/demos` includes segment **07** (`playwright_test`) with checked-in WebM under `terminal/rendered/`.
 - [ ] Re-run / extend existing validator tests (`tests/test_validate_playwright.py`) against real-shaped artifacts
 
 ---
