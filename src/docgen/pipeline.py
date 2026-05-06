@@ -1,4 +1,10 @@
-"""Pipeline orchestrator: tts -> manim -> vhs -> compose -> validate -> concat -> pages."""
+"""Pipeline orchestrator: tts -> manim -> vhs -> compose -> validate -> concat -> pages.
+
+Manim and VHS stages render only scenes/tapes referenced by ``visual_map`` for active
+``segments.all`` entries (see :meth:`docgen.config.Config.pipeline_manim_scene_names` and
+:meth:`~docgen.config.Config.pipeline_vhs_tape_filenames`). Segments whose visuals are
+``playwright_test`` use pre-recorded files and do not run through Manim or VHS capture here.
+"""
 
 from __future__ import annotations
 
@@ -36,17 +42,25 @@ class Pipeline:
             TapeSynchronizer(self.config).sync()
 
         if not skip_manim:
-            print("\n=== Stage: Manim ===")
-            from docgen.manim_runner import ManimRunner
-            ManimRunner(self.config).render()
+            scene_list = self.config.pipeline_manim_scene_names()
+            if scene_list:
+                print("\n=== Stage: Manim ===")
+                from docgen.manim_runner import ManimRunner
+                ManimRunner(self.config).render(scenes=scene_list)
+            else:
+                print("\n=== Stage: Manim (skipped — no manim segments in visual_map) ===")
 
         if not skip_vhs:
-            print("\n=== Stage: VHS ===")
-            from docgen.vhs import VHSRunner
-            results = VHSRunner(self.config).render()
-            for r in results:
-                if not r.success:
-                    print(f"  WARNING: {r.tape} had errors: {r.errors}")
+            tape_list = self.config.pipeline_vhs_tape_filenames()
+            if tape_list:
+                print("\n=== Stage: VHS ===")
+                from docgen.vhs import VHSRunner
+                results = VHSRunner(self.config).render(tapes=tape_list)
+                for r in results:
+                    if not r.success:
+                        print(f"  WARNING: {r.tape} had errors: {r.errors}")
+            else:
+                print("\n=== Stage: VHS (skipped — no vhs segments in visual_map) ===")
 
         print("\n=== Stage: Compose ===")
         from docgen.compose import ComposeError, Composer
@@ -57,9 +71,11 @@ class Pipeline:
             if self._should_retry_manim(exc, skip_manim, retry_manim_on_freeze):
                 print("\n=== Compose FREEZE GUARD detected; retrying Manim + compose once ===")
                 self._clear_manim_media_cache()
-                print("\n=== Stage: Manim (retry) ===")
-                from docgen.manim_runner import ManimRunner
-                ManimRunner(self.config).render()
+                scene_list = self.config.pipeline_manim_scene_names()
+                if scene_list:
+                    print("\n=== Stage: Manim (retry) ===")
+                    from docgen.manim_runner import ManimRunner
+                    ManimRunner(self.config).render(scenes=scene_list)
                 print("\n=== Stage: Compose (retry) ===")
                 composer.compose_segments(self.config.segments_all)
             else:

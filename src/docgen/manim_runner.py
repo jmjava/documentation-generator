@@ -17,9 +17,25 @@ class ManimRunner:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def render(self, scene: str | None = None) -> None:
-        scenes = [scene] if scene else self.config.manim_scenes
-        if not scenes:
+    def render(
+        self,
+        scenes: list[str] | None = None,
+        *,
+        scene: str | None = None,
+    ) -> None:
+        """Render Manim scenes.
+
+        * ``scene=`` — single scene (CLI / wizard).
+        * ``scenes=`` — explicit list (pipeline uses :meth:`Config.pipeline_manim_scene_names`).
+        * Otherwise — ``config.manim`` ``scenes:`` list (legacy).
+        """
+        if scene is not None:
+            to_render = [scene]
+        elif scenes is not None:
+            to_render = scenes
+        else:
+            to_render = self.config.manim_scenes
+        if not to_render:
             print("[manim] No scenes configured")
             return
 
@@ -37,7 +53,7 @@ class ManimRunner:
 
         font = self.config.manim_font
         print(f"[manim] Rendering at {quality_label}, font={font}")
-        for s in scenes:
+        for s in to_render:
             self._render_one(manim_bin, scenes_file, s, quality_args)
 
     def _check_font(self) -> None:
