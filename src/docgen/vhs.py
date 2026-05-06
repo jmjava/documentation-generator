@@ -217,7 +217,7 @@ class VHSRunner:
         if venv_bin and venv_bin not in seen:
             clean_path_parts.insert(0, venv_bin)
 
-        env = {
+        env: dict[str, str] = {
             "PATH": os.pathsep.join(clean_path_parts),
             "HOME": fake_home,
             "PS1": "$ ",
@@ -225,6 +225,14 @@ class VHSRunner:
             "LANG": os.environ.get("LANG", "C.UTF-8"),
             "USER": os.environ.get("USER", "user"),
         }
+        # CI often runs `xvfb-run -a pytest …`; the runner has DISPLAY but we must not drop it
+        # or VHS subprocesses see no display while _vhs_subprocess_argv skips inner xvfb-run.
+        dpy = (os.environ.get("DISPLAY") or "").strip()
+        if dpy:
+            env["DISPLAY"] = dpy
+        xauth = (os.environ.get("XAUTHORITY") or "").strip()
+        if xauth:
+            env["XAUTHORITY"] = xauth
         return env
 
     def _render_one(self, tape_path: Path, strict: bool, timeout_sec: int) -> VHSResult:
@@ -278,6 +286,10 @@ class VHSRunner:
             err_tail = (proc.stderr or "").strip()
             if err_tail:
                 errors.append(f"stderr (tail): {err_tail[-800:]}")
+            else:
+                out_tail = (proc.stdout or "").strip()
+                if out_tail:
+                    errors.append(f"stdout (tail): {out_tail[-800:]}")
         elapsed = time.monotonic() - start
         print(f"[vhs] Finished {tape_path.name} in {elapsed:.1f}s")
 
