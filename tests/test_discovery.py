@@ -92,7 +92,7 @@ def test_discover_tests_json_stdout_is_pure_when_no_tests(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     with patch("docgen.test_discovery.discover_all_node_playwright_tests", return_value=[]):
         r = runner.invoke(
             main,
