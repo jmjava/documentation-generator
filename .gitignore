@@ -24,6 +24,9 @@ Thumbs.db
 
 .pytest_cache/
 tests/.bin-cache/
+
+# Node fixture for Playwright discovery dogfood (fixtures/playwright-vite-dogfood)
+fixtures/playwright-vite-dogfood/node_modules/
 .coverage
 htmlcov/
 .mypy_cache/

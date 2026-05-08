@@ -64,6 +64,43 @@ jobs:
       # VHS terminal capture needs a DISPLAY (headless Ubuntu has none by default).
       - run: xvfb-run -a pytest tests/ --ignore=tests/e2e -v --tb=short
 
+  playwright-vite-dogfood:
+    name: Playwright Vite dogfood fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: fixtures/playwright-vite-dogfood/package-lock.json
+      - name: Install fixture deps + Playwright (Chromium)
+        working-directory: fixtures/playwright-vite-dogfood
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run Playwright tests against Vite dev server
+        working-directory: fixtures/playwright-vite-dogfood
+        env:
+          CI: "1"
+        run: npm run test:e2e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install docgen (CLI)
+        run: pip install --no-cache-dir .
+      - name: docgen discover-tests includes fixture spec
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          set -euo pipefail
+          cd docs/demos
+          docgen --config docgen.yaml discover-tests --format=json | python3 -c "import json,sys; r=sys.stdin.read().strip(); \
+            assert r, 'empty stdout from discover-tests'; \
+            d=json.loads(r); \
+            assert len(d)>=1, d; \
+            assert any('smoke.spec.ts' in (x.get('spec_path') or '') for x in d), d"
+
   smoke:
     name: smoke (config + lint + tts dry-run)
     runs-on: ubuntu-latest
