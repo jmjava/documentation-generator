@@ -56,7 +56,7 @@ Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/de
 
 Shipped on **`courseforge/course-builder`**:
 
-- **`docgen-generate-demos.yml`** — **`workflow_dispatch`** always runs **`docgen generate-all`** (with **`--skip-tts`** if **`OPENAI_API_KEY`** is unset); **push to `main`** on narration/animations/catalog paths runs the same when **`needs_regen`** from the reusable workflow is **`true`**. After a stale-driven run, the workflow **refreshes and commits** **`docgen.catalog.yaml`** so the stale gate clears. **Artifacts** upload **`docs/demos/recordings`** and **`docs/demos/audio`**.
+- **`docgen-generate-demos.yml`** — **`workflow_dispatch`** always runs **`docgen generate-all`** (requires **`OPENAI_API_KEY`** repository secret; fails fast if missing). **Push to `main`** on narration/animations/catalog paths runs the same when **`needs_regen`** from the reusable workflow is **`true`**. After a stale-driven run, the workflow **refreshes and commits** **`docgen.catalog.yaml`** so the stale gate clears. **Artifacts** upload **`docs/demos/recordings`** and **`docs/demos/audio`**.
 - **`pages.yml`** — **push** re-enabled for **`docs/demos/recordings/**`**, **`docs/index.html`**, and the workflow file (narrow paths).
 
 In **`documentation-generator`**: **`reusable-docgen-catalog.yml`** now exposes **`needs_regen`** to callers (``workflow_call`` outputs).
