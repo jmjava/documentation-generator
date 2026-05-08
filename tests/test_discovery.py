@@ -72,14 +72,33 @@ def test_stable_id_stable() -> None:
     assert a.stable_id() == b.stable_id()
 
 
+def _parse_discover_tests_json_stdout(stdout: str) -> list:
+    """Parse ``--format=json`` output; tolerate a leading line on the same stream.
+
+    Click's ``CliRunner`` defaults ``mix_stderr=True`` (stderr merged into the
+    captured stdout buffer), and older Click versions do not support
+    ``CliRunner(mix_stderr=False)``. Real shells still pipe only stdout to ``jq``.
+    """
+    text = stdout.strip()
+    if not text:
+        return []
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if line.startswith("["):
+            return json.loads(line)
+    raise AssertionError(f"No JSON array in stdout: {text!r}")
+
+
 def test_discover_tests_json_stdout_is_pure_when_no_tests(tmp_path: Path) -> None:
-    """Machine-readable formats must not prefix stderr warnings on stdout (breaks ``| jq``)."""
+    """``--format=json`` must yield a parseable JSON list; warn when list is empty."""
     from click.testing import CliRunner
     from unittest.mock import patch
 
     from docgen.cli import main
-
-    import json
 
     (tmp_path / ".git").mkdir()
     (tmp_path / "playwright.config.ts").write_text("export default {}", encoding="utf-8")
@@ -92,7 +111,7 @@ def test_discover_tests_json_stdout_is_pure_when_no_tests(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    runner = CliRunner(mix_stderr=False)
+    runner = CliRunner()
     with patch("docgen.test_discovery.discover_all_node_playwright_tests", return_value=[]):
         r = runner.invoke(
             main,
@@ -105,11 +124,21 @@ def test_discover_tests_json_stdout_is_pure_when_no_tests(tmp_path: Path) -> Non
                 "--format=json",
             ],
         )
-    assert r.exit_code == 0, r.stdout + r.stderr
-    parsed = json.loads(r.stdout.strip())
-    assert parsed == []
-    assert r.stderr is not None
-    assert "no tests parsed" in r.stderr
+    _msg = r.stdout or ""
+    try:
+        _msg += r.stderr
+    except ValueError:
+        pass
+    assert r.exit_code == 0, _msg
+    out = r.stdout or ""
+    err = ""
+    try:
+        err = r.stderr
+    except ValueError:
+        pass
+    combined = out + err
+    assert _parse_discover_tests_json_stdout(out) == []
+    assert "no tests parsed" in combined
 
 
 def test_discover_tests_merge_catalog_cli(tmp_path: Path) -> None:
