@@ -202,8 +202,9 @@ the docs-site analogue of a single Playwright `test('…')` describing one
 behavior. Inputs are declarative: either a `*.docgen.yaml` sidecar or a
 `@pytest.mark.docgen(...)` decorator on a Python test (read statically via
 `ast` — never imported / `exec`'d). Outputs are five files in `--output-dir`:
-`rendered.mp4` (real ISO MP4), `poster.png`, `fragment.txt` (`fn-<slug>`),
-`manifest.json` (snapshot), and `cache-status.txt` (`hit` / `miss`).
+`rendered.mp4` (real ISO MP4 with audio), `poster.png`, `fragment.txt`
+(`fn-<slug>`), `manifest.json` (snapshot, includes captured action `timeline`),
+and `cache-status.txt` (`hit` / `miss`).
 
 ```bash
 docgen demo-function \
@@ -212,14 +213,41 @@ docgen demo-function \
   --cache-dir /tmp/docgen-cache
 ```
 
-Exit codes: `0` success, `1` invalid manifest / render failure, `2` missing
-`ffmpeg` / `playwright`, `78` neutral skip (placeholder manifest with no
-`url` — useful in CI). When `OPENAI_API_KEY` is set, the intent line is
-narrated via `gpt-4o-mini-tts` and muxed onto the video; pass
-`--no-narration` to skip TTS even if the key is set. See
-[`examples/lesson_compile.docgen.yaml`](examples/lesson_compile.docgen.yaml)
+**Manifest highlights** — see
+[`docs/demo-function.md`](docs/demo-function.md) for the full reference
+(manifest schema, action kinds, timeline shape, caching semantics):
+
+- `demonstration.actions[*].say` — narration sentence spoken at the moment
+  the action runs. When set, the renderer captures wall-clock timestamps
+  during the Playwright recording, sends each `say` through OpenAI
+  `gpt-4o-mini-tts`, and **mixes the resulting clips back onto the slowed
+  video at their captured times** (with caption burn-in synced to match).
+  Omit `say` on an action to fall back to single-clip narration of the
+  manifest `intent`.
+- `output_budget.playback_speed_factor` (default `1.0`, range `[0.25, 4.0]`)
+  — post-capture retiming via ffmpeg `setpts`. `0.5` = half speed (clip
+  becomes 2× longer); `2.0` = double speed. Slowdown extends the trim cap
+  proportionally so slowed clips are not chopped in half.
+
+**Narration is required by default.** Without `OPENAI_API_KEY`, the renderer
+**fails fast with `EXIT_TOOLING_MISSING` (exit 2)** — no silent demos
+masquerading as complete artifacts. To explicitly opt into a visual-only
+clip, pass `--no-narration`.
+
+**Exit codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `EXIT_OK` | success |
+| `1` | `EXIT_INVALID` | invalid manifest / render failure / transient TTS network error |
+| `2` | `EXIT_TOOLING_MISSING` | missing `ffmpeg` / `playwright` / Chromium / `OPENAI_API_KEY` (or key rejected by OpenAI) |
+| `78` | `EXIT_NEUTRAL_SKIP` | placeholder manifest (no `url`) — useful in CI |
+
+See [`examples/lesson_compile.docgen.yaml`](examples/lesson_compile.docgen.yaml)
 and [`examples/sample_test.py`](examples/sample_test.py) for both input
-shapes.
+shapes; [`tests/e2e/test_demo_function_e2e.py`](tests/e2e/test_demo_function_e2e.py)
+is the canonical end-to-end test that drives a real Chromium recording with
+per-action narration synced to the captured timeline.
 
 ### VHS safety: avoid real long-running commands in tapes
 

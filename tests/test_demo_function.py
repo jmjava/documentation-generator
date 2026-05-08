@@ -493,8 +493,12 @@ def test_render_cli_kind_emits_artifacts(tmp_path: Path, monkeypatch) -> None:
         assert (out2 / name).exists()
 
 
-def test_render_warns_when_openai_key_missing(tmp_path: Path, monkeypatch, capsys) -> None:
-    """No OPENAI_API_KEY → warning + visual-only video."""
+def test_render_fails_when_openai_key_missing(tmp_path: Path, monkeypatch) -> None:
+    """No ``OPENAI_API_KEY`` and no ``--no-narration`` → hard fail.
+
+    Refuses to emit a silent demo masquerading as a complete artifact;
+    callers must explicitly opt in via ``no_narration=True``.
+    """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     tape = tmp_path / "demo.tape"
     tape.write_text(
@@ -508,18 +512,68 @@ def test_render_warns_when_openai_key_missing(tmp_path: Path, monkeypatch, capsy
     manifest_path = tmp_path / "m.docgen.yaml"
     manifest_path.write_text(
         _yaml_manifest_text(
-            demonstration={
-                "kind": "cli",
-                "tape": "demo.tape",
-            },
+            demonstration={"kind": "cli", "tape": "demo.tape"},
             output_budget={"duration_seconds": 1, "resolution": "320x240"},
         ),
         encoding="utf-8",
     )
     m = load_manifest(manifest_path)
-    df.render(m, tmp_path / "out", no_narration=False)
+    with pytest.raises(df.ToolingMissingError, match=r"OPENAI_API_KEY"):
+        df.render(m, tmp_path / "out", no_narration=False)
+
+
+def test_render_no_narration_opt_in_emits_silent_clip(tmp_path: Path, monkeypatch) -> None:
+    """``no_narration=True`` is the explicit silent-clip opt-in (no key needed)."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    tape = tmp_path / "demo.tape"
+    tape.write_text(
+        'Output rendered/cli-demo.mp4\n'
+        "Set Shell bash\n"
+        "Set Width 320\n"
+        "Set Height 240\n"
+        "Sleep 300ms\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "m.docgen.yaml"
+    manifest_path.write_text(
+        _yaml_manifest_text(
+            demonstration={"kind": "cli", "tape": "demo.tape"},
+            output_budget={"duration_seconds": 1, "resolution": "320x240"},
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(manifest_path)
+    out_dir = tmp_path / "out"
+    df.render(m, out_dir, no_narration=True)
+    assert (out_dir / "rendered.mp4").exists()
+    snapshot = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert snapshot["narration"] is None
+
+
+def test_run_cli_returns_tooling_missing_when_no_key(tmp_path: Path, monkeypatch, capsys) -> None:
+    """CLI surfaces missing ``OPENAI_API_KEY`` as ``EXIT_TOOLING_MISSING``."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    tape = tmp_path / "demo.tape"
+    tape.write_text(
+        'Output rendered/cli-demo.mp4\n'
+        "Set Shell bash\n"
+        "Set Width 320\n"
+        "Set Height 240\n"
+        "Sleep 200ms\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "m.docgen.yaml"
+    manifest_path.write_text(
+        _yaml_manifest_text(
+            demonstration={"kind": "cli", "tape": "demo.tape"},
+            output_budget={"duration_seconds": 1, "resolution": "320x240"},
+        ),
+        encoding="utf-8",
+    )
+    code = run_cli(str(manifest_path), str(tmp_path / "out"), no_narration=False)
+    assert code == df.EXIT_TOOLING_MISSING
     err = capsys.readouterr().err
-    assert "OPENAI_API_KEY not set" in err
+    assert "OPENAI_API_KEY" in err
 
 
 # ---------------------------------------------------------------------------
@@ -735,3 +789,323 @@ def test_run_cli_passes_grep_to_ts_manifest(tmp_path: Path) -> None:
         code = run_cli(str(spec), str(tmp_path / "out"), grep="pick me", no_narration=True)
     assert code == df.EXIT_INVALID
     lm.assert_called_once_with(str(spec), grep="pick me")
+
+
+# ---------------------------------------------------------------------------
+# playback_speed_factor: parsing, validation, cache key
+# ---------------------------------------------------------------------------
+
+
+def test_playback_speed_factor_default_is_one() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "url": "http://x"},
+    }
+    m = _coerce(raw)
+    assert m.playback_speed_factor == df.DEFAULT_PLAYBACK_SPEED_FACTOR == 1.0
+
+
+def test_playback_speed_factor_parses_float() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "url": "http://x"},
+        "output_budget": {"playback_speed_factor": 0.5},
+    }
+    m = _coerce(raw)
+    assert m.playback_speed_factor == 0.5
+
+
+def test_playback_speed_factor_rejects_out_of_range() -> None:
+    base = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "url": "http://x"},
+    }
+    too_low = dict(base, output_budget={"playback_speed_factor": 0.0})
+    with pytest.raises(ManifestError, match="playback_speed_factor"):
+        _coerce(too_low)
+    too_high = dict(
+        base,
+        output_budget={"playback_speed_factor": df.MAX_PLAYBACK_SPEED_FACTOR + 1},
+    )
+    with pytest.raises(ManifestError, match="playback_speed_factor"):
+        _coerce(too_high)
+
+
+def test_playback_speed_factor_rejects_non_numeric() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "url": "http://x"},
+        "output_budget": {"playback_speed_factor": "slow"},
+    }
+    with pytest.raises(ManifestError, match="must be a number"):
+        _coerce(raw)
+
+
+def test_cache_key_changes_with_playback_speed_factor(tmp_path: Path) -> None:
+    src = tmp_path / "source.txt"
+    src.write_text("fn", encoding="utf-8")
+    base = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {"kind": "playwright", "url": "http://x"},
+    }
+    m1 = _coerce(base, source_path=src)
+    m2 = _coerce(
+        dict(base, output_budget={"playback_speed_factor": 0.5}),
+        source_path=src,
+    )
+    assert m1.cache_key != m2.cache_key
+
+
+# ---------------------------------------------------------------------------
+# Action.say: parsing, cache invalidation
+# ---------------------------------------------------------------------------
+
+
+def test_action_say_field_parses() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {
+            "kind": "playwright",
+            "url": "http://x",
+            "actions": [
+                {"kind": "click", "selector": "#go", "say": "Click the button."},
+                {"kind": "wait", "ms": 250},
+            ],
+        },
+    }
+    m = _coerce(raw)
+    assert m.actions[0].say == "Click the button."
+    assert m.actions[1].say is None
+
+
+def test_action_say_rejects_non_string() -> None:
+    raw = {
+        "identifier": "x:y",
+        "intent": "z",
+        "demonstration": {
+            "kind": "playwright",
+            "url": "http://x",
+            "actions": [{"kind": "click", "selector": "#go", "say": 42}],
+        },
+    }
+    with pytest.raises(ManifestError, match="action.say must be a string"):
+        _coerce(raw)
+
+
+def test_cache_key_changes_with_action_say(tmp_path: Path) -> None:
+    """When the manifest is the canonical source, adding ``say`` to an action
+    must change the cache key (the YAML on disk changes, so its bytes hash
+    changes too)."""
+    base_yaml = _yaml_manifest_text(
+        demonstration={
+            "kind": "playwright",
+            "url": "http://x",
+            "actions": [{"kind": "click", "selector": "#go"}],
+        },
+    )
+    say_yaml = _yaml_manifest_text(
+        demonstration={
+            "kind": "playwright",
+            "url": "http://x",
+            "actions": [{"kind": "click", "selector": "#go", "say": "Hi."}],
+        },
+    )
+    p1 = tmp_path / "no_say.docgen.yaml"
+    p1.write_text(base_yaml, encoding="utf-8")
+    p2 = tmp_path / "with_say.docgen.yaml"
+    p2.write_text(say_yaml, encoding="utf-8")
+
+    m_no_say = load_manifest(p1)
+    m_say = load_manifest(p2)
+    assert m_no_say.cache_key != m_say.cache_key
+
+
+# ---------------------------------------------------------------------------
+# Timeline → WebVTT: scaled cue timestamps
+# ---------------------------------------------------------------------------
+
+
+def test_vtt_from_timeline_scales_with_speed_factor() -> None:
+    timeline = [
+        {"kind": "click", "say": "First.", "t_start_ms": 1000, "t_end_ms": 1100},
+        {"kind": "click", "say": "Second.", "t_start_ms": 3000, "t_end_ms": 3100},
+    ]
+    full_speed = df._vtt_from_timeline(timeline, speed_factor=1.0, total_sec=10.0)
+    assert "00:00:01.000 -->" in full_speed
+    assert "00:00:03.000 -->" in full_speed
+    assert "First." in full_speed
+    assert "Second." in full_speed
+
+    half_speed = df._vtt_from_timeline(timeline, speed_factor=0.5, total_sec=10.0)
+    # at 0.5x, t=1s in recording becomes t=2s in playback.
+    assert "00:00:02.000 -->" in half_speed
+    assert "00:00:06.000 -->" in half_speed
+
+
+def test_vtt_from_timeline_skips_actions_without_say() -> None:
+    timeline = [
+        {"kind": "click", "say": None, "t_start_ms": 100, "t_end_ms": 200},
+        {"kind": "wait", "say": "spoken", "t_start_ms": 500, "t_end_ms": 600},
+    ]
+    vtt = df._vtt_from_timeline(timeline, speed_factor=1.0, total_sec=5.0)
+    assert "spoken" in vtt
+    # Only one cue → numbered "1".
+    assert vtt.count("00:00:00.500 -->") == 1
+
+
+def test_vtt_from_timeline_empty_when_no_say() -> None:
+    timeline = [{"kind": "wait", "say": None, "t_start_ms": 100, "t_end_ms": 200}]
+    vtt = df._vtt_from_timeline(timeline, speed_factor=1.0, total_sec=5.0)
+    assert vtt == "WEBVTT\n\n"
+
+
+# ---------------------------------------------------------------------------
+# _retime_video / _mux_audio_padded / _compose_action_audio: ffmpeg helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_silent_clip(path: Path, *, seconds: float, width: int = 320, height: int = 240) -> None:
+    """Generate a deterministic test MP4 (color bars + silence) via ffmpeg."""
+    import subprocess
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"color=c=blue:s={width}x{height}:d={seconds}",
+        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono:d={seconds}",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-t", str(seconds),
+        "-movflags", "+faststart",
+        str(path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr[-500:]
+
+
+def _make_silent_audio(path: Path, *, seconds: float) -> None:
+    import subprocess
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono:d={seconds}",
+        "-c:a", "libmp3lame",
+        "-t", str(seconds),
+        str(path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr[-500:]
+
+
+def test_retime_video_doubles_duration_at_half_speed(tmp_path: Path) -> None:
+    src = tmp_path / "src.mp4"
+    dst = tmp_path / "dst.mp4"
+    _make_silent_clip(src, seconds=2.0)
+    df._retime_video(src, dst, speed_factor=0.5)
+    # ffprobe duration of slowed clip should be ~2x the source.
+    src_dur = df._probe_video_duration_sec(src)
+    dst_dur = df._probe_video_duration_sec(dst)
+    assert src_dur is not None and dst_dur is not None
+    assert dst_dur == pytest.approx(src_dur * 2.0, rel=0.1)
+
+
+def test_retime_video_passthrough_at_unit_speed(tmp_path: Path) -> None:
+    src = tmp_path / "src.mp4"
+    dst = tmp_path / "dst.mp4"
+    _make_silent_clip(src, seconds=1.0)
+    df._retime_video(src, dst, speed_factor=1.0)
+    assert dst.exists()
+    src_dur = df._probe_video_duration_sec(src)
+    dst_dur = df._probe_video_duration_sec(dst)
+    assert dst_dur == pytest.approx(src_dur, rel=0.05)
+
+
+def test_retime_video_rejects_non_positive_speed(tmp_path: Path) -> None:
+    src = tmp_path / "src.mp4"
+    dst = tmp_path / "dst.mp4"
+    _make_silent_clip(src, seconds=1.0)
+    with pytest.raises(RuntimeError, match="playback_speed_factor must be > 0"):
+        df._retime_video(src, dst, speed_factor=0.0)
+
+
+def test_mux_audio_padded_keeps_video_length(tmp_path: Path) -> None:
+    """Padded mux must preserve full video duration even when audio is shorter."""
+    video = tmp_path / "video.mp4"
+    audio = tmp_path / "narration.mp3"
+    out = tmp_path / "out.mp4"
+    _make_silent_clip(video, seconds=4.0)
+    _make_silent_audio(audio, seconds=1.0)
+    df._mux_audio_padded(video, audio, out)
+    out_dur = df._probe_video_duration_sec(out)
+    assert out_dur is not None
+    # Final length matches the (longer) video, not the (shorter) audio.
+    assert out_dur == pytest.approx(4.0, abs=0.3)
+
+
+def test_compose_action_audio_pads_to_total(tmp_path: Path) -> None:
+    a1 = tmp_path / "a1.mp3"
+    a2 = tmp_path / "a2.mp3"
+    _make_silent_audio(a1, seconds=0.5)
+    _make_silent_audio(a2, seconds=0.5)
+    out = tmp_path / "narration.mp3"
+    df._compose_action_audio(
+        clips=[(a1, 0.0), (a2, 2.5)],
+        out_path=out,
+        total_sec=5.0,
+    )
+    dur = df._probe_audio_ms(out)
+    assert dur is not None
+    assert dur == pytest.approx(5000, abs=300)
+
+
+def test_compose_action_audio_single_clip_pads_to_total(tmp_path: Path) -> None:
+    a1 = tmp_path / "a1.mp3"
+    _make_silent_audio(a1, seconds=0.5)
+    out = tmp_path / "narration.mp3"
+    df._compose_action_audio(clips=[(a1, 1.0)], out_path=out, total_sec=4.0)
+    dur = df._probe_audio_ms(out)
+    assert dur is not None
+    assert dur == pytest.approx(4000, abs=300)
+
+
+# ---------------------------------------------------------------------------
+# manifest.json snapshot exposes timeline-related fields
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_includes_speed_factor_and_actions(tmp_path: Path, monkeypatch) -> None:
+    """``manifest.json`` carries playback_speed_factor + action snapshot + (empty) timeline for cli kind."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    tape = tmp_path / "demo.tape"
+    tape.write_text(
+        'Output rendered/cli-demo.mp4\n'
+        "Set Shell bash\n"
+        "Set Width 320\n"
+        "Set Height 240\n"
+        "Sleep 200ms\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "m.docgen.yaml"
+    manifest_path.write_text(
+        _yaml_manifest_text(
+            demonstration={"kind": "cli", "tape": "demo.tape"},
+            output_budget={
+                "duration_seconds": 10,
+                "resolution": "1280x720",
+                "playback_speed_factor": 0.75,
+            },
+        ),
+        encoding="utf-8",
+    )
+    m = load_manifest(manifest_path)
+    out_dir = tmp_path / "out"
+    df.render(m, out_dir, no_narration=True)
+    snapshot = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert snapshot["playback_speed_factor"] == 0.75
+    assert snapshot["actions"] == []
+    assert snapshot["timeline"] == []

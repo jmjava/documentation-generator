@@ -66,3 +66,15 @@ Still optional / later:
 1. **`discover_tests.roots`** + **`merge-on-stale: true`** when a Node **`@playwright/test`** tree lives in the repo.
 2. **Auto-commit narrated MP4s** to **`docs/demos/recordings`** from CI (today: download artifact and commit, or add a bot PR step).
 3. **Pin `docgen-git-ref`** to a SHA instead of **`main`** for reproducible CI.
+
+---
+
+## Per-function videos (`docgen demo-function`)
+
+The per-function path is the docs-site analogue of one Playwright `test('…')`. Manifest fields the consumer needs to know about:
+
+- **`actions[*].say`** — narration sentence spoken at the moment that action runs. Turn it on per action; the renderer captures wall-clock timestamps during the Playwright recording and mixes one TTS clip per `say` back onto the slowed video at the captured times. Captions are burned in at the same scaled timestamps. Omit `say` and you get single-clip narration of `intent` instead.
+- **`output_budget.playback_speed_factor`** (default `1.0`, range `[0.25, 4.0]`) — post-capture retiming. `0.7` is the sweet spot for clicks-and-types demos; `1.0` is the legacy default. The trim cap (`duration_seconds`) is automatically scaled by `1 / playback_speed_factor` so slowed clips are not chopped in half.
+- **`manifest.json` `timeline`** — captured `{kind, say, t_start_ms, t_end_ms}` per action, written on every Playwright run. Downstream consumers (e.g. `courseforge/infrastructure` aggregator) can use this to render per-action chapter markers.
+
+**Narration is required by default.** Without `OPENAI_API_KEY` set in CI secrets, `docgen demo-function` exits **`2` (`EXIT_TOOLING_MISSING`)** instead of emitting a silent video. Pass **`--no-narration`** to explicitly opt into a visual-only clip. See [`docs/demo-function.md`](../docs/demo-function.md) for the full reference and [`tests/e2e/test_demo_function_e2e.py`](../tests/e2e/test_demo_function_e2e.py) for the canonical e2e fixture.

@@ -1,0 +1,40 @@
+# Canonical demo-function fixture exercised by tests/e2e/test_demo_function_e2e.py.
+# Drives Playwright (Chromium) against the sibling demo-page.html, then renders
+# a slowed clip with per-action TTS narration. Update this fixture whenever the
+# manifest schema grows new user-facing fields, and update docs/demo-function.md
+# in the same change.
+identifier: "courseforge/course-builder/src/lesson.ts:compileLesson"
+intent: "Compile a lesson from a topic input on the Course Builder front-end."
+demonstration:
+  kind: playwright
+  # The test rewrites this URL to a `file://` pointer at the sibling demo-page.html
+  # before calling `docgen.demo_function.render`. Kept as a placeholder for clarity.
+  url: "file://__FIXTURE__/demo-page.html"
+  actions:
+    - kind: wait_for
+      selector: '[data-testid="title"]'
+      timeout_ms: 5000
+      say: "Course Builder loads with an empty lesson form."
+    - kind: click
+      selector: '[data-testid="topic"]'
+      say: "We focus the topic input."
+    - kind: type
+      selector: '[data-testid="topic"]'
+      value: "Async iterators"
+      delay_ms: 70
+      say: "And type a lesson topic — async iterators in this case."
+    - kind: click
+      selector: '[data-testid="compile"]'
+      say: "Clicking compile runs the lesson generator."
+    - kind: wait_for_text
+      selector: '[data-testid="output"]'
+      text: "Compiled lesson"
+      timeout_ms: 5000
+      say: "The compiled lesson appears in the result panel."
+    - kind: wait
+      ms: 1500
+output_budget:
+  duration_seconds: 25
+  resolution: "1280x720"
+  playback_speed_factor: 0.7
+assertions_to_surface: []

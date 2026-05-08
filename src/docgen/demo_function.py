@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -51,6 +52,15 @@ DEFAULT_DURATION_SECONDS = 30
 DEFAULT_RESOLUTION = "1280x720"
 RESOLUTION_RE = re.compile(r"^\d+x\d+$")
 FRAGMENT_PREFIX_RE = re.compile(r"^fn-[a-z0-9-]+$")
+
+# `output_budget.playback_speed_factor`: post-capture retiming via ffmpeg setpts.
+# <1.0 slows the visual (longer duration), >1.0 speeds it up. Audio is NOT stretched —
+# narration plays at natural pace and is padded with trailing silence to match the
+# retimed video length, so a slowed Playwright capture stays legible while the
+# one-line TTS summary still lands without distortion.
+DEFAULT_PLAYBACK_SPEED_FACTOR = 1.0
+MIN_PLAYBACK_SPEED_FACTOR = 0.25
+MAX_PLAYBACK_SPEED_FACTOR = 4.0
 
 SUPPORTED_ACTION_KINDS = (
     "goto",
@@ -101,11 +111,17 @@ class Action:
     """One declarative browser action.
 
     `kind` is one of `SUPPORTED_ACTION_KINDS`. `params` carries the rest of
-    the YAML mapping for the action (selector, value, ms, etc.).
+    the YAML mapping for the action (selector, value, ms, etc.). `say`
+    (optional) is the narration sentence spoken aloud at the moment this
+    action runs — when any action has ``say``, the renderer composes one
+    TTS clip per action, places each at its captured timestamp, and burns
+    a caption at the matching moment instead of evenly spreading
+    ``assertions_to_surface`` across the clip.
     """
 
     kind: str
     params: dict[str, Any] = field(default_factory=dict)
+    say: str | None = None
 
     @classmethod
     def from_mapping(cls, raw: Any) -> "Action":
@@ -119,8 +135,18 @@ class Action:
             raise ManifestError(
                 f"unsupported action kind: '{kind}' (supported: {supported})"
             )
-        params = {k: v for k, v in raw.items() if k != "kind"}
-        return cls(kind=kind, params=params)
+        say_raw = raw.get("say")
+        say: str | None = None
+        if say_raw is not None:
+            if not isinstance(say_raw, str):
+                raise ManifestError(
+                    f"action.say must be a string, got: {type(say_raw).__name__}"
+                )
+            say_stripped = say_raw.strip()
+            if say_stripped:
+                say = say_stripped
+        params = {k: v for k, v in raw.items() if k not in {"kind", "say"}}
+        return cls(kind=kind, params=params, say=say)
 
 
 @dataclass
@@ -136,6 +162,7 @@ class Manifest:
     assertions_to_surface: list[str] = field(default_factory=list)
     duration_seconds: int = DEFAULT_DURATION_SECONDS
     resolution: str = DEFAULT_RESOLUTION
+    playback_speed_factor: float = DEFAULT_PLAYBACK_SPEED_FACTOR
     source_path: Path | None = None
     # File whose bytes define the demo "function" for caching (spec, tape, or manifest).
     fn_source_path: Path | None = None
@@ -190,6 +217,8 @@ class Manifest:
         h.update(intent_sha.encode("ascii"))
         h.update(b"\x00")
         h.update(fixture_sha.encode("ascii"))
+        h.update(b"\x00")
+        h.update(f"speed={self.playback_speed_factor:.6f}".encode("ascii"))
         return h.hexdigest()[:16]
 
     def _read_fixture_bytes(self, fixture: str) -> bytes | None:
@@ -779,6 +808,19 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
             f"output_budget.resolution must match WxH (e.g. 1280x720), got: '{resolution}'"
         )
 
+    speed_raw = output_budget.get("playback_speed_factor", DEFAULT_PLAYBACK_SPEED_FACTOR)
+    try:
+        speed_factor = float(speed_raw)
+    except (TypeError, ValueError) as exc:
+        raise ManifestError(
+            f"output_budget.playback_speed_factor must be a number, got: {speed_raw!r}"
+        ) from exc
+    if not (MIN_PLAYBACK_SPEED_FACTOR <= speed_factor <= MAX_PLAYBACK_SPEED_FACTOR):
+        raise ManifestError(
+            f"output_budget.playback_speed_factor={speed_factor} outside "
+            f"[{MIN_PLAYBACK_SPEED_FACTOR}, {MAX_PLAYBACK_SPEED_FACTOR}]"
+        )
+
     fn_source_path: Path | None = source_path
     if pw_spec is not None:
         fn_source_path = pw_spec
@@ -809,6 +851,7 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
         assertions_to_surface=assertions,
         duration_seconds=duration,
         resolution=resolution,
+        playback_speed_factor=speed_factor,
         source_path=source_path,
         fn_source_path=fn_source_path,
         pw_spec=pw_spec,
@@ -1050,6 +1093,65 @@ def _mux_audio(video: Path, audio: Path, dst: Path) -> None:
         raise RuntimeError(f"ffmpeg mux failed: {proc.stderr[-400:]}")
 
 
+def _mux_audio_padded(video: Path, audio: Path, dst: Path) -> None:
+    """Mux audio over video; pad audio with trailing silence to match video length.
+
+    Used when the visual was retimed (slowed) — the one-line TTS narration plays
+    at natural pace and sits inside a longer clip, with silence after the words
+    end. Final length == video length (not ``min(video, audio)`` like
+    :func:`_mux_audio`).
+    """
+    _ensure_ffmpeg()
+    video_dur = _probe_video_duration_sec(video) or 0.0
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video),
+        "-i", str(audio),
+        "-filter_complex", "[1:a]apad[aout]",
+        "-map", "0:v",
+        "-map", "[aout]",
+        "-c:v", "copy",
+        "-c:a", "aac",
+    ]
+    if video_dur > 0:
+        cmd += ["-t", f"{video_dur:.3f}"]
+    cmd += ["-movflags", "+faststart", str(dst)]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg padded mux failed: {proc.stderr[-400:]}")
+
+
+def _retime_video(video_in: Path, video_out: Path, *, speed_factor: float) -> None:
+    """Retime video by ``speed_factor`` via ffmpeg ``setpts``.
+
+    ``speed_factor < 1.0`` slows playback (longer duration); ``> 1.0`` speeds it
+    up. Audio is dropped (``-an``) — the caller adds narration via
+    :func:`_mux_audio_padded` so the video length wins.
+    """
+    if abs(speed_factor - 1.0) < 1e-6:
+        shutil.copy2(video_in, video_out)
+        return
+    if speed_factor <= 0:
+        raise RuntimeError(f"playback_speed_factor must be > 0, got {speed_factor}")
+    _ensure_ffmpeg()
+    setpts_factor = 1.0 / float(speed_factor)
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_in),
+        "-filter:v", f"setpts={setpts_factor:.6f}*PTS",
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(video_out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg retime failed: {proc.stderr[-400:]}")
+
+
 def _probe_video_duration_sec(path: Path) -> float | None:
     _ensure_ffprobe()
     proc = subprocess.run(
@@ -1109,25 +1211,13 @@ def _video_has_audio_stream(path: Path) -> bool:
     return bool(proc.stdout.strip())
 
 
-def _burn_assertion_captions(
+def _burn_captions_from_vtt(
     video_in: Path,
     video_out: Path,
-    assertions: list[str],
-    *,
-    work_dir: Path,
+    vtt_path: Path,
 ) -> None:
-    """Overlay `assertions` as bottom subtitles (WebVTT via ffmpeg)."""
-    if not assertions:
-        shutil.copy2(video_in, video_out)
-        return
+    """Burn an existing WebVTT file as bottom subtitles via ffmpeg."""
     _ensure_ffmpeg()
-    dur = _probe_video_duration_sec(video_in) or 30.0
-    vtt_path = work_dir / "assertions.vtt"
-    vtt_path.write_text(
-        _vtt_from_assertions(assertions, total_sec=dur),
-        encoding="utf-8",
-    )
-    # Escape for ffmpeg filtergraph: colons, backslashes
     sub_path = str(vtt_path.resolve()).replace("\\", "\\\\").replace(":", "\\:")
     if _video_has_audio_stream(video_in):
         cmd = [
@@ -1152,7 +1242,153 @@ def _burn_assertion_captions(
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(
-            f"ffmpeg assertion burn-in failed: {proc.stderr[-500:]}"
+            f"ffmpeg subtitle burn-in failed: {proc.stderr[-500:]}"
+        )
+
+
+def _burn_assertion_captions(
+    video_in: Path,
+    video_out: Path,
+    assertions: list[str],
+    *,
+    work_dir: Path,
+) -> None:
+    """Overlay `assertions` as bottom subtitles (WebVTT via ffmpeg).
+
+    Used when there is no per-action timeline. Cues are spread evenly across
+    the clip — see :func:`_burn_timed_captions` for action-aligned captions.
+    """
+    if not assertions:
+        shutil.copy2(video_in, video_out)
+        return
+    dur = _probe_video_duration_sec(video_in) or 30.0
+    vtt_path = work_dir / "assertions.vtt"
+    vtt_path.write_text(
+        _vtt_from_assertions(assertions, total_sec=dur),
+        encoding="utf-8",
+    )
+    _burn_captions_from_vtt(video_in, video_out, vtt_path)
+
+
+def _vtt_from_timeline(
+    timeline: list[dict[str, Any]],
+    *,
+    speed_factor: float,
+    total_sec: float,
+) -> str:
+    """Build WebVTT cues from a captured action timeline.
+
+    Each entry is ``{kind, say, t_start_ms, t_end_ms}``. Timestamps are
+    relative to the *original* recording wall clock; we scale by
+    ``1 / speed_factor`` so cues align with the slowed playback. Each
+    captioned action is shown from its start until the next captioned
+    action (or video end), so viewers always have something on screen.
+    """
+    speed = max(speed_factor, 1e-6)
+    captioned: list[tuple[float, str]] = []
+    for entry in timeline:
+        text = entry.get("say")
+        if not text:
+            continue
+        t_start = (entry.get("t_start_ms", 0) / 1000.0) / speed
+        captioned.append((t_start, str(text)))
+    if not captioned:
+        return "WEBVTT\n\n"
+    captioned.sort(key=lambda x: x[0])
+    parts = ["WEBVTT", ""]
+
+    def fmt(ts: float) -> str:
+        ts = max(0.0, min(ts, total_sec))
+        h = int(ts // 3600)
+        m = int((ts % 3600) // 60)
+        s = ts % 60
+        return f"{h:02d}:{m:02d}:{s:06.3f}"
+
+    for i, (t_start, text) in enumerate(captioned):
+        t_end = captioned[i + 1][0] if i + 1 < len(captioned) else total_sec
+        # Cap at video end and at the next cue's start (no overlap / stacking).
+        t_end = min(t_end, total_sec)
+        # Ensure a non-zero cue duration even when actions fire back-to-back.
+        if t_end <= t_start:
+            t_end = t_start + 0.05
+        parts.append(str(i + 1))
+        parts.append(f"{fmt(t_start)} --> {fmt(t_end)}")
+        parts.append(text.replace("&", "&amp;").replace("<", "&lt;"))
+        parts.append("")
+    return "\n".join(parts) + "\n"
+
+
+def _burn_timed_captions(
+    video_in: Path,
+    video_out: Path,
+    timeline: list[dict[str, Any]],
+    *,
+    speed_factor: float,
+    work_dir: Path,
+) -> None:
+    """Burn WebVTT cues built from ``timeline`` onto ``video_in``.
+
+    Falls back to a no-op copy when no entry has ``say``.
+    """
+    if not any(entry.get("say") for entry in timeline):
+        shutil.copy2(video_in, video_out)
+        return
+    dur = _probe_video_duration_sec(video_in) or 30.0
+    vtt_text = _vtt_from_timeline(
+        timeline,
+        speed_factor=speed_factor,
+        total_sec=dur,
+    )
+    vtt_path = work_dir / "timeline.vtt"
+    vtt_path.write_text(vtt_text, encoding="utf-8")
+    _burn_captions_from_vtt(video_in, video_out, vtt_path)
+
+
+def _compose_action_audio(
+    *,
+    clips: list[tuple[Path, float]],
+    out_path: Path,
+    total_sec: float,
+) -> None:
+    """Compose per-action MP3s at given delays into one narration track.
+
+    ``clips`` is a list of ``(mp3_path, delay_seconds)``. Each clip is shifted
+    via ``adelay`` and the result mixed with ``amix``; ``apad=whole_dur`` pads
+    the tail with silence so the output is exactly ``total_sec`` seconds —
+    matching the (already-retimed) video length.
+    """
+    if not clips:
+        raise RuntimeError("no audio clips to compose")
+    _ensure_ffmpeg()
+    cmd: list[str] = ["ffmpeg", "-y"]
+    for clip_path, _ in clips:
+        cmd += ["-i", str(clip_path)]
+    filters: list[str] = []
+    labels: list[str] = []
+    for i, (_, delay_sec) in enumerate(clips):
+        delay_ms = max(0, int(round(delay_sec * 1000)))
+        filters.append(f"[{i}:a]adelay={delay_ms}|{delay_ms}[a{i}]")
+        labels.append(f"[a{i}]")
+    if len(clips) == 1:
+        filters.append(f"{labels[0]}apad=whole_dur={total_sec:.3f}[aout]")
+    else:
+        filters.append(
+            f"{''.join(labels)}amix=inputs={len(clips)}:"
+            f"duration=longest:normalize=0,"
+            f"apad=whole_dur={total_sec:.3f}[aout]"
+        )
+    cmd += [
+        "-filter_complex", ";".join(filters),
+        "-map", "[aout]",
+        "-c:a", "libmp3lame",
+        "-q:a", "4",
+        "-t", f"{total_sec:.3f}",
+        str(out_path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg audio compose failed: {proc.stderr[-500:]}"
         )
 
 
@@ -1191,6 +1427,62 @@ class NarrationResult:
     ms: int
 
 
+_TTS_INSTRUCTIONS = (
+    "You are narrating a per-function code demo. Speak in a calm, "
+    "professional tone. One sentence."
+)
+
+
+def _tts_synthesize(
+    text: str,
+    out_path: Path,
+    *,
+    voice: str,
+    model: str,
+) -> None:
+    """Low-level OpenAI TTS call: writes ``text`` as MP3 to ``out_path``.
+
+    Auth failures (invalid / revoked / scoped-out key) are re-raised as
+    :class:`ToolingMissingError` so the renderer fails fast with a clear
+    install hint instead of producing a silent video or surfacing an
+    SDK-specific exception. Other transient failures bubble up so the
+    caller can decide whether to retry.
+    """
+    import openai
+
+    client = openai.OpenAI()
+    try:
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=text,
+            instructions=_TTS_INSTRUCTIONS,
+        )
+        response.stream_to_file(str(out_path))
+    except openai.AuthenticationError as exc:
+        raise ToolingMissingError(
+            f"OpenAI rejected OPENAI_API_KEY (authentication failed): {exc}",
+            install_hint=(
+                "Set a valid OPENAI_API_KEY (export OPENAI_API_KEY=sk-...) "
+                "or pass --no-narration to opt into a silent clip."
+            ),
+        ) from exc
+    except openai.PermissionDeniedError as exc:
+        raise ToolingMissingError(
+            f"OPENAI_API_KEY lacks required permissions for "
+            f"{model}/{voice} TTS: {exc}",
+            install_hint=(
+                "Use a key whose project has access to "
+                "audio.speech.create + the requested model."
+            ),
+        ) from exc
+    except openai.APIConnectionError as exc:
+        raise RuntimeError(
+            f"OpenAI TTS network error: {exc} — re-run when connectivity is "
+            "restored, or pass --no-narration to opt into a silent clip."
+        ) from exc
+
+
 def _generate_narration(
     intent: str,
     work_dir: Path,
@@ -1198,27 +1490,68 @@ def _generate_narration(
     voice: str = "coral",
     model: str = "gpt-4o-mini-tts",
 ) -> NarrationResult:
-    """Generate narration MP3 from `intent` using the OpenAI TTS path.
+    """Generate a single-clip narration MP3 from ``intent``.
 
-    Mirrors `docgen.tts.TTSGenerator` but is self-contained — demo-function
-    runs are one-shot and don't need the segment-aware machinery.
+    Used when no action provides a ``say`` — the whole clip plays a single
+    sentence. See :func:`_generate_action_narration` for action-synced
+    narration with one TTS clip per ``actions[*].say``.
     """
-    import openai
-
     out = work_dir / "narration.mp3"
-    client = openai.OpenAI()
-    response = client.audio.speech.create(
-        model=model,
-        voice=voice,
-        input=intent,
-        instructions=(
-            "You are narrating a per-function code demo. Speak in a calm, "
-            "professional tone. One sentence."
-        ),
-    )
-    response.stream_to_file(str(out))
+    _tts_synthesize(intent, out, voice=voice, model=model)
     ms = _probe_audio_ms(out) or 0
     return NarrationResult(audio_path=out, voice=voice, model=model, ms=ms)
+
+
+def _generate_action_narration(
+    *,
+    timeline: list[dict[str, Any]],
+    work_dir: Path,
+    total_video_sec: float,
+    speed_factor: float,
+    voice: str = "coral",
+    model: str = "gpt-4o-mini-tts",
+) -> NarrationResult | None:
+    """Generate one TTS clip per captioned action and compose them in time.
+
+    Returns ``None`` when no entry has a ``say`` field. The composed track is
+    exactly ``total_video_sec`` seconds long; each per-action clip is placed
+    at ``(t_start_ms / 1000) / speed_factor`` (the recording timestamp scaled
+    onto the slowed-down playback) and the tail is padded with silence.
+    """
+    captioned: list[tuple[int, str]] = [
+        (i, str(entry["say"]))
+        for i, entry in enumerate(timeline)
+        if entry.get("say")
+    ]
+    if not captioned:
+        return None
+
+    speed = max(speed_factor, 1e-6)
+    clips_dir = work_dir / "narration_clips"
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    clips: list[tuple[Path, float]] = []
+    last_end_sec = 0.0
+    breathing_room_sec = 0.1
+    for i, text in captioned:
+        clip_path = clips_dir / f"clip_{i:03d}.mp3"
+        _tts_synthesize(text, clip_path, voice=voice, model=model)
+        clip_ms = _probe_audio_ms(clip_path) or 0
+        clip_sec = clip_ms / 1000.0
+        desired_start = (timeline[i].get("t_start_ms", 0) / 1000.0) / speed
+        # Push later clips past their predecessor's tail so concurrent ``say``
+        # narrations never overlap in the mixed audio track.
+        actual_start = max(desired_start, last_end_sec)
+        clips.append((clip_path, actual_start))
+        last_end_sec = actual_start + clip_sec + breathing_room_sec
+
+    composed = work_dir / "narration.mp3"
+    _compose_action_audio(
+        clips=clips,
+        out_path=composed,
+        total_sec=total_video_sec,
+    )
+    ms = _probe_audio_ms(composed) or int(total_video_sec * 1000)
+    return NarrationResult(audio_path=composed, voice=voice, model=model, ms=ms)
 
 
 # ---------------------------------------------------------------------------
@@ -1261,6 +1594,17 @@ def render(
             f"{manifest.identifier}"
         )
 
+    # Fail-loud key check BEFORE expensive capture/transcode work — refuse to
+    # waste a Chromium launch + ffmpeg pass on a run that will then have no
+    # narration to mux. ``--no-narration`` is the explicit silent opt-in.
+    if not no_narration and not os.environ.get("OPENAI_API_KEY", "").strip():
+        raise ToolingMissingError(
+            "OPENAI_API_KEY is not set — refusing to emit a silent "
+            "demo. Set the key to generate narration, or pass "
+            "--no-narration to explicitly opt into a visual-only clip.",
+            install_hint="export OPENAI_API_KEY=sk-...",
+        )
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cache_key = manifest.cache_key
@@ -1287,6 +1631,8 @@ def render(
         tmp_path = Path(tmp)
         _stage_fixtures(manifest, tmp_path, stderr=stderr)
 
+        timeline_path = tmp_path / "timeline.json"
+        timeline: list[dict[str, Any]] = []
         if manifest.kind == "playwright":
             visual_mp4 = tmp_path / "visual.mp4"
             if manifest.pw_spec is not None:
@@ -1301,57 +1647,87 @@ def render(
                     output_path=visual_mp4,
                     work_dir=tmp_path,
                     stderr=stderr,
+                    timeline_path=timeline_path,
                 )
+                if timeline_path.exists():
+                    try:
+                        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        timeline = []
         elif manifest.kind == "cli":
             visual_mp4 = tmp_path / "visual.mp4"
             _render_cli_vhs(manifest, visual_mp4)
         else:
             raise ManifestError(f"unsupported demonstration.kind: '{manifest.kind}'")
 
-        visual_captioned = tmp_path / "visual_captioned.mp4"
-        _burn_assertion_captions(
-            visual_mp4,
-            visual_captioned,
-            list(manifest.assertions_to_surface),
-            work_dir=tmp_path,
-        )
+        if abs(manifest.playback_speed_factor - 1.0) > 1e-6:
+            visual_retimed = tmp_path / "visual_retimed.mp4"
+            _retime_video(
+                visual_mp4,
+                visual_retimed,
+                speed_factor=manifest.playback_speed_factor,
+            )
+            visual_mp4 = visual_retimed
 
-        narration: NarrationResult | None = None
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if no_narration:
-            pass
-        elif not api_key:
-            print(
-                "[demo-function] OPENAI_API_KEY not set; emitting visual-only "
-                "video. Pass --no-narration to silence this warning.",
-                file=stderr,
+        timed_captions = bool(timeline) and any(
+            entry.get("say") for entry in timeline
+        )
+        visual_captioned = tmp_path / "visual_captioned.mp4"
+        if timed_captions:
+            _burn_timed_captions(
+                visual_mp4,
+                visual_captioned,
+                timeline,
+                speed_factor=manifest.playback_speed_factor,
+                work_dir=tmp_path,
             )
         else:
-            try:
-                narration = _generate_narration(manifest.intent, tmp_path)
-            except Exception as exc:  # pragma: no cover - network-dependent
-                print(
-                    f"[demo-function] narration failed ({exc}); "
-                    "emitting visual-only video.",
-                    file=stderr,
+            _burn_assertion_captions(
+                visual_mp4,
+                visual_captioned,
+                list(manifest.assertions_to_surface),
+                work_dir=tmp_path,
+            )
+
+        # Key presence was validated up-front by ``render``; here we just
+        # decide between single-clip narration and per-action sync.
+        narration: NarrationResult | None = None
+        if not no_narration:
+            if timed_captions:
+                total_video_sec = (
+                    _probe_video_duration_sec(visual_captioned)
+                    or float(manifest.duration_seconds)
                 )
-                narration = None
+                narration = _generate_action_narration(
+                    timeline=timeline,
+                    work_dir=tmp_path,
+                    total_video_sec=total_video_sec,
+                    speed_factor=manifest.playback_speed_factor,
+                )
+            if narration is None:
+                narration = _generate_narration(manifest.intent, tmp_path)
 
         if narration is not None:
-            _mux_audio(visual_captioned, narration.audio_path, rendered_mp4)
+            _mux_audio_padded(visual_captioned, narration.audio_path, rendered_mp4)
         else:
             shutil.move(str(visual_captioned), str(rendered_mp4))
 
-        _trim_video_head(
-            rendered_mp4,
-            max_seconds=float(manifest.duration_seconds),
+        # `duration_seconds` is a cap on the *recorded* timeline; slowdown
+        # extends the final clip proportionally (factor 0.5 → 2x final length).
+        max_seconds = float(manifest.duration_seconds) / max(
+            manifest.playback_speed_factor, 1e-6
         )
+        _trim_video_head(rendered_mp4, max_seconds=max_seconds)
 
         _extract_poster(rendered_mp4, poster_png)
 
     fragment_txt.write_text(manifest.fragment_id, encoding="utf-8")
 
-    snapshot = _manifest_snapshot(manifest, narration=narration)
+    snapshot = _manifest_snapshot(
+        manifest,
+        narration=narration,
+        timeline=timeline,
+    )
     manifest_json.write_text(
         json.dumps(snapshot, indent=2) + "\n",
         encoding="utf-8",
@@ -1374,7 +1750,12 @@ def _manifest_snapshot(
     manifest: Manifest,
     *,
     narration: NarrationResult | None,
+    timeline: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    actions_snapshot: list[dict[str, Any]] = [
+        {"kind": a.kind, "say": a.say, "params": a.params}
+        for a in manifest.actions
+    ]
     return {
         "identifier": manifest.identifier,
         "intent": manifest.intent,
@@ -1382,7 +1763,10 @@ def _manifest_snapshot(
         "cache_key": manifest.cache_key,
         "duration_seconds": manifest.duration_seconds,
         "resolution": manifest.resolution,
+        "playback_speed_factor": manifest.playback_speed_factor,
         "assertions_to_surface": list(manifest.assertions_to_surface),
+        "actions": actions_snapshot,
+        "timeline": list(timeline) if timeline else [],
         "narration": (
             None
             if narration is None
@@ -1433,8 +1817,16 @@ def _drive_playwright(
     output_path: Path,
     work_dir: Path,
     stderr,
+    timeline_path: Path | None = None,
 ) -> None:
-    """Drive declarative actions via Playwright sync_api (Python)."""
+    """Drive declarative actions via Playwright sync_api (Python).
+
+    When ``timeline_path`` is provided, writes a JSON list of per-action
+    ``{kind, say, t_start_ms, t_end_ms}`` entries timed against the recorded
+    video clock (``t=0`` at ``page.goto`` / first action). Used by the
+    renderer to place per-action TTS clips and captions at the moments they
+    happened instead of spreading them evenly.
+    """
     try:
         from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -1447,6 +1839,7 @@ def _drive_playwright(
     raw_video = work_dir / "video"
     raw_video.mkdir(parents=True, exist_ok=True)
 
+    timeline: list[dict[str, Any]] = []
     try:
         with sync_playwright() as pw:
             try:
@@ -1464,9 +1857,15 @@ def _drive_playwright(
             page = context.new_page()
             captured_video: Path | None = None
             try:
+                clock_start = time.monotonic()
                 if manifest.url:
                     page.goto(manifest.url, wait_until="networkidle")
-                _execute_actions(page, manifest.actions)
+                _execute_actions(
+                    page,
+                    manifest.actions,
+                    timeline=timeline,
+                    clock_start=clock_start,
+                )
             finally:
                 if page.video is not None:
                     try:
@@ -1489,6 +1888,12 @@ def _drive_playwright(
         captured_video = candidates[0]
 
     _transcode_to_mp4(captured_video, output_path, width=width, height=height)
+
+    if timeline_path is not None:
+        timeline_path.write_text(
+            json.dumps(timeline, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
 
 def _run_playwright_test_video(
@@ -1598,9 +2003,26 @@ def _render_cli_vhs(
     _transcode_to_mp4(produced, output_path, width=width, height=height)
 
 
-def _execute_actions(page: Any, actions: Iterable[Action]) -> None:
-    """Run `actions` against a live Playwright `page`. Mirrors `_render_action`."""
+def _execute_actions(
+    page: Any,
+    actions: Iterable[Action],
+    *,
+    timeline: list[dict[str, Any]] | None = None,
+    clock_start: float | None = None,
+) -> None:
+    """Run `actions` against a live Playwright `page`.
+
+    When ``timeline`` and ``clock_start`` are provided, appends one entry per
+    action with the wall-clock millisecond span (relative to ``clock_start``)
+    so the renderer can place per-action TTS clips and captions at the
+    moments the actions happened.
+    """
     for action in actions:
+        t_start_ms = (
+            int(round((time.monotonic() - clock_start) * 1000))
+            if (timeline is not None and clock_start is not None)
+            else 0
+        )
         p = action.params
         if action.kind == "goto":
             page.goto(p.get("url", ""), wait_until="networkidle")
@@ -1624,6 +2046,16 @@ def _execute_actions(page: Any, actions: Iterable[Action]) -> None:
             page.screenshot(path=str(p["path"]))
         else:
             raise ManifestError(f"unsupported action kind: '{action.kind}'")
+        if timeline is not None and clock_start is not None:
+            t_end_ms = int(round((time.monotonic() - clock_start) * 1000))
+            timeline.append(
+                {
+                    "kind": action.kind,
+                    "say": action.say,
+                    "t_start_ms": t_start_ms,
+                    "t_end_ms": t_end_ms,
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
