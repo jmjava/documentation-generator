@@ -154,6 +154,36 @@ def test_playwright_test_speed_factor_overrides(tmp_path):
     assert c.playwright_test_max_speed_factor == 3.5
 
 
+def test_effective_max_freeze_ratio_playwright_ceiling(tmp_path):
+    p = tmp_path / "docgen.yaml"
+    p.write_text("{}", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.effective_max_freeze_ratio("playwright") == 0.45
+    assert c.effective_max_freeze_ratio("playwright_test") == 0.45
+    assert c.effective_max_freeze_ratio("vhs") == 0.25
+    assert c.effective_max_freeze_ratio(None) == 0.25
+
+
+def test_effective_max_freeze_ratio_playwright_respects_higher_global(tmp_path):
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump({"validation": {"max_freeze_ratio": 0.6}}), encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.effective_max_freeze_ratio("playwright") == 0.6
+
+
+def test_effective_max_freeze_ratio_explicit_playwright_override(tmp_path):
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump(
+            {"validation": {"max_freeze_ratio": 0.1, "max_freeze_ratio_playwright": 0.55}}
+        ),
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.effective_max_freeze_ratio("playwright") == 0.55
+    assert c.effective_max_freeze_ratio("vhs") == 0.1
+
+
 def test_minimal_config(tmp_path):
     c = Config.minimal(tmp_path)
     assert c.base_dir == tmp_path.resolve()

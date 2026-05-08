@@ -280,6 +280,23 @@ class Config:
         """Maximum fraction of a composed video that may be a frozen last frame."""
         return float(self.raw.get("validation", {}).get("max_freeze_ratio", 0.25))
 
+    def effective_max_freeze_ratio(self, visual_type: str | None) -> float:
+        """Ceiling for compose-time audio-vs-video freeze guard (trailing pad).
+
+        For ``playwright`` / ``playwright_test``, the default global
+        ``max_freeze_ratio`` (0.25) is raised to at least **0.45** so short UI
+        capture + longer TTS is less likely to fail on first run. Set
+        ``validation.max_freeze_ratio_playwright`` to override that family only.
+        """
+        base = self.max_freeze_ratio
+        rawv = self.raw.get("validation", {})
+        vt = (visual_type or "").strip().lower()
+        if vt in ("playwright", "playwright_test"):
+            if "max_freeze_ratio_playwright" in rawv:
+                return float(rawv["max_freeze_ratio_playwright"])
+            return max(base, 0.45)
+        return base
+
     @property
     def ocr_config(self) -> dict[str, Any]:
         defaults: dict[str, Any] = {

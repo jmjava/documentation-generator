@@ -10,14 +10,68 @@ import click
 from docgen.config import Config
 
 
+def _parse_env_file_pairs(env_path: Path) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        k = key.strip()
+        if not k:
+            continue
+        v = val.strip().strip('"').strip("'")
+        pairs.append((k, v))
+    return pairs
+
+
+def _docgen_env_override_mode() -> str | set[str] | None:
+    """Return None (shell wins), 'all' (.env overwrites every key), or a set of keys."""
+    raw = (os.environ.get("DOCGEN_ENV_OVERRIDES") or "").strip()
+    if not raw:
+        return None
+    lower = raw.lower()
+    if lower in ("1", "true", "yes", "*", "all"):
+        return "all"
+    keys = {p.strip() for p in raw.split(",") if p.strip()}
+    return keys if keys else None
+
+
 def _load_env(cfg: Config | None) -> None:
-    """Load .env file from config if specified, so OPENAI_API_KEY etc. are available."""
-    if cfg and cfg.env_file and cfg.env_file.exists():
-        for line in cfg.env_file.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+    """Load .env file from config if specified, so OPENAI_API_KEY etc. are available.
+
+    By default **shell environment wins**: ``os.environ.setdefault`` does not
+    replace keys already exported. Set ``DOCGEN_ENV_OVERRIDES=1`` so every key
+    from the file overwrites, or ``DOCGEN_ENV_OVERRIDES=KEY1,KEY2`` for selected
+    keys only.
+    """
+    if not cfg or not cfg.env_file or not cfg.env_file.exists():
+        return
+    pairs = _parse_env_file_pairs(cfg.env_file)
+    mode = _docgen_env_override_mode()
+    if mode == "all":
+        for k, v in pairs:
+            os.environ[k] = v
+        return
+    override_keys = mode if isinstance(mode, set) else set()
+    for k, v in pairs:
+        if k in override_keys:
+            os.environ[k] = v
+            continue
+        if (
+            k == "OPENAI_API_KEY"
+            and v
+            and os.environ.get("OPENAI_API_KEY")
+        ):
+            click.echo(
+                "[docgen] OPENAI_API_KEY already set in the process environment; "
+                "env_file value is ignored for this key (shell wins). "
+                "Unset OPENAI_API_KEY or set DOCGEN_ENV_OVERRIDES=1 to load all keys "
+                "from env_file, or DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY to override just "
+                "this key.",
+                err=True,
+            )
+        os.environ.setdefault(k, v)
 
 
 @click.group()
@@ -26,16 +80,25 @@ def _load_env(cfg: Config | None) -> None:
     "config_path",
     default=None,
     type=click.Path(exists=False),
-    help="Path to docgen.yaml (auto-discovered if omitted).",
+    help="Path to docgen.yaml (parents of cwd are searched when omitted).",
 )
 @click.pass_context
 def main(ctx: click.Context, config_path: str | None) -> None:
-    """docgen — demo generation pipeline."""
+    """docgen — demo generation pipeline.
+
+    Environment: keys already set in the shell are not replaced by ``env_file``
+    (see ``DOCGEN_ENV_OVERRIDES``). If no docgen.yaml is found, pass ``--config``.
+    """
     ctx.ensure_object(dict)
     try:
         cfg = Config.from_yaml(config_path) if config_path else Config.discover()
     except FileNotFoundError:
         cfg = None
+        click.echo(
+            "[docgen] No docgen.yaml found in this directory tree; pass "
+            "`--config PATH/to/docgen.yaml` or `cd` to your demos bundle directory.",
+            err=True,
+        )
     ctx.obj["config"] = cfg
     _load_env(cfg)
 
@@ -142,7 +205,15 @@ def vhs(
     help="Python script to execute for browser actions (required for standalone mode).",
 )
 @click.option("--url", default=None, help="Target URL for browser capture.")
-@click.option("--source", default="playwright-capture.mp4", help="Output filename under terminal/rendered/.")
+@click.option(
+    "--source",
+    default="playwright-capture.mp4",
+    help=(
+        "Output path: basename only → terminal/rendered/<name>; a relative path "
+        "with a directory (e.g. rendered/foo.mp4) is resolved under the bundle "
+        "base_dir, not under terminal/rendered/."
+    ),
+)
 @click.option("--width", default=1920, type=int, help="Browser viewport width.")
 @click.option("--height", default=1080, type=int, help="Browser viewport height.")
 @click.option("--timeout", "timeout_sec", default=120, type=int, help="Capture timeout in seconds.")
@@ -156,7 +227,12 @@ def playwright(
     height: int,
     timeout_sec: int,
 ) -> None:
-    """Capture a browser demo video using Playwright."""
+    """Capture a browser demo video using Playwright.
+
+    Requires a loaded docgen.yaml: run from your bundle directory, or prefix the
+    command with ``--config path/to/docgen.yaml`` (e.g.
+    ``docgen --config docs/demos/docgen.yaml playwright ...``).
+    """
     from docgen.playwright_runner import PlaywrightRunner
 
     cfg = ctx.obj["config"]

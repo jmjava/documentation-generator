@@ -225,11 +225,13 @@ class Validator:
                 CheckResult("lfs_pointer", True, [f"LFS pointer — skipping media checks for {seg_id}"])
             )
         elif rec:
+            vmap0 = self.config.visual_map.get(seg_id, {})
+            vt0 = vmap0.get("type") if isinstance(vmap0, dict) else None
             report.checks.append(self._check_streams(rec))
             report.checks.append(self._check_drift(rec, max_drift))
 
             samples = _sample_frames(rec, interval_sec=2.0)
-            report.checks.append(self._check_freeze_ratio(rec, samples))
+            report.checks.append(self._check_freeze_ratio(rec, samples, visual_type=vt0))
             report.checks.append(self._check_blank_frames(rec, samples))
             report.checks.append(self._check_ocr(rec, samples))
 
@@ -291,7 +293,11 @@ class Validator:
     # ── Core frame-level checks (cv2 only — always runs) ─────────────
 
     def _check_freeze_ratio(
-        self, path: Path, samples: list[tuple[float, np.ndarray]]
+        self,
+        path: Path,
+        samples: list[tuple[float, np.ndarray]],
+        *,
+        visual_type: str | None = None,
     ) -> CheckResult:
         """Fail if the video ends with a long frozen tail.
 
@@ -300,7 +306,7 @@ class Validator:
         Interior pauses (terminal idle, animation holds) are expected in
         narrated demos and are NOT penalised.
         """
-        max_ratio = self.config.max_freeze_ratio
+        max_ratio = self.config.effective_max_freeze_ratio(visual_type)
 
         if len(samples) < 3:
             return CheckResult("freeze_ratio", True, ["Too few frames to check"])

@@ -199,10 +199,17 @@ class PlaywrightRunner:
         return (self.config.base_dir / path).resolve()
 
     def _resolve_output_path(self, value: Path | str) -> Path:
+        """Map CLI / visual_map ``source`` to an absolute path.
+
+        - **Basename only** (no directory part): ``terminal/rendered/<name>``.
+        - **Relative path with a parent** (e.g. ``rendered/foo.mp4``): under
+          ``config.base_dir`` (the docgen bundle root), not under
+          ``terminal/rendered/`` unless you include that in the path.
+        - **Absolute path**: used as-is.
+        """
         path = Path(value)
         if path.is_absolute():
             return path
-        # Source values are normally relative to terminal/rendered.
         if path.parent == Path("."):
             return (self.config.terminal_dir / "rendered" / path).resolve()
         return (self.config.base_dir / path).resolve()

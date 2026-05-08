@@ -82,6 +82,12 @@ docgen validate --pre-push  # validate all outputs before committing
 
 Create a `docgen.yaml` in your demos directory. See [examples/minimal-bundle/docgen.yaml](examples/minimal-bundle/docgen.yaml) for a starting point.
 
+### `env_file` and the shell
+
+If `docgen.yaml` sets `env_file` (often `.env`), variables are loaded with **shell-first** semantics: anything **already exported** in the process (including your IDE or CI) is **not** replaced by the file. To make the file win, set **`DOCGEN_ENV_OVERRIDES=1`** so every key from `env_file` overwrites the environment, or **`DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY,OTHER_KEY`** for specific keys only.
+
+When `OPENAI_API_KEY` is present in both the shell and `env_file`, docgen prints a one-line hint to stderr so a silent 401 from the wrong key is easier to diagnose.
+
 **Discovery catalog (stable path):** the on-disk catalog for incremental regeneration defaults to **`docgen.catalog.yaml` at the repository root** (the same root used for `repo_root`: nearest `.git` ancestor, or the `repo_root:` setting in `docgen.yaml`). Commit it in consuming repos so discover/narrate/render steps can skip unchanged sources. Override with `catalog.file` (relative paths are resolved from repo root; absolute paths are allowed).
 
 **When the catalog is referenced:** planned narrate/render commands will call `entry_should_run()` (see `docgen.source_catalog`) per entry — stale fingerprints or explicit overrides mean “run”; otherwise skip. **Updating the catalog** should be an explicit step in the same job after a successful regen (refresh fingerprints, then save), not a side effect of unrelated commands.
@@ -115,6 +121,11 @@ narration_from_source:
 Useful pipeline options:
 
 ```yaml
+validation:
+  max_freeze_ratio: 0.25   # default; trailing-frame pad vs narration length (compose freeze guard + validate)
+  # Optional: cap for type playwright / playwright_test only (otherwise max(max_freeze_ratio, 0.45) applies)
+  max_freeze_ratio_playwright: 0.65
+
 manim:
   quality: 1080p30          # supports 480p15, 720p30, 1080p30, 1080p60, 1440p30, 1440p60, 2160p60
   manim_path: ""            # optional explicit binary path (relative to docgen.yaml or absolute)
@@ -167,17 +178,23 @@ visual_map:
 During `docgen compose`, docgen runs the capture script first (if `source` does not exist yet),
 then muxes the generated MP4 with narration audio.
 
-Manual capture (useful while iterating on scripts):
+Manual capture (useful while iterating on scripts). Run from the directory that contains `docgen.yaml`, or pass **`--config`** on the main command first, for example:
 
 ```bash
-docgen playwright --script scripts/demo_capture.py --url http://localhost:3300 --source 04-browser-flow.mp4
+docgen --config docs/demos/docgen.yaml playwright \
+  --script scripts/demo_capture.py --url http://localhost:3300 --source 04-browser-flow.mp4
 ```
+
+**`--source` paths:** a **basename** only (e.g. `04-browser-flow.mp4`) is written under **`terminal/rendered/`**. A **relative path that includes a directory** (e.g. `rendered/foo.mp4`) is resolved under the bundle **`base_dir`** (next to `docgen.yaml`), not automatically under `terminal/rendered/`.
+
+**Playwright + TTS:** narration often runs longer than a short UI capture; compose pads the last video frame. If you hit **FREEZE GUARD**, raise `validation.max_freeze_ratio` or set `validation.max_freeze_ratio_playwright`. For `type: playwright` / `playwright_test`, the effective default ceiling is at least **0.45** unless you set a higher `max_freeze_ratio` or an explicit `max_freeze_ratio_playwright`.
 
 Script contract:
 - receives env vars: `DOCGEN_PLAYWRIGHT_OUTPUT`, optional `DOCGEN_PLAYWRIGHT_URL`,
   `DOCGEN_PLAYWRIGHT_WIDTH`, `DOCGEN_PLAYWRIGHT_HEIGHT`, and optional segment metadata
 - must write an MP4 to the requested output path
 - should use headless Playwright for CI compatibility
+
 ### Per-function video docs (`docgen demo-function`)
 
 `docgen demo-function` renders **one short, single-purpose MP4 per function** —

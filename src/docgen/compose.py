@@ -33,11 +33,13 @@ class Composer:
 
             ok = False
             if vtype == "manim":
-                ok = self._compose_simple(seg_id, self._manim_path(vmap), strict=strict)
+                ok = self._compose_simple(
+                    seg_id, self._manim_path(vmap), strict=strict, visual_type=vtype
+                )
             elif vtype == "vhs":
                 video_path = self._vhs_path(vmap)
                 self._warn_if_stale_vhs(vmap, video_path)
-                ok = self._compose_simple(seg_id, video_path, strict=strict)
+                ok = self._compose_simple(seg_id, video_path, strict=strict, visual_type=vtype)
             elif vtype == "playwright":
                 from docgen.playwright_runner import PlaywrightError, PlaywrightRunner
 
@@ -46,7 +48,9 @@ class Composer:
                 except PlaywrightError as exc:
                     print(f"    SKIP: playwright capture failed ({exc})")
                     video_path = Path("")
-                ok = video_path.exists() and self._compose_simple(seg_id, video_path, strict=strict)
+                ok = video_path.exists() and self._compose_simple(
+                    seg_id, video_path, strict=strict, visual_type=vtype
+                )
             elif vtype == "playwright_test":
                 # Pre-recorded test video (WebM/MP4). Optional sync_map retiming is not applied
                 # here yet — see milestones/archive/milestone-4-playwright-test-video.md issue 4.
@@ -56,7 +60,7 @@ class Composer:
                         "    NOTE: playwright_test has sync_map; retimed compose is not "
                         "implemented yet — using raw visual (see docgen compose roadmap)."
                     )
-                ok = self._compose_simple(seg_id, video_path, strict=strict)
+                ok = self._compose_simple(seg_id, video_path, strict=strict, visual_type=vtype)
             elif vtype == "mixed":
                 sources = [self._resolve_source(s) for s in vmap.get("sources", [])]
                 ok = self._compose_mixed(seg_id, sources)
@@ -80,7 +84,14 @@ class Composer:
         gap = max(0.0, audio_dur - video_dur)
         return gap / audio_dur
 
-    def _compose_simple(self, seg_id: str, video_path: Path, *, strict: bool = True) -> bool:
+    def _compose_simple(
+        self,
+        seg_id: str,
+        video_path: Path,
+        *,
+        strict: bool = True,
+        visual_type: str | None = None,
+    ) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
             print(f"    SKIP: no audio for {seg_id}")
@@ -107,14 +118,29 @@ class Composer:
             return False
 
         freeze = self.check_freeze_ratio(audio_dur, video_dur)
-        max_ratio = self.config.max_freeze_ratio
+        max_ratio = self.config.effective_max_freeze_ratio(visual_type)
         if freeze > max_ratio:
+            vt = (visual_type or "").lower()
+            playwright_hint = (
+                "Short UI capture + longer TTS is common — raise "
+                "`validation.max_freeze_ratio` or `validation.max_freeze_ratio_playwright`, "
+                "re-record a longer capture, or shorten narration."
+            )
+            manim_hint = (
+                "If this segment uses timing-driven Manim waits, run `docgen manim` again "
+                "after `docgen timestamps`, or use `docgen generate-all --retry-manim`."
+            )
+            extra = (
+                playwright_hint
+                if vt in ("playwright", "playwright_test")
+                else manim_hint
+                if vt == "manim"
+                else "Re-render or extend the visual source, or raise validation.max_freeze_ratio."
+            )
             msg = (
                 f"    FREEZE GUARD: {seg_id} visual is {video_dur:.1f}s but audio "
                 f"is {audio_dur:.1f}s → {freeze:.0%} frozen "
-                f"(max {max_ratio:.0%}). Re-render the visual source to be longer. "
-                "If this segment uses timing-driven Manim waits, run `docgen manim` again "
-                "after `docgen timestamps`, or use `docgen generate-all --retry-manim`."
+                f"(max {max_ratio:.0%}). {extra}"
             )
             if strict:
                 raise ComposeError(msg)

@@ -6,9 +6,10 @@ import os
 import time
 from pathlib import Path
 
+import pytest
 import yaml
 
-from docgen.compose import Composer
+from docgen.compose import ComposeError, Composer
 from docgen.config import Config
 from docgen.playwright_runner import PlaywrightError
 
@@ -34,6 +35,39 @@ def test_manim_source_uses_configured_quality_dir(tmp_path: Path) -> None:
     composer = Composer(c)
     resolved = composer._manim_path(c.visual_map["01"])
     assert resolved == target / "Scene01.mp4"
+
+
+def test_compose_freeze_playwright_uses_higher_effective_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Playwright + TTS: ratio above default 0.25 but below 0.45 must compose (issue #55)."""
+    cfg = {
+        "dirs": {"terminal": "terminal", "audio": "audio", "recordings": "recordings", "animations": "animations"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "vhs", "source": "01-demo.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    audio = tmp_path / "audio" / "01-demo.mp3"
+    video = tmp_path / "terminal" / "rendered" / "01-demo.mp4"
+    video.parent.mkdir(parents=True, exist_ok=True)
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    video.write_text("video", encoding="utf-8")
+    audio.write_text("audio", encoding="utf-8")
+
+    def _probe(p: Path) -> float:
+        if p.suffix == ".mp3":
+            return 44.0
+        return 30.0
+
+    composer = Composer(c)
+    monkeypatch.setattr(composer, "_probe_duration", _probe)
+    monkeypatch.setattr(composer, "_run_ffmpeg", lambda _cmd: None)
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+    assert composer._compose_simple("01", video, strict=True, visual_type="playwright") is True
+
+    with pytest.raises(ComposeError, match="FREEZE GUARD"):
+        composer._compose_simple("01", video, strict=True, visual_type="vhs")
 
 
 def test_stale_visual_warning_when_video_older_than_audio(tmp_path: Path, capsys, monkeypatch) -> None:
