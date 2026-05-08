@@ -12,12 +12,17 @@
 #
 # Outputs:
 #   needs_regen — "true" if `docgen catalog stale` reported work to do, else "false".
+#     Caller: `needs.<job_id>.outputs.needs_regen` (e.g. run a regen job when "true").
 #
 # Optional second job (merge-on-stale): when the catalog is stale, merge Playwright
 # discoveries into the catalog and refresh fingerprints (no git commit).
 
 on:
   workflow_call:
+    outputs:
+      needs_regen:
+        description: "true if docgen catalog stale exited non-zero"
+        value: ${{ jobs.catalog-stale.outputs.needs_regen }}
     inputs:
       working-directory:
         required: true

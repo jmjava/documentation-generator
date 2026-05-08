@@ -52,10 +52,17 @@ Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/de
 
 ---
 
-## Next (course-builder): regen videos in CI, not only catalog gate
+## Next (course-builder)
 
-The new workflow proves **install + catalog stale** on every relevant PR. It does **not** yet run **`generate-all`**, commit **`docs/demos/recordings`**, or re-enable automatic **Pages**. Suggested order:
+Shipped on **`courseforge/course-builder`**:
 
-1. Add **`discover_tests.roots`** (and optional **`docgen discover-tests --merge-catalog`** with **`merge-on-stale: true`**) once a Node **`@playwright/test`** tree exists under the repo.
-2. Add a **self-hosted or heavy** workflow (Manim + ffmpeg + optional **`OPENAI_API_KEY`**) that runs **`docgen generate-all`** (or segment subsets) when `needs_regen` is true, then opens a PR or pushes artifacts.
-3. Uncomment **`push`** in **`pages.yml`** when narrated outputs are stable again.
+- **`docgen-generate-demos.yml`** — **`workflow_dispatch`** always runs **`docgen generate-all`** (with **`--skip-tts`** if **`OPENAI_API_KEY`** is unset); **push to `main`** on narration/animations/catalog paths runs the same when **`needs_regen`** from the reusable workflow is **`true`**. After a stale-driven run, the workflow **refreshes and commits** **`docgen.catalog.yaml`** so the stale gate clears. **Artifacts** upload **`docs/demos/recordings`** and **`docs/demos/audio`**.
+- **`pages.yml`** — **push** re-enabled for **`docs/demos/recordings/**`**, **`docs/index.html`**, and the workflow file (narrow paths).
+
+In **`documentation-generator`**: **`reusable-docgen-catalog.yml`** now exposes **`needs_regen`** to callers (``workflow_call`` outputs).
+
+Still optional / later:
+
+1. **`discover_tests.roots`** + **`merge-on-stale: true`** when a Node **`@playwright/test`** tree lives in the repo.
+2. **Auto-commit narrated MP4s** to **`docs/demos/recordings`** from CI (today: download artifact and commit, or add a bot PR step).
+3. **Pin `docgen-git-ref`** to a SHA instead of **`main`** for reproducible CI.
