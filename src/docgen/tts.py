@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
+from docgen.openai_retry import call_with_rate_limit_retries
 
 
 def _probe_duration(path: Path) -> float | None:
@@ -94,13 +95,17 @@ class TTSGenerator:
         print(f"[tts] Generating audio for {seg_id} ({len(plain)} chars) -> {out_path}")
 
         client = openai.OpenAI()
-        response = client.audio.speech.create(
-            model=self.config.tts_model,
-            voice=self.config.tts_voice,
-            input=plain,
-            instructions=self.config.tts_instructions,
-        )
-        response.stream_to_file(str(out_path))
+
+        def _call() -> None:
+            response = client.audio.speech.create(
+                model=self.config.tts_model,
+                voice=self.config.tts_voice,
+                input=plain,
+                instructions=self.config.tts_instructions,
+            )
+            response.stream_to_file(str(out_path))
+
+        call_with_rate_limit_retries(_call)
         print(f"[tts] Wrote {out_path}")
 
         new_duration = _probe_duration(out_path)

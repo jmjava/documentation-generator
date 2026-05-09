@@ -14,25 +14,25 @@ demonstration:
     - kind: wait_for
       selector: '[data-testid="title"]'
       timeout_ms: 5000
-      say: "Course Builder loads with an empty lesson form."
+      say: "The empty lesson form loads."
     - kind: click
       selector: '[data-testid="topic"]'
-      say: "We focus the topic input."
+      say: "We focus the topic field."
     - kind: type
       selector: '[data-testid="topic"]'
       value: "Async iterators"
       delay_ms: 70
-      say: "And type a lesson topic — async iterators in this case."
+      say: "We type a short topic."
     - kind: click
       selector: '[data-testid="compile"]'
-      say: "Clicking compile runs the lesson generator."
+      say: "Compile runs the generator."
     - kind: wait_for_text
       selector: '[data-testid="output"]'
       text: "Compiled lesson"
       timeout_ms: 5000
-      say: "The compiled lesson appears in the result panel."
+      say: "The result panel updates."
     - kind: wait
-      ms: 1500
+      ms: 700
 output_budget:
   duration_seconds: 25
   resolution: "1280x720"

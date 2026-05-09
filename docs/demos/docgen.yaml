@@ -22,16 +22,16 @@ segment_names:
 visual_map:
   '01':
     type: manim
-    scene: _TimedScene
-    source: _TimedScene.mp4
-  '02':
-    type: manim
     scene: OverviewScene
     source: OverviewScene.mp4
-  '03':
+  '02':
     type: manim
     scene: InitScaffoldScene
     source: InitScaffoldScene.mp4
+  '03':
+    type: manim
+    scene: WizardGuiScene
+    source: WizardGuiScene.mp4
 vhs:
   vhs_path: ''
   sync_from_timing: false
@@ -94,13 +94,13 @@ manim_scene_generation:
     globs: []
   segments:
     '01':
-      class_name: _TimedScene
-    '02':
       class_name: OverviewScene
-    '03':
+    '02':
       class_name: InitScaffoldScene
+    '03':
+      class_name: WizardGuiScene
 manim:
   scenes:
-  - _TimedScene
   - OverviewScene
   - InitScaffoldScene
+  - WizardGuiScene

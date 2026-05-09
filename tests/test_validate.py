@@ -404,6 +404,28 @@ class Demo(Scene):
         check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
         assert check["passed"], check["details"]
 
+    def test_timing_stub_antipattern_fails(self, cfg_dir):
+        """LLM footgun: seg_start/seg_end = self._clock breaks at runtime."""
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+
+class Demo(Scene):
+    def construct(self):
+        seg_start, seg_end = self._clock, self._clock
+        seg_start(0)
+        Text("X", font_size=24)
+        seg_end(0)
+""".strip(),
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert not check["passed"]
+        detail = " ".join(check["details"])
+        assert "seg_start" in detail or "invalid call" in detail.lower()
+
     def test_skipped_when_scene_lint_disabled(self, cfg_dir):
         config = self._configure_manim(
             cfg_dir,

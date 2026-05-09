@@ -143,11 +143,16 @@ _MANIM_CLASS_RE = re.compile(r"^class\s+([A-Za-z_][A-Za-z0-9_]*Scene)\s*\(", re.
 
 
 def manim_scene_class_names_in_order(scenes_py: Path) -> list[str]:
-    """Return ``*Scene`` class names in source order from ``animations/scenes.py``."""
+    """Return ``*Scene`` class names in source order from ``animations/scenes.py``.
+
+    Names starting with ``_`` (e.g. ``_TimedScene``) are helpers / bases for generated
+    scenes and are **not** wired as pipeline segments — they must not consume a
+    slot in ``visual_map`` discovery.
+    """
     if not scenes_py.is_file():
         return []
     text = scenes_py.read_text(encoding="utf-8", errors="replace")
-    return _MANIM_CLASS_RE.findall(text)
+    return [n for n in _MANIM_CLASS_RE.findall(text) if not n.startswith("_")]
 
 
 def _pick_playwright_script(scripts_dir: Path, seg_id: str) -> Path | None:

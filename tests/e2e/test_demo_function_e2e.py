@@ -42,6 +42,11 @@ Run locally::
 
     OPENAI_API_KEY=sk-... pytest tests/e2e/test_demo_function_e2e.py -v
 
+The subprocess env includes tighter keyframe sampling
+(``DOCGEN_KEYFRAME_MAX_COUNT`` / ``DOCGEN_KEYFRAME_INTERVAL_SEC``) so the
+single batched vision request carries fewer PNGs than a default production
+render, while still exercising the full pipeline.
+
 This test runs in the ``e2e`` GitHub Actions job (see ``.github/workflows/ci.yml``).
 """
 
@@ -62,6 +67,13 @@ from docgen import demo_function as df
 FIXTURE_DIR = Path(__file__).parent / "demo-function"
 URL_PLACEHOLDER = "file://__FIXTURE__/demo-page.html"
 
+# Batched vision sends one request with every candidate PNG; cap count + widen
+# sampling interval so e2e uses fewer image tokens than a production render.
+_E2E_SUBPROCESS_ENV: dict[str, str] = {
+    "DOCGEN_KEYFRAME_MAX_COUNT": "12",
+    "DOCGEN_KEYFRAME_INTERVAL_SEC": "0.55",
+}
+
 
 def _render_in_subprocess(
     manifest_path: Path,
@@ -69,6 +81,7 @@ def _render_in_subprocess(
     *,
     cache_dir: Path | None = None,
     no_narration: bool = False,
+    env_extra: dict[str, str] | None = None,
 ) -> dict[str, str | int | None]:
     """Run ``df.render`` in a fresh Python interpreter and return its result.
 
@@ -111,7 +124,7 @@ def _render_in_subprocess(
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        env={**os.environ},
+        env={**os.environ, **(env_extra or {})},
     )
     if proc.returncode != 0:
         raise AssertionError(
@@ -181,7 +194,9 @@ def test_demo_function_real_chromium_with_per_action_narration(
     out_dir = tmp_path / "out"
     manifest = df.load_manifest(fixture_manifest_path)
 
-    result = _render_in_subprocess(fixture_manifest_path, out_dir)
+    result = _render_in_subprocess(
+        fixture_manifest_path, out_dir, env_extra=_E2E_SUBPROCESS_ENV
+    )
     assert result["cache_status"] == "miss"
 
     rendered = out_dir / "rendered.mp4"
@@ -253,9 +268,17 @@ def test_demo_function_real_chromium_with_per_action_narration(
     cache_dir = tmp_path / "cache"
     out_dir2 = tmp_path / "out-cached"
     out_dir3 = tmp_path / "out-rerun"
-    _render_in_subprocess(fixture_manifest_path, out_dir2, cache_dir=cache_dir)
+    _render_in_subprocess(
+        fixture_manifest_path,
+        out_dir2,
+        cache_dir=cache_dir,
+        env_extra=_E2E_SUBPROCESS_ENV,
+    )
     rerun = _render_in_subprocess(
-        fixture_manifest_path, out_dir3, cache_dir=cache_dir
+        fixture_manifest_path,
+        out_dir3,
+        cache_dir=cache_dir,
+        env_extra=_E2E_SUBPROCESS_ENV,
     )
     assert rerun["cache_status"] == "hit"
 

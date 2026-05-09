@@ -39,6 +39,7 @@ from typing import Any, Iterable
 import yaml
 
 from docgen.config import Config
+from docgen.openai_retry import call_with_rate_limit_retries
 
 # Exit code for "neutral skip" on placeholder manifests. Mirrors Tekton's
 # documented Skip exit code so CI pipelines do not treat placeholder-shaped
@@ -1159,6 +1160,35 @@ def _mux_audio_padded(video: Path, audio: Path, dst: Path) -> None:
         raise RuntimeError(f"ffmpeg padded mux failed: {proc.stderr[-400:]}")
 
 
+def _keyframe_extract_params_from_environ() -> tuple[float, int]:
+    """Return ``(interval_sec, max_count)`` for vision keyframe sampling.
+
+    Used by :func:`_align_visual_to_narration` so subprocess-based tests (or
+    low-quota local runs) can shrink the batched vision request without YAML
+    changes. Defaults match :func:`docgen.pf_keyframes.extract_candidates`.
+
+    Environment (optional, subprocess-visible):
+
+    * ``DOCGEN_KEYFRAME_INTERVAL_SEC`` — float, default ``0.20``, floored at ``0.05``.
+    * ``DOCGEN_KEYFRAME_MAX_COUNT`` — int, default ``30``, minimum ``2``.
+    """
+    interval_sec = 0.20
+    max_count = 30
+    raw_i = os.environ.get("DOCGEN_KEYFRAME_INTERVAL_SEC", "").strip()
+    if raw_i:
+        try:
+            interval_sec = max(0.05, float(raw_i))
+        except ValueError:
+            pass
+    raw_m = os.environ.get("DOCGEN_KEYFRAME_MAX_COUNT", "").strip()
+    if raw_m:
+        try:
+            max_count = max(2, int(raw_m))
+        except ValueError:
+            pass
+    return interval_sec, max_count
+
+
 def _align_visual_to_narration(
     *,
     source_visual: Path,
@@ -1239,9 +1269,12 @@ def _align_visual_to_narration(
             f"expected {len(timeline)}"
         )
 
+    k_interval, k_max = _keyframe_extract_params_from_environ()
     candidates = extract_candidates(
         source_visual,
         work_dir / "keyframe_candidates",
+        interval_sec=k_interval,
+        max_count=k_max,
     )
     chosen = match_steps_to_keyframes(candidates, timeline)
     if len(chosen) != len(timeline):
@@ -1756,13 +1789,14 @@ def _tts_synthesize(
     Auth failures (invalid / revoked / scoped-out key) are re-raised as
     :class:`ToolingMissingError` so the renderer fails fast with a clear
     install hint instead of producing a silent video or surfacing an
-    SDK-specific exception. Other transient failures bubble up so the
-    caller can decide whether to retry.
+    SDK-specific exception. :class:`openai.RateLimitError` is retried with
+    backoff so bursts / parallel runs don't fail on the first 429.
     """
     import openai
 
     client = openai.OpenAI()
-    try:
+
+    def _call() -> None:
         response = client.audio.speech.create(
             model=model,
             voice=voice,
@@ -1770,6 +1804,9 @@ def _tts_synthesize(
             instructions=_TTS_INSTRUCTIONS,
         )
         response.stream_to_file(str(out_path))
+
+    try:
+        call_with_rate_limit_retries(_call)
     except openai.AuthenticationError as exc:
         raise ToolingMissingError(
             f"OpenAI rejected OPENAI_API_KEY (authentication failed): {exc}",

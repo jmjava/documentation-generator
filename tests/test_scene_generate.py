@@ -20,6 +20,7 @@ from docgen.scene_generate import (
     DEFAULT_MODEL,
     REQUIRED_HELPERS,
     SceneGenerationError,
+    append_audio_tail_to_class_body,
     derive_class_name,
     ensure_scenes_bootstrap,
     extract_reference_classes,
@@ -28,6 +29,7 @@ from docgen.scene_generate import (
     lint_generated_block,
     merged_scene_generation_settings,
     strip_response_fences,
+    sync_audio_tail_waits_in_scenes,
     validate_class_definition,
 )
 
@@ -111,6 +113,71 @@ def test_derive_class_name_handles_underscore_and_spaces() -> None:
 
 def test_derive_class_name_falls_back_to_segment_id_when_name_empty() -> None:
     assert derive_class_name("08", "", None) == "Segment08Scene"
+
+
+# ── Audio-length tail (Manim duration vs TTS) ───────────────────────────
+
+
+def test_append_audio_tail_inserts_wait_before_mass_fadeout() -> None:
+    src = (
+        "class X(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        self.timed_play(Write(Text('a', font_size=24)), run_time=1.0)\n"
+        "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
+    )
+    out = append_audio_tail_to_class_body(src, "01-overview")
+    assert "audio-length tail" in out
+    assert "_load_timing('01-overview')" in out
+    assert "wait_until" in out
+    assert out.index("wait_until") < out.index("FadeOut")
+
+
+def test_append_audio_tail_idempotent() -> None:
+    src = (
+        "class X(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
+    )
+    once = append_audio_tail_to_class_body(src, "01-overview")
+    twice = append_audio_tail_to_class_body(once, "zz-never")
+    assert once == twice
+
+
+def test_sync_audio_tail_waits_patches_marked_block(tmp_path: Path) -> None:
+    import json
+
+    (tmp_path / "animations").mkdir(parents=True)
+    scenes = """# ── BEGIN GENERATED SCENE: 01 (OverviewScene) ──
+class OverviewScene(_TimedScene):
+    def construct(self):
+        self.timed_play(Write(Text("x", font_size=24)), run_time=1.0)
+        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
+# ── END GENERATED SCENE: 01 ──
+"""
+    (tmp_path / "animations" / "scenes.py").write_text(scenes, encoding="utf-8")
+    timing = {"01-test": {"segments": [{"start": 0.0, "end": 99.5, "text": "x"}]}}
+    (tmp_path / "animations" / "timing.json").write_text(
+        json.dumps(timing) + "\n", encoding="utf-8"
+    )
+    raw = {
+        "dirs": {
+            "narration": "n",
+            "audio": "a",
+            "animations": "animations",
+            "terminal": "t",
+            "recordings": "r",
+        },
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-test"},
+        "visual_map": {"01": {"type": "manim", "scene": "OverviewScene", "source": "OverviewScene.mp4"}},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    msgs = sync_audio_tail_waits_in_scenes(cfg)
+    assert msgs and "segment 01" in msgs[0]
+    updated = (tmp_path / "animations" / "scenes.py").read_text(encoding="utf-8")
+    assert "wait_until" in updated
+    assert sync_audio_tail_waits_in_scenes(cfg) == []
 
 
 # ── Validation ─────────────────────────────────────────────────────────────
@@ -388,7 +455,19 @@ def test_generate_scene_idempotent_second_call_replaces_block(tmp_path: Path) ->
 # ── Pre-write lint (font_size, weight=BOLD, unsafe unicode) ────────────────
 
 
-def test_lint_passes_clean_block() -> None:
+def test_lint_flags_title_down_row_collision_pattern() -> None:
+    bad = (
+        "class X(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        a = _box('a', C_GREEN, 1, 1).shift(LEFT * 3)\n"
+        "        b = _box('b', C_BLUE, 1, 1).shift(RIGHT * 3)\n"
+        "        c = _box('c', C_ORANGE, 2, 1).next_to(title, DOWN, buff=1)\n"
+    )
+    issues = lint_generated_block(bad, min_font_size=14, unsafe_unicode=[])
+    assert any("layout:" in i and "shift(LEFT" in i for i in issues)
+
+
+def test_lint_passes_vgroup_row_without_title_down_collision() -> None:
     issues = lint_generated_block(_GOOD_CLASS, min_font_size=14, unsafe_unicode=["\u2192"])
     assert issues == []
 

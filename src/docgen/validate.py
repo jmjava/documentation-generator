@@ -146,6 +146,56 @@ def _extract_font_size(node: ast.Call) -> int | None:
     return None
 
 
+def _ast_is_double_self_clock_tuple(node: ast.expr) -> bool:
+    """True for ``(self._clock, self._clock)`` / ``self._clock, self._clock`` tuple pairs."""
+    if not isinstance(node, ast.Tuple) or len(node.elts) != 2:
+        return False
+
+    def is_clock(e: ast.expr) -> bool:
+        return (
+            isinstance(e, ast.Attribute)
+            and e.attr == "_clock"
+            and isinstance(e.value, ast.Name)
+            and e.value.id == "self"
+        )
+
+    return is_clock(node.elts[0]) and is_clock(node.elts[1])
+
+
+def lint_manim_timing_stub_antipattern(tree: ast.AST, path_label: str) -> list[str]:
+    """Reject a known-bad LLM pattern that assigns ``seg_*`` from ``self._clock`` then calls them.
+
+    That code raises at runtime (calling a float). Fix: regenerate with
+    ``docgen scene-generate`` or replace with explicit ``timed_play`` ``run_time``.
+    """
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in ("seg_start", "seg_end"):
+                issues.append(
+                    f"{path_label}:{node.lineno} invalid call {node.func.id}(...) — "
+                    "broken timing placeholder; run `docgen scene-generate --segment …` "
+                    "to regenerate this scene, or use only `timed_play(..., run_time=...)`."
+                )
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            tgt = node.targets[0]
+            if isinstance(tgt, ast.Tuple) and len(tgt.elts) == 2:
+                a, b = tgt.elts
+                if (
+                    isinstance(a, ast.Name)
+                    and isinstance(b, ast.Name)
+                    and a.id == "seg_start"
+                    and b.id == "seg_end"
+                    and _ast_is_double_self_clock_tuple(node.value)
+                ):
+                    issues.append(
+                        f"{path_label}:{node.lineno} invalid "
+                        "`seg_start, seg_end = self._clock, self._clock` — "
+                        "breaks Manim at runtime; regenerate with `docgen scene-generate`."
+                    )
+    return issues
+
+
 def _lint_manim_text_usage(
     path: Path,
     *,
@@ -198,6 +248,8 @@ def _lint_manim_text_usage(
                 f"{path}:{node.lineno} Text() font_size={font_size} is below minimum {min_font_size}; "
                 "small text is unreadable in video."
             )
+
+    issues.extend(lint_manim_timing_stub_antipattern(tree, str(path)))
 
     return issues
 

@@ -42,6 +42,9 @@ docgen = ["templates/*.html", "templates/*.md", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: optional network/OpenAI; skipped when credentials unavailable",
+]
 
 [tool.ruff]
 line-length = 100

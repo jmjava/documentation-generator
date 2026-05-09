@@ -43,6 +43,7 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
         stroke_color=color, fill_color=color, fill_opacity=0.12,
     )
     t = Text(label, font_size=fs, color=color)
+    t.move_to(r.get_center())
     return VGroup(r, t)
 
 
@@ -71,177 +72,184 @@ class _TimedScene(Scene):
             self.wait(duration)
             self._clock += duration
 
-
 # ── BEGIN GENERATED SCENE: 01 (OverviewScene) ──
 class OverviewScene(_TimedScene):
     def construct(self):
         self.camera.background_color = C_BG
+        timing = _load_timing('01-overview')
 
-        seg_start, seg_end = self._clock, self._clock
-
-        # Introduction to Docgen
-        seg_start(0)
-        title = Text("Docgen Overview", font_size=48, color=C_ACCENT).to_edge(UP)
+        title = Text('DocGen Overview', font_size=36, color=C_WHITE).to_edge(UP)
         self.timed_play(Write(title), run_time=2.0)
-        seg_end(0)
+        if len(timing) > 0:
+            self.wait_until(timing[0]["start"])
+        _bx_0_0 = _box('Documentation Generator', C_GREEN, 6.0, 1.0, 24)
+        _bx_0_1 = _box('Narrated Demo Videos', C_BLUE, 6.0, 1.0, 24)
+        _row_0 = VGroup(_bx_0_0, _bx_0_1).arrange(RIGHT, buff=0.8).next_to(title, DOWN, buff=0.5)
+        self.timed_play(FadeIn(_row_0), run_time=2.0)
+        if len(timing) > 1:
+            self.wait_until(timing[1]["start"])
+        _bx_1_0 = _box('Manim: Storytelling', C_PURPLE, 5.0, 1.0, 20)
+        _bx_1_1 = _box('Playwright: UI Tests', C_ORANGE, 5.0, 1.0, 20)
+        _row_1 = VGroup(_bx_1_0, _bx_1_1).arrange(RIGHT, buff=0.8).next_to(_row_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_1), run_time=2.0)
+        if len(timing) > 3:
+            self.wait_until(timing[3]["start"])
+        _bx_2_0 = _box('CLI & Python Library', C_TEAL, 6.0, 1.0, 20)
+        _bx_2_0.next_to(_row_1, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_2_0), run_time=2.0)
+        if len(timing) > 6:
+            self.wait_until(timing[6]["start"])
+        _bx_3_0 = _box('Modern Video Documentation', C_ACCENT, 7.0, 1.0, 20)
+        _bx_3_0.next_to(_bx_2_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_3_0), run_time=2.0)
+        if len(timing) > 8:
+            self.wait_until(timing[8]["start"])
+        _bx_4_0 = _box('Scripted Narration', C_RED, 5.0, 1.0, 20)
+        _bx_4_1 = _box('Manim Visuals', C_BLUE, 4.0, 1.0, 20)
+        _row_4 = VGroup(_bx_4_0, _bx_4_1).arrange(RIGHT, buff=0.8).next_to(_bx_3_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_4), run_time=2.0)
+        if len(timing) > 11:
+            self.wait_until(timing[11]["start"])
+        _bx_5_0 = _box('Features: Validation, Analysis', C_GREEN, 8.0, 1.0, 20)
+        _bx_5_0.next_to(_row_4, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_5_0), run_time=2.0)
+        if len(timing) > 14:
+            self.wait_until(timing[14]["start"])
+        _bx_6_0 = _box('Legacy Support: VHS', C_ORANGE, 6.0, 1.0, 20)
+        _bx_6_0.next_to(_bx_5_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_6_0), run_time=2.0)
+        if len(timing) > 17:
+            self.wait_until(timing[17]["start"])
+        _bx_7_0 = _box('Easy Installation', C_TEAL, 5.0, 1.0, 20)
+        _bx_7_1 = _box('Flexible Workflows', C_PURPLE, 5.0, 1.0, 20)
+        _row_7 = VGroup(_bx_7_0, _bx_7_1).arrange(RIGHT, buff=0.8).next_to(_bx_6_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_7), run_time=2.0)
+        if len(timing) > 19:
+            self.wait_until(timing[19]["start"])
+        _bx_8_0 = _box('Comprehensive Solution', C_ACCENT, 7.0, 1.0, 20)
+        _bx_8_0.next_to(_row_7, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_8_0), run_time=2.0)
 
-        # Focus on Manim and Playwright
-        seg_start(1)
-        manim_box = _box("Manim", C_GREEN, 3.5, 1.5, 24).shift(LEFT * 3)
-        playwright_box = _box("Playwright", C_BLUE, 3.5, 1.5, 24).shift(RIGHT * 3)
-        self.timed_play(FadeIn(manim_box), FadeIn(playwright_box), run_time=2.0)
-        seg_end(1)
-
-        # Command-line interface and Python library
-        seg_start(2)
-        cli_box = _box("CLI", C_ORANGE, 2.5, 1, 20).next_to(manim_box, DOWN, buff=1.5)
-        lib_box = _box("Python Library", C_TEAL, 2.5, 1, 20).next_to(playwright_box, DOWN, buff=1.5)
-        self.timed_play(FadeIn(cli_box), FadeIn(lib_box), run_time=2.0)
-        seg_end(2)
-
-        # Modern approach to video documentation
-        seg_start(3)
-        modern_box = _box("Modern Video Documentation", C_PURPLE, 6.5, 1.5, 24).next_to(title, DOWN, buff=1.5)
-        self.timed_play(ReplacementTransform(VGroup(manim_box, playwright_box, cli_box, lib_box), modern_box), run_time=2.0)
-        seg_end(3)
-
-        # Features of Docgen
-        seg_start(4)
-        features_box = _box("Features", C_RED, 3, 1.5, 24).next_to(modern_box, DOWN, buff=1.5)
-        self.timed_play(FadeIn(features_box), run_time=2.0)
-        seg_end(4)
-
-        # Legacy support and migration
-        seg_start(5)
-        legacy_box = _box("Legacy Support", C_WHITE, 3.5, 1, 20).next_to(features_box, LEFT, buff=1.5)
-        migrate_box = _box("Migrate to Manim & Playwright", C_ACCENT, 5, 1, 20).next_to(features_box, RIGHT, buff=1.5)
-        self.timed_play(FadeIn(legacy_box), FadeIn(migrate_box), run_time=2.0)
-        seg_end(5)
-
-        # Installation and workflows
-        seg_start(6)
-        install_box = _box("Installation", C_GREEN, 3, 1, 20).next_to(legacy_box, DOWN, buff=1.5)
-        workflow_box = _box("Workflows", C_BLUE, 3, 1, 20).next_to(migrate_box, DOWN, buff=1.5)
-        self.timed_play(FadeIn(install_box), FadeIn(workflow_box), run_time=2.0)
-        seg_end(6)
-
-        # Conclusion
-        seg_start(7)
-        conclusion_text = Text("Comprehensive Solution for Documentation", font_size=36, color=C_ACCENT).next_to(modern_box, DOWN, buff=2.5)
-        self.timed_play(Write(conclusion_text), run_time=2.0)
-        seg_end(7)
-
+        # docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)
+        _docgen_segs = _load_timing('01-overview')
+        if _docgen_segs:
+            self.wait_until(
+                max(float(s.get("end", 0.0)) for s in _docgen_segs)
+            )
         self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
         self.timed_wait(0.5)
 # ── END GENERATED SCENE: 01 ──
-
 
 # ── BEGIN GENERATED SCENE: 02 (InitScaffoldScene) ──
 class InitScaffoldScene(_TimedScene):
     def construct(self):
         self.camera.background_color = C_BG
+        timing = _load_timing('02-init-scaffold')
 
-        seg_start, seg_end = self._clock, self._clock
-
-        # Introduction to init-scaffold command
-        seg_start(0)
-        title = Text("init-scaffold Command", font_size=48, color=C_ACCENT).to_edge(UP)
+        title = Text('Init Scaffold Command', font_size=36, color=C_WHITE).to_edge(UP)
         self.timed_play(Write(title), run_time=2.0)
-        seg_end(0)
+        if len(timing) > 0:
+            self.wait_until(timing[0]["start"])
+        _bx_0_0 = _box('Create Fresh Layout', C_GREEN, 6.0, 1.0, 24)
+        _bx_0_1 = _box('Documentation Project', C_BLUE, 6.0, 1.0, 24)
+        _row_0 = VGroup(_bx_0_0, _bx_0_1).arrange(RIGHT, buff=0.8).next_to(title, DOWN, buff=0.5)
+        self.timed_play(FadeIn(_row_0), run_time=2.0)
+        if len(timing) > 2:
+            self.wait_until(timing[2]["start"])
+        _bx_1_0 = _box('Generates docgen.yaml', C_PURPLE, 5.0, 1.0, 20)
+        _bx_1_1 = _box('Main Configuration', C_ORANGE, 5.0, 1.0, 20)
+        _row_1 = VGroup(_bx_1_0, _bx_1_1).arrange(RIGHT, buff=0.8).next_to(_row_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_1), run_time=2.0)
+        if len(timing) > 5:
+            self.wait_until(timing[5]["start"])
+        _bx_2_0 = _box('Essential Directories', C_TEAL, 6.0, 1.0, 20)
+        _bx_2_0.next_to(_row_1, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_2_0), run_time=2.0)
+        if len(timing) > 7:
+            self.wait_until(timing[7]["start"])
+        _bx_3_0 = _box('Organized Project', C_ACCENT, 7.0, 1.0, 20)
+        _bx_3_0.next_to(_bx_2_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_3_0), run_time=2.0)
+        if len(timing) > 9:
+            self.wait_until(timing[9]["start"])
+        _bx_4_0 = _box('Add Markdown Files', C_RED, 5.0, 1.0, 20)
+        _bx_4_1 = _box('Other Resources', C_BLUE, 4.0, 1.0, 20)
+        _row_4 = VGroup(_bx_4_0, _bx_4_1).arrange(RIGHT, buff=0.8).next_to(_bx_3_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_4), run_time=2.0)
+        if len(timing) > 11:
+            self.wait_until(timing[11]["start"])
+        _bx_5_0 = _box('Comprehensive System', C_GREEN, 8.0, 1.0, 20)
+        _bx_5_0.next_to(_row_4, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_5_0), run_time=2.0)
+        if len(timing) > 13:
+            self.wait_until(timing[13]["start"])
+        _bx_6_0 = _box('Streamlined Process', C_ORANGE, 6.0, 1.0, 20)
+        _bx_6_0.next_to(_bx_5_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_6_0), run_time=2.0)
 
-        # Creating a fresh layout
-        seg_start(1)
-        layout_box = _box("Fresh Layout", C_GREEN, 4.5, 1.5, 24).shift(LEFT * 3)
-        files_box = _box("Files & Directories", C_BLUE, 4.5, 1.5, 24).shift(RIGHT * 3)
-        self.timed_play(FadeIn(layout_box), FadeIn(files_box), run_time=2.0)
-        seg_end(1)
-
-        # Generating docgen.yaml
-        seg_start(2)
-        yaml_box = _box("docgen.yaml", C_ORANGE, 3, 1, 20).next_to(layout_box, DOWN, buff=1.5)
-        config_box = _box("Main Configuration", C_TEAL, 3, 1, 20).next_to(files_box, DOWN, buff=1.5)
-        self.timed_play(FadeIn(yaml_box), FadeIn(config_box), run_time=2.0)
-        seg_end(2)
-
-        # Essential directories for assets
-        seg_start(3)
-        dirs_box = _box("Essential Directories", C_PURPLE, 6.5, 1.5, 24).next_to(title, DOWN, buff=1.5)
-        self.timed_play(ReplacementTransform(VGroup(layout_box, files_box, yaml_box, config_box), dirs_box), run_time=2.0)
-        seg_end(3)
-
-        # Populating with content
-        seg_start(4)
-        content_box = _box("Add Content", C_RED, 3, 1.5, 24).next_to(dirs_box, DOWN, buff=1.5)
-        self.timed_play(FadeIn(content_box), run_time=2.0)
-        seg_end(4)
-
-        # Comprehensive documentation system
-        seg_start(5)
-        system_box = _box("Comprehensive System", C_WHITE, 4, 1, 20).next_to(content_box, LEFT, buff=1.5)
-        streamline_box = _box("Streamlined & Efficient", C_ACCENT, 5, 1, 20).next_to(content_box, RIGHT, buff=1.5)
-        self.timed_play(FadeIn(system_box), FadeIn(streamline_box), run_time=2.0)
-        seg_end(5)
-
+        # docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)
+        _docgen_segs = _load_timing('02-init-scaffold')
+        if _docgen_segs:
+            self.wait_until(
+                max(float(s.get("end", 0.0)) for s in _docgen_segs)
+            )
         self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
         self.timed_wait(0.5)
 # ── END GENERATED SCENE: 02 ──
-
 
 # ── BEGIN GENERATED SCENE: 03 (WizardGuiScene) ──
 class WizardGuiScene(_TimedScene):
     def construct(self):
         self.camera.background_color = C_BG
+        timing = _load_timing('03-wizard-gui')
 
-        seg_start, seg_end = self._clock, self._clock
-
-        # Introduction to the wizard GUI
-        seg_start(0)
-        title = Text("Wizard GUI Overview", font_size=48, color=C_ACCENT).to_edge(UP)
+        title = Text('Wizard GUI', font_size=36, color=C_WHITE).to_edge(UP)
         self.timed_play(Write(title), run_time=2.0)
-        seg_end(0)
+        if len(timing) > 0:
+            self.wait_until(timing[0]["start"])
+        _bx_0_0 = _box('Local Web Application', C_GREEN, 6.0, 1.0, 24)
+        _bx_0_1 = _box('Streamline Narration', C_BLUE, 6.0, 1.0, 24)
+        _row_0 = VGroup(_bx_0_0, _bx_0_1).arrange(RIGHT, buff=0.8).next_to(title, DOWN, buff=0.5)
+        self.timed_play(FadeIn(_row_0), run_time=2.0)
+        if len(timing) > 2:
+            self.wait_until(timing[2]["start"])
+        _bx_1_0 = _box('Bootstrap Scripts', C_PURPLE, 5.0, 1.0, 20)
+        _bx_1_1 = _box('From Documentation', C_ORANGE, 5.0, 1.0, 20)
+        _row_1 = VGroup(_bx_1_0, _bx_1_1).arrange(RIGHT, buff=0.8).next_to(_row_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_1), run_time=2.0)
+        if len(timing) > 4:
+            self.wait_until(timing[4]["start"])
+        _bx_2_0 = _box('Automates Setup', C_TEAL, 6.0, 1.0, 20)
+        _bx_2_0.next_to(_row_1, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_2_0), run_time=2.0)
+        if len(timing) > 6:
+            self.wait_until(timing[6]["start"])
+        _bx_3_0 = _box('Customize Narration Hints', C_ACCENT, 7.0, 1.0, 20)
+        _bx_3_0.next_to(_bx_2_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_3_0), run_time=2.0)
+        if len(timing) > 8:
+            self.wait_until(timing[8]["start"])
+        _bx_4_0 = _box('Launch via Command Line', C_RED, 5.0, 1.0, 20)
+        _bx_4_1 = _box('Opens in Browser', C_BLUE, 4.0, 1.0, 20)
+        _row_4 = VGroup(_bx_4_0, _bx_4_1).arrange(RIGHT, buff=0.8).next_to(_bx_3_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_4), run_time=2.0)
+        if len(timing) > 11:
+            self.wait_until(timing[11]["start"])
+        _bx_5_0 = _box('Foundation for Scripts', C_GREEN, 8.0, 1.0, 20)
+        _bx_5_0.next_to(_row_4, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_5_0), run_time=2.0)
+        if len(timing) > 13:
+            self.wait_until(timing[13]["start"])
+        _bx_6_0 = _box('Enhances Productivity', C_ORANGE, 6.0, 1.0, 20)
+        _bx_6_0.next_to(_bx_5_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_6_0), run_time=2.0)
 
-        # Streamlining narration scripts
-        seg_start(1)
-        streamline_box = _box("Streamline Narration Scripts", C_GREEN, 5.5, 1.5, 24).shift(UP * 1.5)
-        self.timed_play(FadeIn(streamline_box), run_time=2.0)
-        seg_end(1)
-
-        # Bootstrap from documentation
-        seg_start(2)
-        bootstrap_box = _box("Bootstrap from Documentation", C_BLUE, 5.5, 1.5, 24).next_to(streamline_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(bootstrap_box), run_time=2.0)
-        seg_end(2)
-
-        # Automate setup
-        seg_start(3)
-        automate_box = _box("Automate Initial Setup", C_ORANGE, 5.5, 1.5, 24).next_to(bootstrap_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(automate_box), run_time=2.0)
-        seg_end(3)
-
-        # Customize narration hints
-        seg_start(4)
-        customize_box = _box("Customize Narration Hints", C_TEAL, 5.5, 1.5, 24).next_to(automate_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(customize_box), run_time=2.0)
-        seg_end(4)
-
-        # Launch using command line
-        seg_start(5)
-        command_line_box = _box("Launch via Command Line", C_PURPLE, 5.5, 1.5, 24).next_to(customize_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(command_line_box), run_time=2.0)
-        seg_end(5)
-
-        # Solid foundation for scripts
-        seg_start(6)
-        foundation_box = _box("Solid Foundation for Scripts", C_RED, 5.5, 1.5, 24).next_to(command_line_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(foundation_box), run_time=2.0)
-        seg_end(6)
-
-        # Enhance productivity
-        seg_start(7)
-        productivity_box = _box("Enhance Productivity", C_WHITE, 5.5, 1.5, 24).next_to(foundation_box, DOWN, buff=1.0)
-        self.timed_play(FadeIn(productivity_box), run_time=2.0)
-        seg_end(7)
-
+        # docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)
+        _docgen_segs = _load_timing('03-wizard-gui')
+        if _docgen_segs:
+            self.wait_until(
+                max(float(s.get("end", 0.0)) for s in _docgen_segs)
+            )
         self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
         self.timed_wait(0.5)
 # ── END GENERATED SCENE: 03 ──

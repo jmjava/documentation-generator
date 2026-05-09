@@ -956,6 +956,188 @@ def scene_generate(
     )
 
 
+@main.command("scene-compile")
+@click.argument(
+    "spec_path",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print generated Python only; do not write animations/scenes.py.",
+)
+@click.pass_context
+def scene_compile(ctx: click.Context, spec_path: Path, dry_run: bool) -> None:
+    """Compile a declarative ``*.scene.yaml`` into ``animations/scenes.py``.
+
+    Deterministic layout (rows of ``_box`` mobjects) — use for reliable diagrams
+    or after an LLM emits **only** YAML. Schema: :mod:`docgen.scene_spec`.
+    ``timing_key`` defaults from ``segment_names`` in docgen.yaml when omitted.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    from docgen.scene_generate import SceneGenerationError
+    from docgen.scene_spec import load_scene_spec
+    from docgen.scene_spec_generate import inject_class_block_into_scenes_py, linted_class_block_from_spec
+
+    cfg = ctx.obj["config"]
+    raw = load_scene_spec(spec_path)
+    try:
+        class_block, merged = linted_class_block_from_spec(cfg, dict(raw))
+    except SceneGenerationError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if dry_run:
+        click.echo(class_block, nl=False)
+        return
+
+    sid = str(merged["segment_id"]).strip()
+    class_name = str(merged["class_name"]).strip()
+    scenes_path = inject_class_block_into_scenes_py(
+        cfg, seg_id=sid, class_name=class_name, class_block=class_block
+    )
+    click.echo(
+        f"[scene-compile] wrote {class_name} to {scenes_path} "
+        f"(segment {sid} → timing_key {merged['timing_key']!r})"
+    )
+
+
+@main.command("scene-spec-generate")
+@click.option(
+    "--segment",
+    "segment",
+    required=True,
+    help="Segment id (e.g. 01) matching narration and segment_names.",
+)
+@click.option(
+    "--class-name",
+    "class_name_override",
+    default=None,
+    help="Override class name (default: manim_scene_generation.segments.<id>.class_name or CamelCase+Scene).",
+)
+@click.option(
+    "--extra-path",
+    "extra_paths",
+    multiple=True,
+    type=str,
+    help="Repo-root-relative source file (repeatable); added to manim context.paths.",
+)
+@click.option(
+    "--hint",
+    "extra_hints",
+    multiple=True,
+    type=str,
+    help="Extra owner hint for the model (repeatable).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print prompts only; do not call OpenAI.",
+)
+@click.option(
+    "--print-only",
+    is_flag=True,
+    help="Call OpenAI and print YAML to stdout; do not write a spec file by default.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path, dir_okay=False),
+    help="Write spec YAML here (default: <animations_dir>/specs/<segment_stem>.scene.yaml).",
+)
+@click.option(
+    "--compile",
+    "do_compile",
+    is_flag=True,
+    help="After success, inject the compiled class into animations/scenes.py (same as scene-compile).",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="OpenAI chat model override (default: manim_scene_generation.model in docgen.yaml).",
+)
+@click.pass_context
+def scene_spec_generate_cmd(
+    ctx: click.Context,
+    segment: str,
+    class_name_override: str | None,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    dry_run: bool,
+    print_only: bool,
+    output_path: Path | None,
+    do_compile: bool,
+    model: str | None,
+) -> None:
+    """Generate a declarative ``*.scene.yaml`` via OpenAI, then optionally compile.
+
+    The model outputs YAML only (see :mod:`docgen.scene_spec`); layout is
+    deterministic in :func:`docgen.scene_spec.compile_scene_class`.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    if dry_run and print_only:
+        raise click.ClickException("--dry-run and --print-only are mutually exclusive")
+
+    from docgen.scene_generate import SceneGenerationError
+    from docgen.scene_spec_generate import (
+        generate_scene_spec,
+        inject_class_block_into_scenes_py,
+        linted_class_block_from_spec,
+    )
+
+    cfg = ctx.obj["config"]
+    try:
+        result = generate_scene_spec(
+            cfg,
+            segment,
+            extra_paths=list(extra_paths),
+            extra_hints=list(extra_hints),
+            class_name_override=class_name_override,
+            dry_run=dry_run,
+            model_override=model,
+        )
+    except SceneGenerationError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if dry_run:
+        click.echo(result.prompt)
+        return
+
+    if print_only:
+        click.echo(result.yaml_text, nl=False)
+
+    write_path: Path | None = None
+    if not print_only:
+        specs_dir = cfg.animations_dir / "specs"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        write_path = output_path or (specs_dir / f"{result.seg_name}.scene.yaml")
+    elif output_path:
+        write_path = output_path
+
+    if write_path is not None:
+        write_path.parent.mkdir(parents=True, exist_ok=True)
+        write_path.write_text(result.yaml_text, encoding="utf-8")
+        click.echo(f"[scene-spec-generate] wrote {write_path}")
+
+    if do_compile:
+        try:
+            class_block, merged = linted_class_block_from_spec(cfg, result.spec, timing_key=result.seg_name)
+            inject_class_block_into_scenes_py(
+                cfg,
+                seg_id=merged["segment_id"],
+                class_name=merged["class_name"],
+                class_block=class_block,
+            )
+        except SceneGenerationError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(
+            f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
+            f"({result.class_name}, timing_key {result.seg_name!r})"
+        )
+
+
 @main.command("yaml-generate")
 @click.option(
     "--merge-defaults/--no-merge-defaults",

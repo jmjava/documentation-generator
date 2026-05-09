@@ -1091,3 +1091,31 @@ def test_snapshot_includes_speed_factor_and_actions(tmp_path: Path, monkeypatch)
     assert snapshot["playback_speed_factor"] == 0.75
     assert snapshot["actions"] == []
     assert snapshot["timeline"] == []
+
+
+def test_keyframe_extract_params_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DOCGEN_KEYFRAME_MAX_COUNT", raising=False)
+    monkeypatch.delenv("DOCGEN_KEYFRAME_INTERVAL_SEC", raising=False)
+    assert df._keyframe_extract_params_from_environ() == (0.20, 30)
+
+
+def test_keyframe_extract_params_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_KEYFRAME_MAX_COUNT", "9")
+    monkeypatch.setenv("DOCGEN_KEYFRAME_INTERVAL_SEC", "0.4")
+    assert df._keyframe_extract_params_from_environ() == (0.4, 9)
+
+
+def test_keyframe_extract_params_invalid_env_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOCGEN_KEYFRAME_MAX_COUNT", "not-int")
+    monkeypatch.setenv("DOCGEN_KEYFRAME_INTERVAL_SEC", "x")
+    assert df._keyframe_extract_params_from_environ() == (0.20, 30)
+
+
+def test_keyframe_extract_params_clamp_minimums(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_KEYFRAME_MAX_COUNT", "1")
+    monkeypatch.setenv("DOCGEN_KEYFRAME_INTERVAL_SEC", "0.01")
+    interval, max_c = df._keyframe_extract_params_from_environ()
+    assert interval == 0.05
+    assert max_c == 2

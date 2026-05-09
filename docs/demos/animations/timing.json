@@ -1,0 +1,3413 @@
+{
+  "01-overview": {
+    "text": "DocGen is a powerful documentation generator designed to create narrated demo videos using Python. It focuses on two primary tools, Manim for long-form storytelling and Playwright for creating tutorials from UI tests. The library provides a command line interface and the reusable Python library to streamline the process of generating video documentation. It allows users to create engaging content that explains how a system works, making it easier to understand complex concepts. DocGen emphasizes a modern approach to video documentation. It supports scripted narration that can be generated from markdown scripts using text-to-speech technology. This narration is paired with visuals created in Manim, which serves as the main medium for explaining architecture and workflows. Playwright can be integrated where interactive browser demonstrations are necessary. The library provides a suite of features, including validation checks for audio-visual sync, layout analysis, and error detection. It also includes a local web GUI wizard to help bootstrap narration scripts from existing project documentation, making it user-friendly for newcomers. Legacy support for VHS terminal recordings exists, but users are encouraged to migrate to using Manim and Playwright for new projects. This shift not only improves the quality of the documentation, but also aligns with modern development practices. Installation is straightforward, allowing users to quickly set up their environment with a simple command. Development workflows are flexible, with the ability to run tests and manage dependencies easily. Overall, DocGen offers a comprehensive solution for generating high-quality documentation and narrated demo videos, ensuring that both developers and end-users have access to clear, informative content.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 6.579999923706055,
+        "text": " DocGen is a powerful documentation generator designed to create narrated demo videos using"
+      },
+      {
+        "start": 6.579999923706055,
+        "end": 13.800000190734863,
+        "text": " Python. It focuses on two primary tools, Manim for long-form storytelling and Playwright for"
+      },
+      {
+        "start": 13.800000190734863,
+        "end": 19.459999084472656,
+        "text": " creating tutorials from UI tests. The library provides a command line interface and the"
+      },
+      {
+        "start": 19.459999084472656,
+        "end": 24.34000015258789,
+        "text": " reusable Python library to streamline the process of generating video documentation."
+      },
+      {
+        "start": 24.979999542236328,
+        "end": 29.520000457763672,
+        "text": " It allows users to create engaging content that explains how a system works,"
+      },
+      {
+        "start": 30.18000030517578,
+        "end": 32.81999969482422,
+        "text": " making it easier to understand complex concepts."
+      },
+      {
+        "start": 33.540000915527344,
+        "end": 36.560001373291016,
+        "text": " DocGen emphasizes a modern approach to video documentation."
+      },
+      {
+        "start": 37.439998626708984,
+        "end": 40.91999816894531,
+        "text": " It supports scripted narration that can be generated from markdown scripts"
+      },
+      {
+        "start": 40.91999816894531,
+        "end": 46.36000061035156,
+        "text": " using text-to-speech technology. This narration is paired with visuals created in Manim,"
+      },
+      {
+        "start": 46.81999969482422,
+        "end": 50.779998779296875,
+        "text": " which serves as the main medium for explaining architecture and workflows."
+      },
+      {
+        "start": 50.779998779296875,
+        "end": 55.58000183105469,
+        "text": " Playwright can be integrated where interactive browser demonstrations are necessary."
+      },
+      {
+        "start": 56.29999923706055,
+        "end": 61.380001068115234,
+        "text": " The library provides a suite of features, including validation checks for audio-visual sync,"
+      },
+      {
+        "start": 62.13999938964844,
+        "end": 67.77999877929688,
+        "text": " layout analysis, and error detection. It also includes a local web GUI wizard to help bootstrap"
+      },
+      {
+        "start": 67.77999877929688,
+        "end": 72.5999984741211,
+        "text": " narration scripts from existing project documentation, making it user-friendly for"
+      },
+      {
+        "start": 72.31999969482422,
+        "end": 78.30000305175781,
+        "text": " newcomers. Legacy support for VHS terminal recordings exists, but users are encouraged"
+      },
+      {
+        "start": 78.30000305175781,
+        "end": 84.22000122070312,
+        "text": " to migrate to using Manim and Playwright for new projects. This shift not only improves the"
+      },
+      {
+        "start": 84.22000122070312,
+        "end": 88.37999725341797,
+        "text": " quality of the documentation, but also aligns with modern development practices."
+      },
+      {
+        "start": 89.33999633789062,
+        "end": 93.41999816894531,
+        "text": " Installation is straightforward, allowing users to quickly set up their environment"
+      },
+      {
+        "start": 93.41999816894531,
+        "end": 99.36000061035156,
+        "text": " with a simple command. Development workflows are flexible, with the ability to run tests"
+      },
+      {
+        "start": 99.36000061035156,
+        "end": 105.05999755859375,
+        "text": " and manage dependencies easily. Overall, DocGen offers a comprehensive solution"
+      },
+      {
+        "start": 105.05999755859375,
+        "end": 109.23999786376953,
+        "text": " for generating high-quality documentation and narrated demo videos,"
+      },
+      {
+        "start": 109.95999908447266,
+        "end": 114.72000122070312,
+        "text": " ensuring that both developers and end-users have access to clear, informative content."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.7200000286102295,
+        "word": "DocGen"
+      },
+      {
+        "start": 0.7200000286102295,
+        "end": 1.0800000429153442,
+        "word": "is"
+      },
+      {
+        "start": 1.0800000429153442,
+        "end": 1.340000033378601,
+        "word": "a"
+      },
+      {
+        "start": 1.340000033378601,
+        "end": 1.899999976158142,
+        "word": "powerful"
+      },
+      {
+        "start": 1.899999976158142,
+        "end": 2.680000066757202,
+        "word": "documentation"
+      },
+      {
+        "start": 2.680000066757202,
+        "end": 3.200000047683716,
+        "word": "generator"
+      },
+      {
+        "start": 3.200000047683716,
+        "end": 4.119999885559082,
+        "word": "designed"
+      },
+      {
+        "start": 4.119999885559082,
+        "end": 4.460000038146973,
+        "word": "to"
+      },
+      {
+        "start": 4.460000038146973,
+        "end": 4.659999847412109,
+        "word": "create"
+      },
+      {
+        "start": 4.659999847412109,
+        "end": 5.239999771118164,
+        "word": "narrated"
+      },
+      {
+        "start": 5.239999771118164,
+        "end": 5.659999847412109,
+        "word": "demo"
+      },
+      {
+        "start": 5.659999847412109,
+        "end": 6.019999980926514,
+        "word": "videos"
+      },
+      {
+        "start": 6.019999980926514,
+        "end": 6.579999923706055,
+        "word": "using"
+      },
+      {
+        "start": 6.579999923706055,
+        "end": 7.019999980926514,
+        "word": "Python"
+      },
+      {
+        "start": 7.71999979019165,
+        "end": 7.900000095367432,
+        "word": "It"
+      },
+      {
+        "start": 7.900000095367432,
+        "end": 8.239999771118164,
+        "word": "focuses"
+      },
+      {
+        "start": 8.239999771118164,
+        "end": 8.699999809265137,
+        "word": "on"
+      },
+      {
+        "start": 8.699999809265137,
+        "end": 8.979999542236328,
+        "word": "two"
+      },
+      {
+        "start": 8.979999542236328,
+        "end": 9.460000038146973,
+        "word": "primary"
+      },
+      {
+        "start": 9.460000038146973,
+        "end": 9.859999656677246,
+        "word": "tools"
+      },
+      {
+        "start": 10.899999618530273,
+        "end": 10.899999618530273,
+        "word": "Manim"
+      },
+      {
+        "start": 10.899999618530273,
+        "end": 11.180000305175781,
+        "word": "for"
+      },
+      {
+        "start": 11.180000305175781,
+        "end": 11.65999984741211,
+        "word": "long"
+      },
+      {
+        "start": 11.65999984741211,
+        "end": 11.699999809265137,
+        "word": "form"
+      },
+      {
+        "start": 11.699999809265137,
+        "end": 12.260000228881836,
+        "word": "storytelling"
+      },
+      {
+        "start": 12.260000228881836,
+        "end": 12.960000038146973,
+        "word": "and"
+      },
+      {
+        "start": 12.960000038146973,
+        "end": 13.34000015258789,
+        "word": "Playwright"
+      },
+      {
+        "start": 13.34000015258789,
+        "end": 13.800000190734863,
+        "word": "for"
+      },
+      {
+        "start": 13.800000190734863,
+        "end": 14.239999771118164,
+        "word": "creating"
+      },
+      {
+        "start": 14.239999771118164,
+        "end": 14.760000228881836,
+        "word": "tutorials"
+      },
+      {
+        "start": 14.760000228881836,
+        "end": 15.119999885559082,
+        "word": "from"
+      },
+      {
+        "start": 15.119999885559082,
+        "end": 15.460000038146973,
+        "word": "UI"
+      },
+      {
+        "start": 15.460000038146973,
+        "end": 15.859999656677246,
+        "word": "tests"
+      },
+      {
+        "start": 16.559999465942383,
+        "end": 16.760000228881836,
+        "word": "The"
+      },
+      {
+        "start": 16.760000228881836,
+        "end": 17.139999389648438,
+        "word": "library"
+      },
+      {
+        "start": 17.139999389648438,
+        "end": 17.559999465942383,
+        "word": "provides"
+      },
+      {
+        "start": 17.559999465942383,
+        "end": 17.81999969482422,
+        "word": "a"
+      },
+      {
+        "start": 17.81999969482422,
+        "end": 18.059999465942383,
+        "word": "command"
+      },
+      {
+        "start": 18.059999465942383,
+        "end": 18.280000686645508,
+        "word": "line"
+      },
+      {
+        "start": 18.280000686645508,
+        "end": 18.760000228881836,
+        "word": "interface"
+      },
+      {
+        "start": 18.760000228881836,
+        "end": 19.219999313354492,
+        "word": "and"
+      },
+      {
+        "start": 19.219999313354492,
+        "end": 19.459999084472656,
+        "word": "the"
+      },
+      {
+        "start": 19.459999084472656,
+        "end": 19.959999084472656,
+        "word": "reusable"
+      },
+      {
+        "start": 19.959999084472656,
+        "end": 20.440000534057617,
+        "word": "Python"
+      },
+      {
+        "start": 20.440000534057617,
+        "end": 20.920000076293945,
+        "word": "library"
+      },
+      {
+        "start": 20.920000076293945,
+        "end": 21.6200008392334,
+        "word": "to"
+      },
+      {
+        "start": 21.6200008392334,
+        "end": 21.959999084472656,
+        "word": "streamline"
+      },
+      {
+        "start": 21.959999084472656,
+        "end": 22.299999237060547,
+        "word": "the"
+      },
+      {
+        "start": 22.299999237060547,
+        "end": 22.65999984741211,
+        "word": "process"
+      },
+      {
+        "start": 22.65999984741211,
+        "end": 23.34000015258789,
+        "word": "of"
+      },
+      {
+        "start": 23.34000015258789,
+        "end": 23.34000015258789,
+        "word": "generating"
+      },
+      {
+        "start": 23.34000015258789,
+        "end": 23.799999237060547,
+        "word": "video"
+      },
+      {
+        "start": 23.799999237060547,
+        "end": 24.34000015258789,
+        "word": "documentation"
+      },
+      {
+        "start": 24.860000610351562,
+        "end": 25.239999771118164,
+        "word": "It"
+      },
+      {
+        "start": 25.239999771118164,
+        "end": 25.579999923706055,
+        "word": "allows"
+      },
+      {
+        "start": 25.579999923706055,
+        "end": 25.959999084472656,
+        "word": "users"
+      },
+      {
+        "start": 25.959999084472656,
+        "end": 26.260000228881836,
+        "word": "to"
+      },
+      {
+        "start": 26.260000228881836,
+        "end": 26.520000457763672,
+        "word": "create"
+      },
+      {
+        "start": 26.520000457763672,
+        "end": 27.079999923706055,
+        "word": "engaging"
+      },
+      {
+        "start": 27.079999923706055,
+        "end": 27.600000381469727,
+        "word": "content"
+      },
+      {
+        "start": 27.600000381469727,
+        "end": 28.1200008392334,
+        "word": "that"
+      },
+      {
+        "start": 28.1200008392334,
+        "end": 28.559999465942383,
+        "word": "explains"
+      },
+      {
+        "start": 28.559999465942383,
+        "end": 28.739999771118164,
+        "word": "how"
+      },
+      {
+        "start": 28.739999771118164,
+        "end": 29.15999984741211,
+        "word": "a"
+      },
+      {
+        "start": 29.15999984741211,
+        "end": 29.15999984741211,
+        "word": "system"
+      },
+      {
+        "start": 29.15999984741211,
+        "end": 29.520000457763672,
+        "word": "works"
+      },
+      {
+        "start": 30.18000030517578,
+        "end": 30.219999313354492,
+        "word": "making"
+      },
+      {
+        "start": 30.219999313354492,
+        "end": 30.440000534057617,
+        "word": "it"
+      },
+      {
+        "start": 30.440000534057617,
+        "end": 30.739999771118164,
+        "word": "easier"
+      },
+      {
+        "start": 30.739999771118164,
+        "end": 31.440000534057617,
+        "word": "to"
+      },
+      {
+        "start": 31.440000534057617,
+        "end": 31.440000534057617,
+        "word": "understand"
+      },
+      {
+        "start": 31.440000534057617,
+        "end": 32.040000915527344,
+        "word": "complex"
+      },
+      {
+        "start": 32.040000915527344,
+        "end": 32.81999969482422,
+        "word": "concepts"
+      },
+      {
+        "start": 33.540000915527344,
+        "end": 33.7400016784668,
+        "word": "DocGen"
+      },
+      {
+        "start": 33.7400016784668,
+        "end": 34.36000061035156,
+        "word": "emphasizes"
+      },
+      {
+        "start": 34.36000061035156,
+        "end": 34.880001068115234,
+        "word": "a"
+      },
+      {
+        "start": 34.880001068115234,
+        "end": 35.02000045776367,
+        "word": "modern"
+      },
+      {
+        "start": 35.02000045776367,
+        "end": 35.400001525878906,
+        "word": "approach"
+      },
+      {
+        "start": 35.400001525878906,
+        "end": 35.65999984741211,
+        "word": "to"
+      },
+      {
+        "start": 35.65999984741211,
+        "end": 35.97999954223633,
+        "word": "video"
+      },
+      {
+        "start": 35.97999954223633,
+        "end": 36.560001373291016,
+        "word": "documentation"
+      },
+      {
+        "start": 37.439998626708984,
+        "end": 37.439998626708984,
+        "word": "It"
+      },
+      {
+        "start": 37.439998626708984,
+        "end": 37.84000015258789,
+        "word": "supports"
+      },
+      {
+        "start": 37.84000015258789,
+        "end": 38.79999923706055,
+        "word": "scripted"
+      },
+      {
+        "start": 38.79999923706055,
+        "end": 38.79999923706055,
+        "word": "narration"
+      },
+      {
+        "start": 38.79999923706055,
+        "end": 39.099998474121094,
+        "word": "that"
+      },
+      {
+        "start": 39.099998474121094,
+        "end": 39.220001220703125,
+        "word": "can"
+      },
+      {
+        "start": 39.220001220703125,
+        "end": 39.81999969482422,
+        "word": "be"
+      },
+      {
+        "start": 39.81999969482422,
+        "end": 39.81999969482422,
+        "word": "generated"
+      },
+      {
+        "start": 39.81999969482422,
+        "end": 40.15999984741211,
+        "word": "from"
+      },
+      {
+        "start": 40.15999984741211,
+        "end": 40.619998931884766,
+        "word": "markdown"
+      },
+      {
+        "start": 40.619998931884766,
+        "end": 40.91999816894531,
+        "word": "scripts"
+      },
+      {
+        "start": 40.91999816894531,
+        "end": 41.619998931884766,
+        "word": "using"
+      },
+      {
+        "start": 41.619998931884766,
+        "end": 42.0,
+        "word": "text"
+      },
+      {
+        "start": 42.0,
+        "end": 42.220001220703125,
+        "word": "to"
+      },
+      {
+        "start": 42.220001220703125,
+        "end": 42.36000061035156,
+        "word": "speech"
+      },
+      {
+        "start": 42.36000061035156,
+        "end": 42.939998626708984,
+        "word": "technology"
+      },
+      {
+        "start": 43.68000030517578,
+        "end": 43.86000061035156,
+        "word": "This"
+      },
+      {
+        "start": 43.86000061035156,
+        "end": 44.2400016784668,
+        "word": "narration"
+      },
+      {
+        "start": 44.2400016784668,
+        "end": 44.720001220703125,
+        "word": "is"
+      },
+      {
+        "start": 44.720001220703125,
+        "end": 44.720001220703125,
+        "word": "paired"
+      },
+      {
+        "start": 44.720001220703125,
+        "end": 45.040000915527344,
+        "word": "with"
+      },
+      {
+        "start": 45.040000915527344,
+        "end": 45.439998626708984,
+        "word": "visuals"
+      },
+      {
+        "start": 45.439998626708984,
+        "end": 45.91999816894531,
+        "word": "created"
+      },
+      {
+        "start": 45.91999816894531,
+        "end": 46.279998779296875,
+        "word": "in"
+      },
+      {
+        "start": 46.279998779296875,
+        "end": 46.36000061035156,
+        "word": "Manim"
+      },
+      {
+        "start": 46.81999969482422,
+        "end": 47.119998931884766,
+        "word": "which"
+      },
+      {
+        "start": 47.119998931884766,
+        "end": 47.380001068115234,
+        "word": "serves"
+      },
+      {
+        "start": 47.380001068115234,
+        "end": 47.63999938964844,
+        "word": "as"
+      },
+      {
+        "start": 47.63999938964844,
+        "end": 47.779998779296875,
+        "word": "the"
+      },
+      {
+        "start": 47.779998779296875,
+        "end": 48.08000183105469,
+        "word": "main"
+      },
+      {
+        "start": 48.08000183105469,
+        "end": 48.439998626708984,
+        "word": "medium"
+      },
+      {
+        "start": 48.439998626708984,
+        "end": 49.040000915527344,
+        "word": "for"
+      },
+      {
+        "start": 49.040000915527344,
+        "end": 49.34000015258789,
+        "word": "explaining"
+      },
+      {
+        "start": 49.34000015258789,
+        "end": 49.939998626708984,
+        "word": "architecture"
+      },
+      {
+        "start": 49.939998626708984,
+        "end": 50.36000061035156,
+        "word": "and"
+      },
+      {
+        "start": 50.36000061035156,
+        "end": 50.779998779296875,
+        "word": "workflows"
+      },
+      {
+        "start": 50.779998779296875,
+        "end": 51.7400016784668,
+        "word": "Playwright"
+      },
+      {
+        "start": 51.7400016784668,
+        "end": 52.02000045776367,
+        "word": "can"
+      },
+      {
+        "start": 52.02000045776367,
+        "end": 52.400001525878906,
+        "word": "be"
+      },
+      {
+        "start": 52.400001525878906,
+        "end": 52.68000030517578,
+        "word": "integrated"
+      },
+      {
+        "start": 52.68000030517578,
+        "end": 53.2599983215332,
+        "word": "where"
+      },
+      {
+        "start": 53.2599983215332,
+        "end": 53.880001068115234,
+        "word": "interactive"
+      },
+      {
+        "start": 53.880001068115234,
+        "end": 54.279998779296875,
+        "word": "browser"
+      },
+      {
+        "start": 54.279998779296875,
+        "end": 54.79999923706055,
+        "word": "demonstrations"
+      },
+      {
+        "start": 54.79999923706055,
+        "end": 55.13999938964844,
+        "word": "are"
+      },
+      {
+        "start": 55.13999938964844,
+        "end": 55.58000183105469,
+        "word": "necessary"
+      },
+      {
+        "start": 56.29999923706055,
+        "end": 56.47999954223633,
+        "word": "The"
+      },
+      {
+        "start": 56.47999954223633,
+        "end": 56.86000061035156,
+        "word": "library"
+      },
+      {
+        "start": 56.86000061035156,
+        "end": 57.31999969482422,
+        "word": "provides"
+      },
+      {
+        "start": 57.31999969482422,
+        "end": 57.68000030517578,
+        "word": "a"
+      },
+      {
+        "start": 57.68000030517578,
+        "end": 57.68000030517578,
+        "word": "suite"
+      },
+      {
+        "start": 57.68000030517578,
+        "end": 58.34000015258789,
+        "word": "of"
+      },
+      {
+        "start": 58.34000015258789,
+        "end": 58.34000015258789,
+        "word": "features"
+      },
+      {
+        "start": 58.7400016784668,
+        "end": 59.02000045776367,
+        "word": "including"
+      },
+      {
+        "start": 59.02000045776367,
+        "end": 59.65999984741211,
+        "word": "validation"
+      },
+      {
+        "start": 59.65999984741211,
+        "end": 60.02000045776367,
+        "word": "checks"
+      },
+      {
+        "start": 60.02000045776367,
+        "end": 60.380001068115234,
+        "word": "for"
+      },
+      {
+        "start": 60.380001068115234,
+        "end": 60.7400016784668,
+        "word": "audio"
+      },
+      {
+        "start": 60.7400016784668,
+        "end": 61.0,
+        "word": "visual"
+      },
+      {
+        "start": 61.0,
+        "end": 61.380001068115234,
+        "word": "sync"
+      },
+      {
+        "start": 62.13999938964844,
+        "end": 62.18000030517578,
+        "word": "layout"
+      },
+      {
+        "start": 62.18000030517578,
+        "end": 62.68000030517578,
+        "word": "analysis"
+      },
+      {
+        "start": 63.08000183105469,
+        "end": 63.459999084472656,
+        "word": "and"
+      },
+      {
+        "start": 63.459999084472656,
+        "end": 63.52000045776367,
+        "word": "error"
+      },
+      {
+        "start": 63.52000045776367,
+        "end": 63.900001525878906,
+        "word": "detection"
+      },
+      {
+        "start": 64.4800033569336,
+        "end": 64.68000030517578,
+        "word": "It"
+      },
+      {
+        "start": 64.68000030517578,
+        "end": 65.05999755859375,
+        "word": "also"
+      },
+      {
+        "start": 65.05999755859375,
+        "end": 65.27999877929688,
+        "word": "includes"
+      },
+      {
+        "start": 65.27999877929688,
+        "end": 65.54000091552734,
+        "word": "a"
+      },
+      {
+        "start": 65.54000091552734,
+        "end": 65.80000305175781,
+        "word": "local"
+      },
+      {
+        "start": 65.80000305175781,
+        "end": 66.08000183105469,
+        "word": "web"
+      },
+      {
+        "start": 66.08000183105469,
+        "end": 66.33999633789062,
+        "word": "GUI"
+      },
+      {
+        "start": 66.33999633789062,
+        "end": 66.5999984741211,
+        "word": "wizard"
+      },
+      {
+        "start": 66.5999984741211,
+        "end": 67.0999984741211,
+        "word": "to"
+      },
+      {
+        "start": 67.0999984741211,
+        "end": 67.36000061035156,
+        "word": "help"
+      },
+      {
+        "start": 67.36000061035156,
+        "end": 67.77999877929688,
+        "word": "bootstrap"
+      },
+      {
+        "start": 67.77999877929688,
+        "end": 68.31999969482422,
+        "word": "narration"
+      },
+      {
+        "start": 68.31999969482422,
+        "end": 68.5999984741211,
+        "word": "scripts"
+      },
+      {
+        "start": 68.5999984741211,
+        "end": 69.12000274658203,
+        "word": "from"
+      },
+      {
+        "start": 69.12000274658203,
+        "end": 69.55999755859375,
+        "word": "existing"
+      },
+      {
+        "start": 69.55999755859375,
+        "end": 70.0,
+        "word": "project"
+      },
+      {
+        "start": 70.0,
+        "end": 70.5999984741211,
+        "word": "documentation"
+      },
+      {
+        "start": 71.4000015258789,
+        "end": 71.5199966430664,
+        "word": "making"
+      },
+      {
+        "start": 71.5199966430664,
+        "end": 71.83999633789062,
+        "word": "it"
+      },
+      {
+        "start": 71.83999633789062,
+        "end": 72.12000274658203,
+        "word": "user"
+      },
+      {
+        "start": 72.12000274658203,
+        "end": 72.27999877929688,
+        "word": "friendly"
+      },
+      {
+        "start": 72.27999877929688,
+        "end": 72.5999984741211,
+        "word": "for"
+      },
+      {
+        "start": 72.31999969482422,
+        "end": 73.08000183105469,
+        "word": "newcomers"
+      },
+      {
+        "start": 73.91999816894531,
+        "end": 74.18000030517578,
+        "word": "Legacy"
+      },
+      {
+        "start": 74.18000030517578,
+        "end": 74.54000091552734,
+        "word": "support"
+      },
+      {
+        "start": 74.54000091552734,
+        "end": 74.81999969482422,
+        "word": "for"
+      },
+      {
+        "start": 74.81999969482422,
+        "end": 75.31999969482422,
+        "word": "VHS"
+      },
+      {
+        "start": 75.31999969482422,
+        "end": 75.68000030517578,
+        "word": "terminal"
+      },
+      {
+        "start": 75.68000030517578,
+        "end": 76.12000274658203,
+        "word": "recordings"
+      },
+      {
+        "start": 76.12000274658203,
+        "end": 76.68000030517578,
+        "word": "exists"
+      },
+      {
+        "start": 76.91999816894531,
+        "end": 77.45999908447266,
+        "word": "but"
+      },
+      {
+        "start": 77.45999908447266,
+        "end": 77.72000122070312,
+        "word": "users"
+      },
+      {
+        "start": 77.72000122070312,
+        "end": 78.04000091552734,
+        "word": "are"
+      },
+      {
+        "start": 78.04000091552734,
+        "end": 78.30000305175781,
+        "word": "encouraged"
+      },
+      {
+        "start": 78.30000305175781,
+        "end": 78.58000183105469,
+        "word": "to"
+      },
+      {
+        "start": 78.58000183105469,
+        "end": 79.0199966430664,
+        "word": "migrate"
+      },
+      {
+        "start": 79.0199966430664,
+        "end": 79.31999969482422,
+        "word": "to"
+      },
+      {
+        "start": 79.31999969482422,
+        "end": 79.5999984741211,
+        "word": "using"
+      },
+      {
+        "start": 79.5999984741211,
+        "end": 79.87999725341797,
+        "word": "Manim"
+      },
+      {
+        "start": 79.87999725341797,
+        "end": 80.22000122070312,
+        "word": "and"
+      },
+      {
+        "start": 80.22000122070312,
+        "end": 80.5999984741211,
+        "word": "Playwright"
+      },
+      {
+        "start": 80.5999984741211,
+        "end": 81.0199966430664,
+        "word": "for"
+      },
+      {
+        "start": 81.0199966430664,
+        "end": 81.26000213623047,
+        "word": "new"
+      },
+      {
+        "start": 81.26000213623047,
+        "end": 81.69999694824219,
+        "word": "projects"
+      },
+      {
+        "start": 82.54000091552734,
+        "end": 82.63999938964844,
+        "word": "This"
+      },
+      {
+        "start": 82.63999938964844,
+        "end": 82.94000244140625,
+        "word": "shift"
+      },
+      {
+        "start": 82.94000244140625,
+        "end": 83.26000213623047,
+        "word": "not"
+      },
+      {
+        "start": 83.26000213623047,
+        "end": 83.55999755859375,
+        "word": "only"
+      },
+      {
+        "start": 83.55999755859375,
+        "end": 83.86000061035156,
+        "word": "improves"
+      },
+      {
+        "start": 83.86000061035156,
+        "end": 84.22000122070312,
+        "word": "the"
+      },
+      {
+        "start": 84.22000122070312,
+        "end": 84.5199966430664,
+        "word": "quality"
+      },
+      {
+        "start": 84.5199966430664,
+        "end": 84.72000122070312,
+        "word": "of"
+      },
+      {
+        "start": 84.72000122070312,
+        "end": 84.94000244140625,
+        "word": "the"
+      },
+      {
+        "start": 84.94000244140625,
+        "end": 85.33999633789062,
+        "word": "documentation"
+      },
+      {
+        "start": 85.68000030517578,
+        "end": 86.08000183105469,
+        "word": "but"
+      },
+      {
+        "start": 86.08000183105469,
+        "end": 86.4800033569336,
+        "word": "also"
+      },
+      {
+        "start": 86.4800033569336,
+        "end": 86.86000061035156,
+        "word": "aligns"
+      },
+      {
+        "start": 86.86000061035156,
+        "end": 87.0999984741211,
+        "word": "with"
+      },
+      {
+        "start": 87.0999984741211,
+        "end": 87.44000244140625,
+        "word": "modern"
+      },
+      {
+        "start": 87.44000244140625,
+        "end": 87.87999725341797,
+        "word": "development"
+      },
+      {
+        "start": 87.87999725341797,
+        "end": 88.37999725341797,
+        "word": "practices"
+      },
+      {
+        "start": 89.33999633789062,
+        "end": 89.76000213623047,
+        "word": "Installation"
+      },
+      {
+        "start": 89.76000213623047,
+        "end": 90.0199966430664,
+        "word": "is"
+      },
+      {
+        "start": 90.0199966430664,
+        "end": 90.62000274658203,
+        "word": "straightforward"
+      },
+      {
+        "start": 91.5,
+        "end": 91.5199966430664,
+        "word": "allowing"
+      },
+      {
+        "start": 91.5199966430664,
+        "end": 91.86000061035156,
+        "word": "users"
+      },
+      {
+        "start": 91.86000061035156,
+        "end": 92.13999938964844,
+        "word": "to"
+      },
+      {
+        "start": 92.13999938964844,
+        "end": 92.4800033569336,
+        "word": "quickly"
+      },
+      {
+        "start": 92.4800033569336,
+        "end": 92.69999694824219,
+        "word": "set"
+      },
+      {
+        "start": 92.69999694824219,
+        "end": 92.83999633789062,
+        "word": "up"
+      },
+      {
+        "start": 92.83999633789062,
+        "end": 93.05999755859375,
+        "word": "their"
+      },
+      {
+        "start": 93.05999755859375,
+        "end": 93.41999816894531,
+        "word": "environment"
+      },
+      {
+        "start": 93.41999816894531,
+        "end": 93.95999908447266,
+        "word": "with"
+      },
+      {
+        "start": 93.95999908447266,
+        "end": 94.19999694824219,
+        "word": "a"
+      },
+      {
+        "start": 94.19999694824219,
+        "end": 94.4800033569336,
+        "word": "simple"
+      },
+      {
+        "start": 94.4800033569336,
+        "end": 94.83999633789062,
+        "word": "command"
+      },
+      {
+        "start": 95.81999969482422,
+        "end": 96.16000366210938,
+        "word": "Development"
+      },
+      {
+        "start": 96.16000366210938,
+        "end": 96.5999984741211,
+        "word": "workflows"
+      },
+      {
+        "start": 96.5999984741211,
+        "end": 96.9800033569336,
+        "word": "are"
+      },
+      {
+        "start": 96.9800033569336,
+        "end": 97.36000061035156,
+        "word": "flexible"
+      },
+      {
+        "start": 97.9000015258789,
+        "end": 98.0199966430664,
+        "word": "with"
+      },
+      {
+        "start": 98.0199966430664,
+        "end": 98.26000213623047,
+        "word": "the"
+      },
+      {
+        "start": 98.26000213623047,
+        "end": 98.45999908447266,
+        "word": "ability"
+      },
+      {
+        "start": 98.45999908447266,
+        "end": 98.83999633789062,
+        "word": "to"
+      },
+      {
+        "start": 98.83999633789062,
+        "end": 98.9800033569336,
+        "word": "run"
+      },
+      {
+        "start": 98.9800033569336,
+        "end": 99.36000061035156,
+        "word": "tests"
+      },
+      {
+        "start": 99.36000061035156,
+        "end": 99.72000122070312,
+        "word": "and"
+      },
+      {
+        "start": 99.72000122070312,
+        "end": 100.0,
+        "word": "manage"
+      },
+      {
+        "start": 100.0,
+        "end": 100.54000091552734,
+        "word": "dependencies"
+      },
+      {
+        "start": 100.54000091552734,
+        "end": 101.22000122070312,
+        "word": "easily"
+      },
+      {
+        "start": 101.95999908447266,
+        "end": 102.5199966430664,
+        "word": "Overall"
+      },
+      {
+        "start": 103.08000183105469,
+        "end": 103.31999969482422,
+        "word": "DocGen"
+      },
+      {
+        "start": 103.31999969482422,
+        "end": 103.73999786376953,
+        "word": "offers"
+      },
+      {
+        "start": 103.73999786376953,
+        "end": 104.0199966430664,
+        "word": "a"
+      },
+      {
+        "start": 104.0199966430664,
+        "end": 104.5,
+        "word": "comprehensive"
+      },
+      {
+        "start": 104.5,
+        "end": 105.05999755859375,
+        "word": "solution"
+      },
+      {
+        "start": 105.05999755859375,
+        "end": 105.58000183105469,
+        "word": "for"
+      },
+      {
+        "start": 105.58000183105469,
+        "end": 106.0199966430664,
+        "word": "generating"
+      },
+      {
+        "start": 106.0199966430664,
+        "end": 106.4000015258789,
+        "word": "high"
+      },
+      {
+        "start": 106.4000015258789,
+        "end": 106.73999786376953,
+        "word": "quality"
+      },
+      {
+        "start": 106.73999786376953,
+        "end": 107.41999816894531,
+        "word": "documentation"
+      },
+      {
+        "start": 107.41999816894531,
+        "end": 108.0999984741211,
+        "word": "and"
+      },
+      {
+        "start": 108.0999984741211,
+        "end": 108.5199966430664,
+        "word": "narrated"
+      },
+      {
+        "start": 108.5199966430664,
+        "end": 108.81999969482422,
+        "word": "demo"
+      },
+      {
+        "start": 108.81999969482422,
+        "end": 109.23999786376953,
+        "word": "videos"
+      },
+      {
+        "start": 109.95999908447266,
+        "end": 110.16000366210938,
+        "word": "ensuring"
+      },
+      {
+        "start": 110.16000366210938,
+        "end": 110.5199966430664,
+        "word": "that"
+      },
+      {
+        "start": 110.5199966430664,
+        "end": 110.76000213623047,
+        "word": "both"
+      },
+      {
+        "start": 110.76000213623047,
+        "end": 111.27999877929688,
+        "word": "developers"
+      },
+      {
+        "start": 111.27999877929688,
+        "end": 111.63999938964844,
+        "word": "and"
+      },
+      {
+        "start": 111.63999938964844,
+        "end": 112.04000091552734,
+        "word": "end"
+      },
+      {
+        "start": 112.04000091552734,
+        "end": 112.26000213623047,
+        "word": "users"
+      },
+      {
+        "start": 112.26000213623047,
+        "end": 112.5,
+        "word": "have"
+      },
+      {
+        "start": 112.5,
+        "end": 112.87999725341797,
+        "word": "access"
+      },
+      {
+        "start": 112.87999725341797,
+        "end": 113.22000122070312,
+        "word": "to"
+      },
+      {
+        "start": 113.22000122070312,
+        "end": 113.5199966430664,
+        "word": "clear"
+      },
+      {
+        "start": 114.26000213623047,
+        "end": 114.26000213623047,
+        "word": "informative"
+      },
+      {
+        "start": 114.26000213623047,
+        "end": 114.72000122070312,
+        "word": "content"
+      }
+    ]
+  },
+  "02-init-scaffold": {
+    "text": "The init scaffold command is used to create a fresh layout for your documentation project. It sets up the necessary files and directories, providing a solid foundation for your documentation needs. When you run docgen init, it generates a docgen.yaml file in your demos directory. This file serves as the main configuration for your project. It defines the structure and settings that guide the documentation generation process. The command also creates essential directories where you can store your narration scripts, animations, and other related assets. This organization helps keep your project tidy and manageable as it grows. After initializing with init scaffold, you're ready to start populating your project with content. You can add your markdown files and other resources, making it easy to generate narrated demo videos later. This command is the first step in building a comprehensive documentation system that integrates narration, visuals, and interactive elements, all tailored to your project's specific needs. By starting with a solid scaffold, you ensure that your documentation process remains streamlined and efficient.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 5.679999828338623,
+        "text": " The init scaffold command is used to create a fresh layout for your documentation project."
+      },
+      {
+        "start": 6.480000019073486,
+        "end": 11.319999694824219,
+        "text": " It sets up the necessary files and directories, providing a solid foundation for your documentation"
+      },
+      {
+        "start": 11.079999923706055,
+        "end": 17.780000686645508,
+        "text": " needs. When you run docgen init, it generates a docgen.yaml file in your demos directory."
+      },
+      {
+        "start": 18.5,
+        "end": 21.5,
+        "text": " This file serves as the main configuration for your project."
+      },
+      {
+        "start": 21.940000534057617,
+        "end": 26.6200008392334,
+        "text": " It defines the structure and settings that guide the documentation generation process."
+      },
+      {
+        "start": 27.440000534057617,
+        "end": 32.400001525878906,
+        "text": " The command also creates essential directories where you can store your narration scripts,"
+      },
+      {
+        "start": 33.15999984741211,
+        "end": 37.63999938964844,
+        "text": " animations, and other related assets. This organization helps keep your project tidy"
+      },
+      {
+        "start": 37.63999938964844,
+        "end": 43.060001373291016,
+        "text": " and manageable as it grows. After initializing with init scaffold, you're ready to start"
+      },
+      {
+        "start": 43.060001373291016,
+        "end": 47.880001068115234,
+        "text": " populating your project with content. You can add your markdown files and other resources,"
+      },
+      {
+        "start": 48.720001220703125,
+        "end": 51.34000015258789,
+        "text": " making it easy to generate narrated demo videos later."
+      },
+      {
+        "start": 51.779998779296875,
+        "end": 56.119998931884766,
+        "text": " This command is the first step in building a comprehensive documentation system"
+      },
+      {
+        "start": 56.119998931884766,
+        "end": 60.060001373291016,
+        "text": " that integrates narration, visuals, and interactive elements,"
+      },
+      {
+        "start": 60.68000030517578,
+        "end": 65.04000091552734,
+        "text": " all tailored to your project's specific needs. By starting with a solid scaffold,"
+      },
+      {
+        "start": 65.58000183105469,
+        "end": 69.23999786376953,
+        "text": " you ensure that your documentation process remains streamlined and efficient."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.4399999976158142,
+        "word": "The"
+      },
+      {
+        "start": 0.4399999976158142,
+        "end": 0.8199999928474426,
+        "word": "init"
+      },
+      {
+        "start": 0.8199999928474426,
+        "end": 1.440000057220459,
+        "word": "scaffold"
+      },
+      {
+        "start": 1.440000057220459,
+        "end": 2.059999942779541,
+        "word": "command"
+      },
+      {
+        "start": 2.059999942779541,
+        "end": 2.4800000190734863,
+        "word": "is"
+      },
+      {
+        "start": 2.4800000190734863,
+        "end": 2.799999952316284,
+        "word": "used"
+      },
+      {
+        "start": 2.799999952316284,
+        "end": 3.299999952316284,
+        "word": "to"
+      },
+      {
+        "start": 3.299999952316284,
+        "end": 3.299999952316284,
+        "word": "create"
+      },
+      {
+        "start": 3.299999952316284,
+        "end": 3.5399999618530273,
+        "word": "a"
+      },
+      {
+        "start": 3.5399999618530273,
+        "end": 3.799999952316284,
+        "word": "fresh"
+      },
+      {
+        "start": 3.799999952316284,
+        "end": 4.099999904632568,
+        "word": "layout"
+      },
+      {
+        "start": 4.099999904632568,
+        "end": 4.360000133514404,
+        "word": "for"
+      },
+      {
+        "start": 4.360000133514404,
+        "end": 4.639999866485596,
+        "word": "your"
+      },
+      {
+        "start": 4.639999866485596,
+        "end": 5.099999904632568,
+        "word": "documentation"
+      },
+      {
+        "start": 5.099999904632568,
+        "end": 5.679999828338623,
+        "word": "project"
+      },
+      {
+        "start": 6.480000019073486,
+        "end": 6.480000019073486,
+        "word": "It"
+      },
+      {
+        "start": 6.480000019073486,
+        "end": 6.619999885559082,
+        "word": "sets"
+      },
+      {
+        "start": 6.619999885559082,
+        "end": 6.840000152587891,
+        "word": "up"
+      },
+      {
+        "start": 6.840000152587891,
+        "end": 7.019999980926514,
+        "word": "the"
+      },
+      {
+        "start": 7.019999980926514,
+        "end": 7.519999980926514,
+        "word": "necessary"
+      },
+      {
+        "start": 7.519999980926514,
+        "end": 7.860000133514404,
+        "word": "files"
+      },
+      {
+        "start": 7.860000133514404,
+        "end": 8.140000343322754,
+        "word": "and"
+      },
+      {
+        "start": 8.140000343322754,
+        "end": 8.600000381469727,
+        "word": "directories"
+      },
+      {
+        "start": 9.020000457763672,
+        "end": 9.260000228881836,
+        "word": "providing"
+      },
+      {
+        "start": 9.260000228881836,
+        "end": 9.579999923706055,
+        "word": "a"
+      },
+      {
+        "start": 9.579999923706055,
+        "end": 9.859999656677246,
+        "word": "solid"
+      },
+      {
+        "start": 9.859999656677246,
+        "end": 10.319999694824219,
+        "word": "foundation"
+      },
+      {
+        "start": 10.319999694824219,
+        "end": 10.619999885559082,
+        "word": "for"
+      },
+      {
+        "start": 10.619999885559082,
+        "end": 10.9399995803833,
+        "word": "your"
+      },
+      {
+        "start": 10.9399995803833,
+        "end": 11.319999694824219,
+        "word": "documentation"
+      },
+      {
+        "start": 11.079999923706055,
+        "end": 11.760000228881836,
+        "word": "needs"
+      },
+      {
+        "start": 12.600000381469727,
+        "end": 12.699999809265137,
+        "word": "When"
+      },
+      {
+        "start": 12.699999809265137,
+        "end": 12.899999618530273,
+        "word": "you"
+      },
+      {
+        "start": 12.899999618530273,
+        "end": 13.199999809265137,
+        "word": "run"
+      },
+      {
+        "start": 13.199999809265137,
+        "end": 13.640000343322754,
+        "word": "docgen"
+      },
+      {
+        "start": 13.640000343322754,
+        "end": 13.9399995803833,
+        "word": "init"
+      },
+      {
+        "start": 14.239999771118164,
+        "end": 14.539999961853027,
+        "word": "it"
+      },
+      {
+        "start": 14.539999961853027,
+        "end": 14.859999656677246,
+        "word": "generates"
+      },
+      {
+        "start": 14.859999656677246,
+        "end": 15.199999809265137,
+        "word": "a"
+      },
+      {
+        "start": 15.199999809265137,
+        "end": 15.5600004196167,
+        "word": "docgen"
+      },
+      {
+        "start": 15.5600004196167,
+        "end": 16.139999389648438,
+        "word": "yaml"
+      },
+      {
+        "start": 16.139999389648438,
+        "end": 16.5,
+        "word": "file"
+      },
+      {
+        "start": 16.5,
+        "end": 16.84000015258789,
+        "word": "in"
+      },
+      {
+        "start": 16.84000015258789,
+        "end": 17.040000915527344,
+        "word": "your"
+      },
+      {
+        "start": 17.040000915527344,
+        "end": 17.31999969482422,
+        "word": "demos"
+      },
+      {
+        "start": 17.31999969482422,
+        "end": 17.780000686645508,
+        "word": "directory"
+      },
+      {
+        "start": 18.5,
+        "end": 18.81999969482422,
+        "word": "This"
+      },
+      {
+        "start": 18.81999969482422,
+        "end": 19.200000762939453,
+        "word": "file"
+      },
+      {
+        "start": 19.200000762939453,
+        "end": 19.440000534057617,
+        "word": "serves"
+      },
+      {
+        "start": 19.440000534057617,
+        "end": 19.68000030517578,
+        "word": "as"
+      },
+      {
+        "start": 19.68000030517578,
+        "end": 19.84000015258789,
+        "word": "the"
+      },
+      {
+        "start": 19.84000015258789,
+        "end": 20.100000381469727,
+        "word": "main"
+      },
+      {
+        "start": 20.100000381469727,
+        "end": 20.600000381469727,
+        "word": "configuration"
+      },
+      {
+        "start": 20.600000381469727,
+        "end": 20.959999084472656,
+        "word": "for"
+      },
+      {
+        "start": 20.959999084472656,
+        "end": 21.139999389648438,
+        "word": "your"
+      },
+      {
+        "start": 21.139999389648438,
+        "end": 21.5,
+        "word": "project"
+      },
+      {
+        "start": 21.940000534057617,
+        "end": 22.34000015258789,
+        "word": "It"
+      },
+      {
+        "start": 22.34000015258789,
+        "end": 22.6200008392334,
+        "word": "defines"
+      },
+      {
+        "start": 22.6200008392334,
+        "end": 23.239999771118164,
+        "word": "the"
+      },
+      {
+        "start": 23.239999771118164,
+        "end": 23.239999771118164,
+        "word": "structure"
+      },
+      {
+        "start": 23.239999771118164,
+        "end": 23.68000030517578,
+        "word": "and"
+      },
+      {
+        "start": 23.68000030517578,
+        "end": 23.940000534057617,
+        "word": "settings"
+      },
+      {
+        "start": 23.940000534057617,
+        "end": 24.520000457763672,
+        "word": "that"
+      },
+      {
+        "start": 24.520000457763672,
+        "end": 24.739999771118164,
+        "word": "guide"
+      },
+      {
+        "start": 24.739999771118164,
+        "end": 25.579999923706055,
+        "word": "the"
+      },
+      {
+        "start": 25.579999923706055,
+        "end": 25.579999923706055,
+        "word": "documentation"
+      },
+      {
+        "start": 25.579999923706055,
+        "end": 26.1200008392334,
+        "word": "generation"
+      },
+      {
+        "start": 26.1200008392334,
+        "end": 26.6200008392334,
+        "word": "process"
+      },
+      {
+        "start": 27.440000534057617,
+        "end": 28.1200008392334,
+        "word": "The"
+      },
+      {
+        "start": 28.1200008392334,
+        "end": 28.459999084472656,
+        "word": "command"
+      },
+      {
+        "start": 28.459999084472656,
+        "end": 28.920000076293945,
+        "word": "also"
+      },
+      {
+        "start": 28.920000076293945,
+        "end": 29.280000686645508,
+        "word": "creates"
+      },
+      {
+        "start": 29.280000686645508,
+        "end": 29.799999237060547,
+        "word": "essential"
+      },
+      {
+        "start": 29.799999237060547,
+        "end": 30.34000015258789,
+        "word": "directories"
+      },
+      {
+        "start": 30.34000015258789,
+        "end": 30.780000686645508,
+        "word": "where"
+      },
+      {
+        "start": 30.780000686645508,
+        "end": 30.899999618530273,
+        "word": "you"
+      },
+      {
+        "start": 30.899999618530273,
+        "end": 31.31999969482422,
+        "word": "can"
+      },
+      {
+        "start": 31.31999969482422,
+        "end": 31.31999969482422,
+        "word": "store"
+      },
+      {
+        "start": 31.31999969482422,
+        "end": 31.600000381469727,
+        "word": "your"
+      },
+      {
+        "start": 31.600000381469727,
+        "end": 32.0,
+        "word": "narration"
+      },
+      {
+        "start": 32.0,
+        "end": 32.400001525878906,
+        "word": "scripts"
+      },
+      {
+        "start": 33.15999984741211,
+        "end": 33.15999984741211,
+        "word": "animations"
+      },
+      {
+        "start": 33.5,
+        "end": 33.68000030517578,
+        "word": "and"
+      },
+      {
+        "start": 33.68000030517578,
+        "end": 33.880001068115234,
+        "word": "other"
+      },
+      {
+        "start": 33.880001068115234,
+        "end": 34.29999923706055,
+        "word": "related"
+      },
+      {
+        "start": 34.29999923706055,
+        "end": 34.599998474121094,
+        "word": "assets"
+      },
+      {
+        "start": 35.41999816894531,
+        "end": 35.599998474121094,
+        "word": "This"
+      },
+      {
+        "start": 35.599998474121094,
+        "end": 36.18000030517578,
+        "word": "organization"
+      },
+      {
+        "start": 36.18000030517578,
+        "end": 36.47999954223633,
+        "word": "helps"
+      },
+      {
+        "start": 36.47999954223633,
+        "end": 36.720001220703125,
+        "word": "keep"
+      },
+      {
+        "start": 36.720001220703125,
+        "end": 36.939998626708984,
+        "word": "your"
+      },
+      {
+        "start": 36.939998626708984,
+        "end": 37.279998779296875,
+        "word": "project"
+      },
+      {
+        "start": 37.279998779296875,
+        "end": 37.63999938964844,
+        "word": "tidy"
+      },
+      {
+        "start": 37.63999938964844,
+        "end": 38.040000915527344,
+        "word": "and"
+      },
+      {
+        "start": 38.040000915527344,
+        "end": 38.31999969482422,
+        "word": "manageable"
+      },
+      {
+        "start": 38.31999969482422,
+        "end": 38.70000076293945,
+        "word": "as"
+      },
+      {
+        "start": 38.70000076293945,
+        "end": 39.15999984741211,
+        "word": "it"
+      },
+      {
+        "start": 39.15999984741211,
+        "end": 39.15999984741211,
+        "word": "grows"
+      },
+      {
+        "start": 39.959999084472656,
+        "end": 40.119998931884766,
+        "word": "After"
+      },
+      {
+        "start": 40.119998931884766,
+        "end": 40.779998779296875,
+        "word": "initializing"
+      },
+      {
+        "start": 40.779998779296875,
+        "end": 41.13999938964844,
+        "word": "with"
+      },
+      {
+        "start": 41.13999938964844,
+        "end": 41.2400016784668,
+        "word": "init"
+      },
+      {
+        "start": 41.2400016784668,
+        "end": 41.619998931884766,
+        "word": "scaffold"
+      },
+      {
+        "start": 42.15999984741211,
+        "end": 42.41999816894531,
+        "word": "you're"
+      },
+      {
+        "start": 42.41999816894531,
+        "end": 42.599998474121094,
+        "word": "ready"
+      },
+      {
+        "start": 42.599998474121094,
+        "end": 42.86000061035156,
+        "word": "to"
+      },
+      {
+        "start": 42.86000061035156,
+        "end": 43.060001373291016,
+        "word": "start"
+      },
+      {
+        "start": 43.060001373291016,
+        "end": 43.5,
+        "word": "populating"
+      },
+      {
+        "start": 43.5,
+        "end": 43.779998779296875,
+        "word": "your"
+      },
+      {
+        "start": 43.779998779296875,
+        "end": 44.08000183105469,
+        "word": "project"
+      },
+      {
+        "start": 44.08000183105469,
+        "end": 44.47999954223633,
+        "word": "with"
+      },
+      {
+        "start": 44.47999954223633,
+        "end": 44.720001220703125,
+        "word": "content"
+      },
+      {
+        "start": 45.380001068115234,
+        "end": 45.599998474121094,
+        "word": "You"
+      },
+      {
+        "start": 45.599998474121094,
+        "end": 45.81999969482422,
+        "word": "can"
+      },
+      {
+        "start": 45.81999969482422,
+        "end": 46.0,
+        "word": "add"
+      },
+      {
+        "start": 46.0,
+        "end": 46.2599983215332,
+        "word": "your"
+      },
+      {
+        "start": 46.2599983215332,
+        "end": 46.619998931884766,
+        "word": "markdown"
+      },
+      {
+        "start": 46.619998931884766,
+        "end": 46.939998626708984,
+        "word": "files"
+      },
+      {
+        "start": 46.939998626708984,
+        "end": 47.20000076293945,
+        "word": "and"
+      },
+      {
+        "start": 47.20000076293945,
+        "end": 47.439998626708984,
+        "word": "other"
+      },
+      {
+        "start": 47.439998626708984,
+        "end": 47.880001068115234,
+        "word": "resources"
+      },
+      {
+        "start": 48.720001220703125,
+        "end": 48.720001220703125,
+        "word": "making"
+      },
+      {
+        "start": 48.720001220703125,
+        "end": 49.0,
+        "word": "it"
+      },
+      {
+        "start": 49.0,
+        "end": 49.29999923706055,
+        "word": "easy"
+      },
+      {
+        "start": 49.29999923706055,
+        "end": 49.91999816894531,
+        "word": "to"
+      },
+      {
+        "start": 49.91999816894531,
+        "end": 49.91999816894531,
+        "word": "generate"
+      },
+      {
+        "start": 49.91999816894531,
+        "end": 50.36000061035156,
+        "word": "narrated"
+      },
+      {
+        "start": 50.36000061035156,
+        "end": 50.70000076293945,
+        "word": "demo"
+      },
+      {
+        "start": 50.70000076293945,
+        "end": 51.02000045776367,
+        "word": "videos"
+      },
+      {
+        "start": 51.02000045776367,
+        "end": 51.34000015258789,
+        "word": "later"
+      },
+      {
+        "start": 51.779998779296875,
+        "end": 52.459999084472656,
+        "word": "This"
+      },
+      {
+        "start": 52.459999084472656,
+        "end": 52.7400016784668,
+        "word": "command"
+      },
+      {
+        "start": 52.7400016784668,
+        "end": 52.939998626708984,
+        "word": "is"
+      },
+      {
+        "start": 52.939998626708984,
+        "end": 53.099998474121094,
+        "word": "the"
+      },
+      {
+        "start": 53.099998474121094,
+        "end": 53.380001068115234,
+        "word": "first"
+      },
+      {
+        "start": 53.380001068115234,
+        "end": 53.599998474121094,
+        "word": "step"
+      },
+      {
+        "start": 53.599998474121094,
+        "end": 54.060001373291016,
+        "word": "in"
+      },
+      {
+        "start": 54.060001373291016,
+        "end": 54.2400016784668,
+        "word": "building"
+      },
+      {
+        "start": 54.2400016784668,
+        "end": 55.060001373291016,
+        "word": "a"
+      },
+      {
+        "start": 55.060001373291016,
+        "end": 55.060001373291016,
+        "word": "comprehensive"
+      },
+      {
+        "start": 55.060001373291016,
+        "end": 55.63999938964844,
+        "word": "documentation"
+      },
+      {
+        "start": 55.63999938964844,
+        "end": 56.119998931884766,
+        "word": "system"
+      },
+      {
+        "start": 56.119998931884766,
+        "end": 56.560001373291016,
+        "word": "that"
+      },
+      {
+        "start": 56.560001373291016,
+        "end": 57.060001373291016,
+        "word": "integrates"
+      },
+      {
+        "start": 57.060001373291016,
+        "end": 57.540000915527344,
+        "word": "narration"
+      },
+      {
+        "start": 58.52000045776367,
+        "end": 58.52000045776367,
+        "word": "visuals"
+      },
+      {
+        "start": 58.68000030517578,
+        "end": 59.220001220703125,
+        "word": "and"
+      },
+      {
+        "start": 59.220001220703125,
+        "end": 59.63999938964844,
+        "word": "interactive"
+      },
+      {
+        "start": 59.63999938964844,
+        "end": 60.060001373291016,
+        "word": "elements"
+      },
+      {
+        "start": 60.68000030517578,
+        "end": 61.0,
+        "word": "all"
+      },
+      {
+        "start": 61.0,
+        "end": 61.119998931884766,
+        "word": "tailored"
+      },
+      {
+        "start": 61.119998931884766,
+        "end": 61.34000015258789,
+        "word": "to"
+      },
+      {
+        "start": 61.34000015258789,
+        "end": 61.52000045776367,
+        "word": "your"
+      },
+      {
+        "start": 61.52000045776367,
+        "end": 62.040000915527344,
+        "word": "project's"
+      },
+      {
+        "start": 62.040000915527344,
+        "end": 62.439998626708984,
+        "word": "specific"
+      },
+      {
+        "start": 62.439998626708984,
+        "end": 62.720001220703125,
+        "word": "needs"
+      },
+      {
+        "start": 63.08000183105469,
+        "end": 63.70000076293945,
+        "word": "By"
+      },
+      {
+        "start": 63.70000076293945,
+        "end": 63.959999084472656,
+        "word": "starting"
+      },
+      {
+        "start": 63.959999084472656,
+        "end": 64.12000274658203,
+        "word": "with"
+      },
+      {
+        "start": 64.12000274658203,
+        "end": 64.63999938964844,
+        "word": "a"
+      },
+      {
+        "start": 64.63999938964844,
+        "end": 64.63999938964844,
+        "word": "solid"
+      },
+      {
+        "start": 64.63999938964844,
+        "end": 65.04000091552734,
+        "word": "scaffold"
+      },
+      {
+        "start": 65.58000183105469,
+        "end": 65.63999938964844,
+        "word": "you"
+      },
+      {
+        "start": 65.63999938964844,
+        "end": 65.95999908447266,
+        "word": "ensure"
+      },
+      {
+        "start": 65.95999908447266,
+        "end": 66.18000030517578,
+        "word": "that"
+      },
+      {
+        "start": 66.18000030517578,
+        "end": 66.33999633789062,
+        "word": "your"
+      },
+      {
+        "start": 66.33999633789062,
+        "end": 66.83999633789062,
+        "word": "documentation"
+      },
+      {
+        "start": 66.83999633789062,
+        "end": 67.44000244140625,
+        "word": "process"
+      },
+      {
+        "start": 67.44000244140625,
+        "end": 67.9800033569336,
+        "word": "remains"
+      },
+      {
+        "start": 67.9800033569336,
+        "end": 68.5,
+        "word": "streamlined"
+      },
+      {
+        "start": 68.5,
+        "end": 69.0199966430664,
+        "word": "and"
+      },
+      {
+        "start": 69.0199966430664,
+        "end": 69.23999786376953,
+        "word": "efficient"
+      }
+    ]
+  },
+  "03-wizard-gui": {
+    "text": "The Wizard GUI is a local web application designed to streamline the process of creating narration scripts for your projects. This intuitive interface allows users to bootstrap narration scripts directly from existing project documentation. By simply launching the Wizard, you can quickly generate a narration framework that aligns with your project's content. The Wizard automates the initial setup, pulling relevant information from your project files. This means you spend less time configuring and more time focusing on the actual content of your narration. With the Wizard, you can easily customize your narration hints, ensuring that the generated scripts are tailored to your specific audience and objectives. You can launch the Wizard using the command line, which opens the GUI in your web browser. This makes the setup process accessible and user-friendly, even for those who may not be familiar with command line interfaces. Once the Wizard has completed its task, you will have a solid foundation for your narration scripts, ready for further refinement and integration into your video production pipeline. Overall, the Wizard GUI enhances productivity by simplifying the initial steps in creating high-quality narrate and demo videos.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 6.579999923706055,
+        "text": " The Wizard GUI is a local web application designed to streamline the process of creating"
+      },
+      {
+        "start": 6.579999923706055,
+        "end": 13.680000305175781,
+        "text": " narration scripts for your projects. This intuitive interface allows users to bootstrap narration"
+      },
+      {
+        "start": 13.680000305175781,
+        "end": 19.020000457763672,
+        "text": " scripts directly from existing project documentation. By simply launching the Wizard,"
+      },
+      {
+        "start": 19.260000228881836,
+        "end": 24.059999465942383,
+        "text": " you can quickly generate a narration framework that aligns with your project's content."
+      },
+      {
+        "start": 24.700000762939453,
+        "end": 30.020000457763672,
+        "text": " The Wizard automates the initial setup, pulling relevant information from your project files."
+      },
+      {
+        "start": 30.920000076293945,
+        "end": 35.70000076293945,
+        "text": " This means you spend less time configuring and more time focusing on the actual content"
+      },
+      {
+        "start": 35.70000076293945,
+        "end": 40.41999816894531,
+        "text": " of your narration. With the Wizard, you can easily customize your narration hints,"
+      },
+      {
+        "start": 41.380001068115234,
+        "end": 45.68000030517578,
+        "text": " ensuring that the generated scripts are tailored to your specific audience and objectives."
+      },
+      {
+        "start": 46.099998474121094,
+        "end": 51.060001373291016,
+        "text": " You can launch the Wizard using the command line, which opens the GUI in your web browser."
+      },
+      {
+        "start": 51.060001373291016,
+        "end": 54.540000915527344,
+        "text": " This makes the setup process accessible and user-friendly,"
+      },
+      {
+        "start": 55.15999984741211,
+        "end": 58.279998779296875,
+        "text": " even for those who may not be familiar with command line interfaces."
+      },
+      {
+        "start": 59.220001220703125,
+        "end": 64.19999694824219,
+        "text": " Once the Wizard has completed its task, you will have a solid foundation for your narration scripts,"
+      },
+      {
+        "start": 64.87999725341797,
+        "end": 68.72000122070312,
+        "text": " ready for further refinement and integration into your video production pipeline."
+      },
+      {
+        "start": 69.58000183105469,
+        "end": 74.45999908447266,
+        "text": " Overall, the Wizard GUI enhances productivity by simplifying the initial steps"
+      },
+      {
+        "start": 74.45999908447266,
+        "end": 77.66000366210938,
+        "text": " in creating high-quality narrate and demo videos."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.46000000834465027,
+        "word": "The"
+      },
+      {
+        "start": 0.46000000834465027,
+        "end": 0.8199999928474426,
+        "word": "Wizard"
+      },
+      {
+        "start": 0.8199999928474426,
+        "end": 1.2400000095367432,
+        "word": "GUI"
+      },
+      {
+        "start": 1.2400000095367432,
+        "end": 1.8799999952316284,
+        "word": "is"
+      },
+      {
+        "start": 1.8799999952316284,
+        "end": 2.140000104904175,
+        "word": "a"
+      },
+      {
+        "start": 2.140000104904175,
+        "end": 2.5199999809265137,
+        "word": "local"
+      },
+      {
+        "start": 2.5199999809265137,
+        "end": 2.8399999141693115,
+        "word": "web"
+      },
+      {
+        "start": 2.8399999141693115,
+        "end": 3.380000114440918,
+        "word": "application"
+      },
+      {
+        "start": 3.380000114440918,
+        "end": 4.260000228881836,
+        "word": "designed"
+      },
+      {
+        "start": 4.260000228881836,
+        "end": 4.71999979019165,
+        "word": "to"
+      },
+      {
+        "start": 4.71999979019165,
+        "end": 5.059999942779541,
+        "word": "streamline"
+      },
+      {
+        "start": 5.059999942779541,
+        "end": 5.420000076293945,
+        "word": "the"
+      },
+      {
+        "start": 5.420000076293945,
+        "end": 5.840000152587891,
+        "word": "process"
+      },
+      {
+        "start": 5.840000152587891,
+        "end": 6.260000228881836,
+        "word": "of"
+      },
+      {
+        "start": 6.260000228881836,
+        "end": 6.579999923706055,
+        "word": "creating"
+      },
+      {
+        "start": 6.579999923706055,
+        "end": 7.099999904632568,
+        "word": "narration"
+      },
+      {
+        "start": 7.099999904632568,
+        "end": 7.420000076293945,
+        "word": "scripts"
+      },
+      {
+        "start": 7.420000076293945,
+        "end": 8.0,
+        "word": "for"
+      },
+      {
+        "start": 8.0,
+        "end": 8.300000190734863,
+        "word": "your"
+      },
+      {
+        "start": 8.300000190734863,
+        "end": 8.760000228881836,
+        "word": "projects"
+      },
+      {
+        "start": 9.279999732971191,
+        "end": 9.979999542236328,
+        "word": "This"
+      },
+      {
+        "start": 9.979999542236328,
+        "end": 10.600000381469727,
+        "word": "intuitive"
+      },
+      {
+        "start": 10.600000381469727,
+        "end": 11.180000305175781,
+        "word": "interface"
+      },
+      {
+        "start": 11.180000305175781,
+        "end": 11.880000114440918,
+        "word": "allows"
+      },
+      {
+        "start": 11.880000114440918,
+        "end": 12.260000228881836,
+        "word": "users"
+      },
+      {
+        "start": 12.260000228881836,
+        "end": 13.100000381469727,
+        "word": "to"
+      },
+      {
+        "start": 13.100000381469727,
+        "end": 13.100000381469727,
+        "word": "bootstrap"
+      },
+      {
+        "start": 13.100000381469727,
+        "end": 13.680000305175781,
+        "word": "narration"
+      },
+      {
+        "start": 13.680000305175781,
+        "end": 14.039999961853027,
+        "word": "scripts"
+      },
+      {
+        "start": 14.039999961853027,
+        "end": 14.880000114440918,
+        "word": "directly"
+      },
+      {
+        "start": 14.880000114440918,
+        "end": 15.220000267028809,
+        "word": "from"
+      },
+      {
+        "start": 15.220000267028809,
+        "end": 15.720000267028809,
+        "word": "existing"
+      },
+      {
+        "start": 15.720000267028809,
+        "end": 16.18000030517578,
+        "word": "project"
+      },
+      {
+        "start": 16.18000030517578,
+        "end": 16.799999237060547,
+        "word": "documentation"
+      },
+      {
+        "start": 17.299999237060547,
+        "end": 17.81999969482422,
+        "word": "By"
+      },
+      {
+        "start": 17.81999969482422,
+        "end": 18.200000762939453,
+        "word": "simply"
+      },
+      {
+        "start": 18.200000762939453,
+        "end": 18.6200008392334,
+        "word": "launching"
+      },
+      {
+        "start": 18.6200008392334,
+        "end": 19.020000457763672,
+        "word": "the"
+      },
+      {
+        "start": 19.020000457763672,
+        "end": 19.020000457763672,
+        "word": "Wizard"
+      },
+      {
+        "start": 19.260000228881836,
+        "end": 19.65999984741211,
+        "word": "you"
+      },
+      {
+        "start": 19.65999984741211,
+        "end": 19.899999618530273,
+        "word": "can"
+      },
+      {
+        "start": 19.899999618530273,
+        "end": 20.280000686645508,
+        "word": "quickly"
+      },
+      {
+        "start": 20.280000686645508,
+        "end": 20.719999313354492,
+        "word": "generate"
+      },
+      {
+        "start": 20.719999313354492,
+        "end": 21.360000610351562,
+        "word": "a"
+      },
+      {
+        "start": 21.360000610351562,
+        "end": 21.360000610351562,
+        "word": "narration"
+      },
+      {
+        "start": 21.360000610351562,
+        "end": 21.780000686645508,
+        "word": "framework"
+      },
+      {
+        "start": 21.780000686645508,
+        "end": 22.34000015258789,
+        "word": "that"
+      },
+      {
+        "start": 22.34000015258789,
+        "end": 22.780000686645508,
+        "word": "aligns"
+      },
+      {
+        "start": 22.780000686645508,
+        "end": 22.979999542236328,
+        "word": "with"
+      },
+      {
+        "start": 22.979999542236328,
+        "end": 23.219999313354492,
+        "word": "your"
+      },
+      {
+        "start": 23.219999313354492,
+        "end": 23.84000015258789,
+        "word": "project's"
+      },
+      {
+        "start": 23.84000015258789,
+        "end": 24.059999465942383,
+        "word": "content"
+      },
+      {
+        "start": 24.639999389648438,
+        "end": 24.959999084472656,
+        "word": "The"
+      },
+      {
+        "start": 24.959999084472656,
+        "end": 25.260000228881836,
+        "word": "Wizard"
+      },
+      {
+        "start": 25.260000228881836,
+        "end": 25.799999237060547,
+        "word": "automates"
+      },
+      {
+        "start": 25.799999237060547,
+        "end": 26.040000915527344,
+        "word": "the"
+      },
+      {
+        "start": 26.040000915527344,
+        "end": 26.360000610351562,
+        "word": "initial"
+      },
+      {
+        "start": 26.360000610351562,
+        "end": 26.700000762939453,
+        "word": "setup"
+      },
+      {
+        "start": 27.420000076293945,
+        "end": 27.440000534057617,
+        "word": "pulling"
+      },
+      {
+        "start": 27.440000534057617,
+        "end": 27.920000076293945,
+        "word": "relevant"
+      },
+      {
+        "start": 27.920000076293945,
+        "end": 28.420000076293945,
+        "word": "information"
+      },
+      {
+        "start": 28.420000076293945,
+        "end": 28.920000076293945,
+        "word": "from"
+      },
+      {
+        "start": 28.920000076293945,
+        "end": 29.239999771118164,
+        "word": "your"
+      },
+      {
+        "start": 29.239999771118164,
+        "end": 29.639999389648438,
+        "word": "project"
+      },
+      {
+        "start": 29.639999389648438,
+        "end": 30.020000457763672,
+        "word": "files"
+      },
+      {
+        "start": 30.920000076293945,
+        "end": 30.940000534057617,
+        "word": "This"
+      },
+      {
+        "start": 30.940000534057617,
+        "end": 31.200000762939453,
+        "word": "means"
+      },
+      {
+        "start": 31.200000762939453,
+        "end": 31.399999618530273,
+        "word": "you"
+      },
+      {
+        "start": 31.399999618530273,
+        "end": 31.579999923706055,
+        "word": "spend"
+      },
+      {
+        "start": 31.579999923706055,
+        "end": 31.8799991607666,
+        "word": "less"
+      },
+      {
+        "start": 31.8799991607666,
+        "end": 32.29999923706055,
+        "word": "time"
+      },
+      {
+        "start": 32.29999923706055,
+        "end": 32.70000076293945,
+        "word": "configuring"
+      },
+      {
+        "start": 32.70000076293945,
+        "end": 33.2599983215332,
+        "word": "and"
+      },
+      {
+        "start": 33.2599983215332,
+        "end": 33.599998474121094,
+        "word": "more"
+      },
+      {
+        "start": 33.599998474121094,
+        "end": 33.939998626708984,
+        "word": "time"
+      },
+      {
+        "start": 33.939998626708984,
+        "end": 34.279998779296875,
+        "word": "focusing"
+      },
+      {
+        "start": 34.279998779296875,
+        "end": 34.63999938964844,
+        "word": "on"
+      },
+      {
+        "start": 34.63999938964844,
+        "end": 34.81999969482422,
+        "word": "the"
+      },
+      {
+        "start": 34.81999969482422,
+        "end": 35.279998779296875,
+        "word": "actual"
+      },
+      {
+        "start": 35.279998779296875,
+        "end": 35.70000076293945,
+        "word": "content"
+      },
+      {
+        "start": 35.70000076293945,
+        "end": 35.939998626708984,
+        "word": "of"
+      },
+      {
+        "start": 35.939998626708984,
+        "end": 36.13999938964844,
+        "word": "your"
+      },
+      {
+        "start": 36.13999938964844,
+        "end": 36.400001525878906,
+        "word": "narration"
+      },
+      {
+        "start": 36.900001525878906,
+        "end": 37.47999954223633,
+        "word": "With"
+      },
+      {
+        "start": 37.47999954223633,
+        "end": 37.81999969482422,
+        "word": "the"
+      },
+      {
+        "start": 37.81999969482422,
+        "end": 37.880001068115234,
+        "word": "Wizard"
+      },
+      {
+        "start": 38.220001220703125,
+        "end": 38.31999969482422,
+        "word": "you"
+      },
+      {
+        "start": 38.31999969482422,
+        "end": 38.560001373291016,
+        "word": "can"
+      },
+      {
+        "start": 38.560001373291016,
+        "end": 38.97999954223633,
+        "word": "easily"
+      },
+      {
+        "start": 38.97999954223633,
+        "end": 39.439998626708984,
+        "word": "customize"
+      },
+      {
+        "start": 39.439998626708984,
+        "end": 39.7599983215332,
+        "word": "your"
+      },
+      {
+        "start": 39.7599983215332,
+        "end": 40.060001373291016,
+        "word": "narration"
+      },
+      {
+        "start": 40.060001373291016,
+        "end": 40.41999816894531,
+        "word": "hints"
+      },
+      {
+        "start": 41.380001068115234,
+        "end": 41.380001068115234,
+        "word": "ensuring"
+      },
+      {
+        "start": 41.380001068115234,
+        "end": 41.63999938964844,
+        "word": "that"
+      },
+      {
+        "start": 41.63999938964844,
+        "end": 41.900001525878906,
+        "word": "the"
+      },
+      {
+        "start": 41.900001525878906,
+        "end": 42.2599983215332,
+        "word": "generated"
+      },
+      {
+        "start": 42.2599983215332,
+        "end": 42.560001373291016,
+        "word": "scripts"
+      },
+      {
+        "start": 42.560001373291016,
+        "end": 43.099998474121094,
+        "word": "are"
+      },
+      {
+        "start": 43.099998474121094,
+        "end": 43.20000076293945,
+        "word": "tailored"
+      },
+      {
+        "start": 43.20000076293945,
+        "end": 43.52000045776367,
+        "word": "to"
+      },
+      {
+        "start": 43.52000045776367,
+        "end": 43.84000015258789,
+        "word": "your"
+      },
+      {
+        "start": 43.84000015258789,
+        "end": 44.2400016784668,
+        "word": "specific"
+      },
+      {
+        "start": 44.2400016784668,
+        "end": 44.65999984741211,
+        "word": "audience"
+      },
+      {
+        "start": 44.65999984741211,
+        "end": 45.220001220703125,
+        "word": "and"
+      },
+      {
+        "start": 45.220001220703125,
+        "end": 45.68000030517578,
+        "word": "objectives"
+      },
+      {
+        "start": 46.099998474121094,
+        "end": 46.7400016784668,
+        "word": "You"
+      },
+      {
+        "start": 46.7400016784668,
+        "end": 47.060001373291016,
+        "word": "can"
+      },
+      {
+        "start": 47.060001373291016,
+        "end": 47.279998779296875,
+        "word": "launch"
+      },
+      {
+        "start": 47.279998779296875,
+        "end": 47.68000030517578,
+        "word": "the"
+      },
+      {
+        "start": 47.68000030517578,
+        "end": 47.68000030517578,
+        "word": "Wizard"
+      },
+      {
+        "start": 47.68000030517578,
+        "end": 48.0,
+        "word": "using"
+      },
+      {
+        "start": 48.0,
+        "end": 48.20000076293945,
+        "word": "the"
+      },
+      {
+        "start": 48.20000076293945,
+        "end": 48.459999084472656,
+        "word": "command"
+      },
+      {
+        "start": 48.459999084472656,
+        "end": 48.70000076293945,
+        "word": "line"
+      },
+      {
+        "start": 49.02000045776367,
+        "end": 49.31999969482422,
+        "word": "which"
+      },
+      {
+        "start": 49.31999969482422,
+        "end": 49.599998474121094,
+        "word": "opens"
+      },
+      {
+        "start": 49.599998474121094,
+        "end": 50.02000045776367,
+        "word": "the"
+      },
+      {
+        "start": 50.02000045776367,
+        "end": 50.02000045776367,
+        "word": "GUI"
+      },
+      {
+        "start": 50.02000045776367,
+        "end": 50.29999923706055,
+        "word": "in"
+      },
+      {
+        "start": 50.29999923706055,
+        "end": 50.540000915527344,
+        "word": "your"
+      },
+      {
+        "start": 50.540000915527344,
+        "end": 50.81999969482422,
+        "word": "web"
+      },
+      {
+        "start": 50.81999969482422,
+        "end": 51.060001373291016,
+        "word": "browser"
+      },
+      {
+        "start": 51.060001373291016,
+        "end": 51.68000030517578,
+        "word": "This"
+      },
+      {
+        "start": 51.68000030517578,
+        "end": 51.91999816894531,
+        "word": "makes"
+      },
+      {
+        "start": 51.91999816894531,
+        "end": 52.220001220703125,
+        "word": "the"
+      },
+      {
+        "start": 52.220001220703125,
+        "end": 52.36000061035156,
+        "word": "setup"
+      },
+      {
+        "start": 52.36000061035156,
+        "end": 52.84000015258789,
+        "word": "process"
+      },
+      {
+        "start": 52.84000015258789,
+        "end": 53.31999969482422,
+        "word": "accessible"
+      },
+      {
+        "start": 53.31999969482422,
+        "end": 53.939998626708984,
+        "word": "and"
+      },
+      {
+        "start": 53.939998626708984,
+        "end": 54.279998779296875,
+        "word": "user"
+      },
+      {
+        "start": 54.279998779296875,
+        "end": 54.540000915527344,
+        "word": "friendly"
+      },
+      {
+        "start": 55.15999984741211,
+        "end": 55.34000015258789,
+        "word": "even"
+      },
+      {
+        "start": 55.34000015258789,
+        "end": 55.58000183105469,
+        "word": "for"
+      },
+      {
+        "start": 55.58000183105469,
+        "end": 55.81999969482422,
+        "word": "those"
+      },
+      {
+        "start": 55.81999969482422,
+        "end": 56.0,
+        "word": "who"
+      },
+      {
+        "start": 56.0,
+        "end": 56.15999984741211,
+        "word": "may"
+      },
+      {
+        "start": 56.15999984741211,
+        "end": 56.41999816894531,
+        "word": "not"
+      },
+      {
+        "start": 56.41999816894531,
+        "end": 56.68000030517578,
+        "word": "be"
+      },
+      {
+        "start": 56.68000030517578,
+        "end": 56.900001525878906,
+        "word": "familiar"
+      },
+      {
+        "start": 56.900001525878906,
+        "end": 57.2599983215332,
+        "word": "with"
+      },
+      {
+        "start": 57.2599983215332,
+        "end": 57.52000045776367,
+        "word": "command"
+      },
+      {
+        "start": 57.52000045776367,
+        "end": 57.7400016784668,
+        "word": "line"
+      },
+      {
+        "start": 57.7400016784668,
+        "end": 58.279998779296875,
+        "word": "interfaces"
+      },
+      {
+        "start": 59.220001220703125,
+        "end": 59.380001068115234,
+        "word": "Once"
+      },
+      {
+        "start": 59.380001068115234,
+        "end": 59.599998474121094,
+        "word": "the"
+      },
+      {
+        "start": 59.599998474121094,
+        "end": 59.68000030517578,
+        "word": "Wizard"
+      },
+      {
+        "start": 59.68000030517578,
+        "end": 60.0,
+        "word": "has"
+      },
+      {
+        "start": 60.0,
+        "end": 60.380001068115234,
+        "word": "completed"
+      },
+      {
+        "start": 60.380001068115234,
+        "end": 60.599998474121094,
+        "word": "its"
+      },
+      {
+        "start": 60.599998474121094,
+        "end": 60.959999084472656,
+        "word": "task"
+      },
+      {
+        "start": 61.459999084472656,
+        "end": 61.560001373291016,
+        "word": "you"
+      },
+      {
+        "start": 61.560001373291016,
+        "end": 61.720001220703125,
+        "word": "will"
+      },
+      {
+        "start": 61.720001220703125,
+        "end": 61.86000061035156,
+        "word": "have"
+      },
+      {
+        "start": 61.86000061035156,
+        "end": 62.119998931884766,
+        "word": "a"
+      },
+      {
+        "start": 62.119998931884766,
+        "end": 62.380001068115234,
+        "word": "solid"
+      },
+      {
+        "start": 62.380001068115234,
+        "end": 62.84000015258789,
+        "word": "foundation"
+      },
+      {
+        "start": 62.84000015258789,
+        "end": 63.18000030517578,
+        "word": "for"
+      },
+      {
+        "start": 63.18000030517578,
+        "end": 63.47999954223633,
+        "word": "your"
+      },
+      {
+        "start": 63.47999954223633,
+        "end": 63.86000061035156,
+        "word": "narration"
+      },
+      {
+        "start": 63.86000061035156,
+        "end": 64.19999694824219,
+        "word": "scripts"
+      },
+      {
+        "start": 64.87999725341797,
+        "end": 64.94000244140625,
+        "word": "ready"
+      },
+      {
+        "start": 64.94000244140625,
+        "end": 65.23999786376953,
+        "word": "for"
+      },
+      {
+        "start": 65.23999786376953,
+        "end": 65.5199966430664,
+        "word": "further"
+      },
+      {
+        "start": 65.5199966430664,
+        "end": 65.9000015258789,
+        "word": "refinement"
+      },
+      {
+        "start": 65.9000015258789,
+        "end": 66.5999984741211,
+        "word": "and"
+      },
+      {
+        "start": 66.5999984741211,
+        "end": 66.9800033569336,
+        "word": "integration"
+      },
+      {
+        "start": 66.9800033569336,
+        "end": 67.36000061035156,
+        "word": "into"
+      },
+      {
+        "start": 67.36000061035156,
+        "end": 67.58000183105469,
+        "word": "your"
+      },
+      {
+        "start": 67.58000183105469,
+        "end": 67.86000061035156,
+        "word": "video"
+      },
+      {
+        "start": 67.86000061035156,
+        "end": 68.26000213623047,
+        "word": "production"
+      },
+      {
+        "start": 68.26000213623047,
+        "end": 68.72000122070312,
+        "word": "pipeline"
+      },
+      {
+        "start": 69.58000183105469,
+        "end": 70.0,
+        "word": "Overall"
+      },
+      {
+        "start": 70.37999725341797,
+        "end": 70.63999938964844,
+        "word": "the"
+      },
+      {
+        "start": 70.63999938964844,
+        "end": 70.83999633789062,
+        "word": "Wizard"
+      },
+      {
+        "start": 70.83999633789062,
+        "end": 71.22000122070312,
+        "word": "GUI"
+      },
+      {
+        "start": 71.22000122070312,
+        "end": 71.69999694824219,
+        "word": "enhances"
+      },
+      {
+        "start": 71.69999694824219,
+        "end": 72.30000305175781,
+        "word": "productivity"
+      },
+      {
+        "start": 72.30000305175781,
+        "end": 73.04000091552734,
+        "word": "by"
+      },
+      {
+        "start": 73.04000091552734,
+        "end": 73.54000091552734,
+        "word": "simplifying"
+      },
+      {
+        "start": 73.54000091552734,
+        "end": 73.81999969482422,
+        "word": "the"
+      },
+      {
+        "start": 73.81999969482422,
+        "end": 74.13999938964844,
+        "word": "initial"
+      },
+      {
+        "start": 74.13999938964844,
+        "end": 74.45999908447266,
+        "word": "steps"
+      },
+      {
+        "start": 74.45999908447266,
+        "end": 75.05999755859375,
+        "word": "in"
+      },
+      {
+        "start": 75.05999755859375,
+        "end": 75.36000061035156,
+        "word": "creating"
+      },
+      {
+        "start": 75.36000061035156,
+        "end": 75.76000213623047,
+        "word": "high"
+      },
+      {
+        "start": 75.76000213623047,
+        "end": 76.16000366210938,
+        "word": "quality"
+      },
+      {
+        "start": 76.16000366210938,
+        "end": 76.80000305175781,
+        "word": "narrate"
+      },
+      {
+        "start": 76.80000305175781,
+        "end": 77.0199966430664,
+        "word": "and"
+      },
+      {
+        "start": 77.0199966430664,
+        "end": 77.22000122070312,
+        "word": "demo"
+      },
+      {
+        "start": 77.22000122070312,
+        "end": 77.66000366210938,
+        "word": "videos"
+      }
+    ]
+  }
+}

@@ -56,3 +56,8 @@ class TimestampExtractor:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(timing, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"[timestamps] Wrote {out}")
+
+        from docgen.scene_generate import sync_audio_tail_waits_in_scenes
+
+        for msg in sync_audio_tail_waits_in_scenes(self.config):
+            print(f"[timestamps] scenes.py: {msg}")

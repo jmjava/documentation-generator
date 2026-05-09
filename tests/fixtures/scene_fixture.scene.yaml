@@ -1,0 +1,30 @@
+segment_id: "99"
+class_name: TestDeclarativeScene
+title:
+  text: "Test declarative"
+  font_size: 40
+  color: C_WHITE
+layout:
+  first_row_title_buff: 0.5
+  row_gap: 0.35
+  column_gap: 0.35
+rows:
+  - run_time: 1.0
+    boxes:
+      - label: "Alpha"
+        color: C_ORANGE
+        width: 5.0
+        height: 1.2
+        font_size: 28
+  - run_time: 1.0
+    boxes:
+      - label: "Beta"
+        color: C_BLUE
+        width: 3.5
+        height: 1.2
+        font_size: 24
+      - label: "Gamma"
+        color: C_TEAL
+        width: 3.5
+        height: 1.2
+        font_size: 24

@@ -39,6 +39,38 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from docgen.config import Config
 
+from docgen.validate import lint_manim_timing_stub_antipattern
+
+_TITLE_DOWN_OVERLAP_RE = re.compile(r"\.next_to\(\s*title\s*,\s*DOWN\b")
+_SHIFT_LEFT_RE = re.compile(r"\.shift\(\s*LEFT\s*\*")
+_SHIFT_RIGHT_RE = re.compile(r"\.shift\(\s*RIGHT\s*\*")
+
+
+def lint_manim_title_down_row_collision_risk(code: str) -> list[str]:
+    """Flag a layout anti-pattern that stacks a wide box over flanking side boxes.
+
+    When two mobjects are placed with ``.shift(LEFT * n)`` / ``.shift(RIGHT * n)``
+    and another uses ``.next_to(title, DOWN, ...)`` only, their bounding boxes
+    often collide on the same horizontal band. Scene-generate should use
+    ``VGroup(...).arrange(RIGHT)`` rows chained with ``.next_to(row, DOWN)`` instead.
+    """
+    if (
+        _SHIFT_LEFT_RE.search(code)
+        and _SHIFT_RIGHT_RE.search(code)
+        and _TITLE_DOWN_OVERLAP_RE.search(code)
+    ):
+        # Init-style scenes may use ReplacementTransform with a title-anchored box;
+        # do not block those wholesale.
+        if "ReplacementTransform" in code:
+            return []
+        return [
+            "layout: pairing `.shift(LEFT * …)` + `.shift(RIGHT * …)` with "
+            "`.next_to(title, DOWN, …)` usually overlaps a centered box onto the "
+            "side boxes; build `VGroup(left, right).arrange(RIGHT, buff=…)`, "
+            "`row.next_to(title, DOWN, buff=…)`, then chain further rows with "
+            "`.next_to(row, DOWN, buff=…)` only."
+        ]
+    return []
 
 DEFAULT_MODEL = "gpt-4o"
 DEFAULT_TEMPERATURE = 0.4
@@ -55,7 +87,14 @@ Output discipline:
     timing helpers: `self.timed_play(*anims, run_time=...)`, `self.wait_until(t)`, `self.timed_wait(d)`, `self._clock`
     manim primitives: Text, RoundedRectangle, Rectangle, Line, Dot, Arrow, VGroup, FadeIn, FadeOut, Write, Create, Indicate, Transform, ReplacementTransform, GrowFromEdge, ORIGIN, UP, DOWN, LEFT, RIGHT, NORMAL, GREY_B, GREY_D
 - Frame is 1280x720; coordinates x in [-7.11, 7.11], y in [-4, 4]. Keep all mobjects inside this box.
-- Sync beats with `_load_timing(<segment_key>)`. The Whisper segments may be empty (timing.json not yet generated); your code MUST still render correctly via the `seg_start`/`seg_end` fallback pattern shown in the reference scenes.
+- Layout / overlap (diagram readability — `docgen validate` is strict on fonts, but overlaps ruin demos):
+    - **No accidental collisions:** every `_box` must keep clear margin from every other `_box`. Prefer **explicit rows**: build a row with `VGroup(left, right).arrange(RIGHT, buff=0.8)` (tune `buff` 0.6–1.2), then place the next row with `.next_to(row, DOWN, buff=0.6)`.
+    - **Forbidden pattern:** side-by-side boxes positioned with `.shift(LEFT * n)` / `.shift(RIGHT * n)` while a **wide** box is anchored with `.next_to(title, DOWN, ...)` only — the centered-under-title box will sit at the **same depth** as the row and **cover** the flanking boxes. Fix: first complete the top row as a `VGroup`, then chain downward with `DOWN` from that row (or move the flanking row `UP` and the centered stack strictly `DOWN` with enough `buff`).
+    - Use `.next_to(..., buff=...)` on every placement; default Manim gaps are often too tight for rounded `_box` labels. When in doubt, **increase `buff`** or **narrow** `_box` width `w`.
+    - Titles use `.to_edge(UP)`; the **first** row of content should be `.next_to(title, DOWN, buff=0.5)` (single anchor), then **only** chain `DOWN` from the previous row — do not mix free `shift(LEFT/RIGHT)` on the same Y band as a full-width centered element.
+- Sync beats with `_load_timing("<narration_audio_stem>")` when you need audio-aligned waits: each item has `start` / `end` / `text` (seconds). If the list is non-empty, you may call `self.wait_until(float(segs[i]["start"]))` before a beat that should land on spoken word `i`. If the list is empty (`timing.json` not yet generated), the scene MUST still render using only explicit `run_time` arguments to `timed_play` and optional `timed_wait` — never invent placeholder functions named `seg_start` / `seg_end`, and never call `self._clock` like a function.
+- Narration is usually much longer than a few bullet labels: **spread meaningfully distinct visuals across the entire Whisper timeline**, not just the first 10–20 seconds. When `_load_timing(...)` returns segments, aim for **at least one clear on-screen change (new label, Transform, arrow, or layout shift) near the start of most segments**, pacing with `wait_until` on segment `start` times. Avoid front-loading every `FadeIn` then sitting on a static frame while implied audio would still be describing new ideas — that is exactly what makes demos feel "incomplete" after compose.
+- On-screen text should be **short phrases** cueing each idea; the voice may use full sentences — visuals reinforce, they need not mirror every word.
 - The first action in `construct` MUST be `self.camera.background_color = C_BG`.
 - The last action in `construct` MUST be a fade-out of all mobjects: `self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)` followed by `self.timed_wait(0.5)`.
 - Do not call `self.play(...)` directly; always use `self.timed_play` so the elapsed-clock contract holds.
@@ -123,6 +162,7 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
         stroke_color=color, fill_color=color, fill_opacity=0.12,
     )
     t = Text(label, font_size=fs, color=color)
+    t.move_to(r.get_center())
     return VGroup(r, t)
 
 
@@ -404,11 +444,17 @@ def build_user_message(
             for i, s in enumerate(whisper_segments[:25])
         ]
         parts.append(json.dumps(compact, indent=2))
+        parts.append(
+            "# Staging: use the segment start times above with `self.wait_until(start)` "
+            "and match each segment's `text` gist to a visual beat so the picture evolves "
+            "through the whole clip, not only at the beginning."
+        )
     else:
         parts.append(
             "[]\n# timing.json is not yet populated for this segment. The scene must "
-            "still render correctly when `_load_timing(...)` returns []. Use the "
-            "`seg_start(i)`/`seg_end(i)` fallback pattern from the reference scenes."
+            "still render correctly when `_load_timing(...)` returns []: use explicit "
+            "`timed_play` / `timed_wait` run_times only. Never emit `seg_start` / `seg_end` "
+            "placeholders and never call `self._clock` as if it were a function."
         )
 
     all_hints = list(hints) + list(extra_hints)
@@ -539,6 +585,8 @@ def lint_generated_block(
                         f"line {node.lineno}: Text() font_size={int(val)} is below "
                         f"minimum {min_font_size}; small text is unreadable in video"
                     )
+    issues.extend(lint_manim_timing_stub_antipattern(tree, "generated"))
+    issues.extend(lint_manim_title_down_row_collision_risk(code))
     return issues
 
 
@@ -617,6 +665,102 @@ def inject_or_replace(scenes_py_text: str, seg_id: str, class_name: str, class_b
     if not scenes_py_text.endswith("\n"):
         scenes_py_text += "\n"
     return scenes_py_text + wrapped
+
+
+_AUDIO_TAIL_COMMENT = "# docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)"
+
+
+def append_audio_tail_to_class_body(class_body: str, timing_json_key: str) -> str:
+    """Insert ``wait_until`` from last Whisper ``end`` before the final mass FadeOut.
+
+    LLM-generated scenes typically total ~15–20s of ``timed_play`` while TTS runs
+    70–120s. Without this tail, ``docgen compose`` freeze-pads the video for the
+    gap and the result looks broken / ``incomplete``.  ``timing_json_key`` must
+    match the stem in ``audio/<stem>.mp3`` and the top-level key in
+    ``animations/timing.json`` (e.g. ``01-overview``).
+
+    Idempotent: if :data:`_AUDIO_TAIL_COMMENT` is already present, returns
+    ``class_body`` unchanged.
+    """
+    if _AUDIO_TAIL_COMMENT in class_body:
+        return class_body
+    fade_needle = "self.timed_play(*[FadeOut(m) for m in self.mobjects]"
+    lines = class_body.splitlines(keepends=True)
+    fade_idx: int | None = None
+    for i, line in enumerate(lines):
+        if fade_needle in line:
+            fade_idx = i
+            break
+    if fade_idx is None:
+        return class_body
+    m = re.match(r"^(\s*)", lines[fade_idx])
+    indent = m.group(1) if m else ""
+    inner = f"{indent}    "
+    deeper = f"{indent}        "
+    tail = (
+        f"{indent}{_AUDIO_TAIL_COMMENT}\n"
+        f"{indent}_docgen_segs = _load_timing({timing_json_key!r})\n"
+        f"{indent}if _docgen_segs:\n"
+        f"{inner}self.wait_until(\n"
+        f"{deeper}max(float(s.get(\"end\", 0.0)) for s in _docgen_segs)\n"
+        f"{inner})\n"
+    )
+    return "".join(lines[:fade_idx] + [tail, lines[fade_idx]])
+
+
+def sync_audio_tail_waits_in_scenes(cfg: "Config") -> list[str]:
+    """Patch ``animations/scenes.py`` generated blocks: add audio-length tail waits.
+
+    For each segment in ``segments.all`` whose ``visual_map`` type is ``manim``
+    and whose narration audio has Whisper segments in ``timing.json``, inject
+    :func:`append_audio_tail_to_class_body` into the marked block for that
+    segment id.
+
+    Returns human-readable changelog lines (empty if nothing to do).  Intended
+    to run from :meth:`docgen.timestamps.TimestampExtractor.extract_all`
+    immediately after ``timing.json`` is written.
+    """
+    scenes_path = cfg.animations_dir / "scenes.py"
+    timing_path = cfg.animations_dir / "timing.json"
+    if not scenes_path.is_file() or not timing_path.is_file():
+        return []
+    try:
+        timing = json.loads(timing_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    text = scenes_path.read_text(encoding="utf-8")
+    changes: list[str] = []
+
+    for seg_id in cfg.segments_all:
+        sid = str(seg_id)
+        vm = cfg.visual_map.get(sid)
+        if not isinstance(vm, dict) or str(vm.get("type", "")).lower() != "manim":
+            continue
+        stem = cfg.resolve_segment_name(sid)
+        if not timing.get(stem, {}).get("segments"):
+            continue
+
+        block_re = re.compile(
+            rf"# ── BEGIN GENERATED SCENE: {re.escape(sid)} \([^)]+\) ──\n"
+            rf"[\s\S]*?"
+            rf"# ── END GENERATED SCENE: {re.escape(sid)} ──",
+        )
+        m = block_re.search(text)
+        if not m:
+            continue
+        block = m.group(0)
+        if _AUDIO_TAIL_COMMENT in block:
+            continue
+        new_block = append_audio_tail_to_class_body(block, stem)
+        if new_block == block:
+            continue
+        text = text[: m.start()] + new_block + text[m.end() :]
+        changes.append(f"patched audio-length tail for segment {sid} ({stem})")
+
+    if changes:
+        scenes_path.write_text(text, encoding="utf-8")
+    return changes
 
 
 def ensure_scenes_bootstrap(scenes_path: Path) -> None:
@@ -783,6 +927,23 @@ def generate_scene(
             f"Generated class for segment {seg_id} would fail `docgen validate` "
             f"manim_scene_lint:\n  {joined}\n"
             f"Draft saved to {draft}. Tighten YAML hints or `--hint`, then re-run."
+        )
+
+    cleaned = append_audio_tail_to_class_body(cleaned, seg_name)
+    lint2 = lint_generated_block(
+        cleaned,
+        min_font_size=cfg.manim_min_font_size,
+        unsafe_unicode=cfg.manim_unsafe_unicode,
+    )
+    if lint2:
+        drafts_dir = cfg.animations_dir / ".scene-generate-drafts"
+        drafts_dir.mkdir(parents=True, exist_ok=True)
+        draft = drafts_dir / f"{seg_id}.draft.py"
+        draft.write_text(cleaned, encoding="utf-8")
+        joined = "\n  ".join(lint2[:15])
+        raise SceneGenerationError(
+            f"After audio-tail injection, segment {seg_id} failed manim_scene_lint:\n  {joined}\n"
+            f"Draft saved to {draft}."
         )
 
     if print_only:
