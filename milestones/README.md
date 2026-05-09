@@ -7,3 +7,5 @@
 - **[Upstream](upstream-dogfood.md)** — **`courseforge/course-builder`** (`pip install`s docgen, consumer CI: catalog workflow, secrets, xvfb/ttyd).
 
 **Archived roadmaps:** [archive/](archive/) — older milestone write-ups (hardening, slides, i18n, early Playwright-video spec, Embabel sketch). Kept for history; not the day-to-day execution list.
+
+**Session notes (ad hoc):** [Declarative Manim — May 2026](../docs/session-notes-2026-05-08-manim-declarative-specs.md) (`scene-spec-generate`, YAML compile path, dogfood refresh).

@@ -17,7 +17,7 @@ https://jmjava.github.io/documentation-generator/
 **Story pipeline (long-form segments)**
 
 - **TTS narration** — generate MP3 audio from Markdown scripts via OpenAI gpt-4o-mini-tts
-- **Manim animations** — primary visual for explaining architecture and flows
+- **Manim animations** — primary visual for explaining architecture and flows. For **diagram / bullet-board** segments, prefer **`docgen scene-spec-generate`** + **`scene-compile`** (or hand-maintained **`animations/specs/*.scene.yaml`**) so layout is **deterministic**; use **`docgen scene-generate`** when you need richer raw Manim and accept more LLM layout risk.
 - **VHS / `.tape` terminal recordings** — **legacy**; **may be deprecated**. Still supported for existing long-form segments and `kind: cli` manifests; **not** the direction for new docs (use **Manim** + **Playwright**).
 - **ffmpeg composition** — combine audio + video into final segments
 - **Validation** — OCR error detection, layout analysis, audio-visual sync, narration linting
@@ -55,7 +55,7 @@ pytest tests/e2e/ -x          # end-to-end (Playwright, needs `playwright instal
 
 On **Linux**, **legacy VHS** coverage in tests (e.g. `demo_function` `kind: cli`) may need **`ttyd`** and a display (**`xvfb-run -a pytest …`**). CI installs `ttyd`, `xvfb`, and `ffmpeg` via apt (see `.github/workflows/ci.yml`).
 
-**Roadmap:** [milestones/README.md](milestones/README.md) (active checklist; [in-repo dogfood](milestones/next-session-dogfood.md) & [upstream dogfood](milestones/upstream-dogfood.md) — `courseforge/course-builder`; archived notes).
+**Roadmap:** [milestones/README.md](milestones/README.md) (active checklist; [in-repo dogfood](milestones/next-session-dogfood.md) & [upstream dogfood](milestones/upstream-dogfood.md) — `courseforge/course-builder`; archived notes). Recent slice: [session notes — declarative Manim](docs/session-notes-2026-05-08-manim-declarative-specs.md).
 
 ## Quick start
 
@@ -92,7 +92,9 @@ docgen validate --pre-push
 | `docgen catalog refresh [--clear-pins]` | Recompute all ``fingerprints.inputs`` and save the catalog |
 | `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force]` | Generate narration ``.md`` from repo sources + **owner** hints (OpenAI); see ``narration_from_source`` in YAML |
 | `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into ``docgen.yaml`` (e.g. archive excludes, skeleton blocks); optional OpenAI refresh of ``tts.instructions`` / ``wizard.system_prompt``; **rewrites file** (comments not preserved — review in Git) |
-| `docgen scene-generate --segment 08 [--class-name …] [--extra-path …] [--hint …] [--dry-run] [--print-only]` | Generate or replace one Manim scene class in ``animations/scenes.py`` from narration + ``manim_scene_generation`` config (OpenAI) |
+| `docgen scene-generate --segment 08 [--class-name …] [--extra-path …] [--hint …] [--dry-run] [--print-only] [--all]` | Generate or replace one Manim scene **class** in ``animations/scenes.py`` via OpenAI (**raw Python**); use **sparingly** when you need motion beyond rows of `_box` |
+| `docgen scene-compile SPEC.scene.yaml [--dry-run]` | Compile a **declarative** scene spec (YAML) into a `_TimedScene` class and inject into ``animations/scenes.py`` — **deterministic layout** (rows of `_box`); preferred for diagram-heavy segments |
+| `docgen scene-spec-generate --segment 01 [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit **YAML only** (same schema as ``scene-compile``), optionally write ``animations/specs/<stem>.scene.yaml`` and ``--compile`` into ``scenes.py`` |
 | `docgen discover-tests` | List Node ``@playwright/test`` cases (`--format` yaml, json, catalog). With ``docgen.yaml``, scans ``discover_tests.roots`` (default ``["."]``). ``--repo-root`` limits discovery to one directory (repo root for paths still comes from config). Flags: ``--suggest-visual-map``, ``--write-suggest-visual-map PATH``, ``--playwright-insights``, ``--merge-catalog`` |
 
 **Reusable GitHub Actions:** [`.github/workflows/reusable-docgen-catalog.yml`](.github/workflows/reusable-docgen-catalog.yml) — install docgen from a git ref, `catalog init`, then `catalog stale` and expose `needs_regen` for caller jobs.

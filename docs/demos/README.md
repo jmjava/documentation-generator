@@ -9,7 +9,7 @@ Use **one** path below—they are **not** combined in a single session:
 1. **`docgen init .`** — interactive **terminal** wizard (segments, paths, TTS).  
    *Or* **`docgen init . --defaults`** — same scaffold, no prompts (scripts/CI).
 2. **`docgen --config docgen.yaml yaml-generate`** (or **`./_regenerate-docgen-config.sh`**) — merge tool defaults; (**re)build **`visual_map`** only from assets that **already exist** on disk (tapes, scripts, `*Scene` classes)—**never** invented placeholders (unless **`discovery.auto_visual_map: false`** and you edit by hand).
-3. Then **`scene-generate`**, **`generate-all`**, **`validate`**, etc. as needed.
+3. Then **`scene-spec-generate`** / **`scene-compile`** (preferred for diagram rows) or **`scene-generate`**, **`generate-all`**, **`validate`**, etc. as needed.
 
 Do **not** open the browser wizard until step 1–2 exist; **`docgen wizard`** is not a substitute for **`docgen init`**.
 
@@ -38,6 +38,18 @@ Full **`docgen generate-all`** for this bundle needs the toolchain that matches 
 - The same command syncs **`manim.scenes`** and **`manim_scene_generation.segments`** from Manim rows in **`visual_map`**.
 - **`docgen discover-tests`** can emit suggested YAML for **`playwright_test`**-style rows (**`--suggest-visual-map`**, **`--write-suggest-visual-map`**); merge those in if you use catalog-driven segments.
 
+## Declarative Manim (`animations/specs/*.scene.yaml`)
+
+For segments whose `visual_map` type is **`manim`** and the story is mostly **rows of labeled `_box` diagrams**, prefer the **scene spec** path over raw **`scene-generate`** Python:
+
+1. **`docgen scene-spec-generate --segment <ID> [--compile] [--hint "…"]`** — OpenAI emits **YAML only**; layout is compiled deterministically (every row `next_to` / `VGroup.arrange`). Writes **`animations/specs/<segment_stem>.scene.yaml`** by default; **`--compile`** injects into **`animations/scenes.py`**.
+2. **`docgen scene-compile path/to/spec.scene.yaml`** — compile an existing spec (hand-edited or from the LLM) without another API call.
+3. Then **`docgen timestamps`** (if you use Whisper alignment), **`docgen manim`**, **`docgen compose`**, and **`docgen concat full-demo`** when refreshing recordings.
+
+Optional YAML overrides for the LLM system prompt: `manim_scene_generation.scene_spec_system_prompt` (root or per-segment). Schema and compiler: `docgen.scene_spec` in source.
+
+**`scene-generate`** remains available when you need full Manim freedom (transforms, custom mobjects) and accept higher layout risk from model-authored Python.
+
 ## Full reset (total nuke + regen)
 
 **`_full-reset-regenerate.sh`** automates a **full** dogfood regen:
@@ -45,7 +57,7 @@ Full **`docgen generate-all`** for this bundle needs the toolchain that matches 
 1. **`docgen clean-bundle -y --reset-catalog --delete-config --keep-narration`** — removes **`docgen.yaml` first**, then clears generated assets (see **`docgen clean-bundle --help`**). **`--keep-narration`** keeps **`narration/*.md`** so **`docgen init --defaults`** can reinfer **`segments`** from filenames.
 2. **`docgen init . --defaults`** — writes a fresh **`docgen.yaml`** scaffold (empty **`visual_map`** until **`yaml-generate`**).
 3. **`docgen yaml-generate`** — merge tool defaults / skeletons.
-4. OpenAI **`narration-generate`** / **`scene-generate`**, **`generate-all`**, per-function rebuild, **`validate --pre-push`**, **`_seed-examples.sh`**.
+4. OpenAI **`narration-generate`** / **`scene-spec-generate`** (or **`scene-generate`**), **`generate-all`**, per-function rebuild, **`validate --pre-push`**, **`_seed-examples.sh`**.
 
 For a **generic** wipe (any repo): run **`docgen --config /path/to/docgen.yaml clean-bundle -y`** with or without **`--delete-config`** / **`--keep-narration`**.
 
