@@ -15,7 +15,10 @@ build/
 
 .idea/
 .vscode/
-.cursor/
+# Cursor: track `.cursor/rules/*.mdc` only; ignore other workspace data (un-ignore must follow ignore)
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/*.mdc
 *.swp
 *.swo
 

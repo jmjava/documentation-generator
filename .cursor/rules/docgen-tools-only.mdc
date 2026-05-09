@@ -1,0 +1,18 @@
+---
+description: All doc/demo asset generation goes through docgen CLI and approved wrappers—never Cursor-authored outputs.
+alwaysApply: true
+---
+
+# Documentation and demo generation: tools only
+
+**Rule:** Anything that **generates** documentation assets, dogfood config, narration, scenes, audio, composed video, catalogs, or other pipeline outputs must be produced by **docgen** (CLI and library) plus **repo-documented scripts** that invoke it (e.g. `docs/demos/_regenerate-docgen-config.sh`, `_full-reset-regenerate.sh`). **Do not** use the editor to paste or rewrite generated files to “fix” the pipeline.
+
+**Allowed for Cursor / humans**
+
+- Edit **inputs** Git is meant to carry: **`docgen.yaml`** (review YAML diff after **`docgen yaml-generate`**), per-function manifests, hints, tests, fixtures, static `docs/*.md` that are not tool outputs.
+- Edit **docgen implementation** under `src/` (or equivalent package root): new flags, commands, merge logic, validators—so the **tool** can do what you need.
+- Run commands: `docgen …`, bundle shell scripts, tests.
+
+**Dogfood (`docs/demos`):** **`docgen.yaml`** is the only bundle config—same as downstream. Run **`docgen yaml-generate`** (this repo: **`docs/demos/_regenerate-docgen-config.sh`**) to merge tool defaults and sync **`manim_scene_generation.segments`** from **`visual_map`**; do not keep a second “source” YAML. Manim diagram segments: use **`docgen scene-spec-generate`** / **`scene-compile`** and committed **`animations/specs/*.scene.yaml`**, not hand-edited **`scenes.py`** for those blocks.
+
+**If the right command does not exist:** implement it in **docgen** (or a thin wrapper script committed to the repo), then use it—do not bypass with manual file edits.
