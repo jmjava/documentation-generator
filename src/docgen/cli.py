@@ -1164,6 +1164,12 @@ def scene_spec_generate_cmd(
     is_flag=True,
     help="Print narration segment ids missing from segments.all; exit 1 if any.",
 )
+@click.option(
+    "--merge-hint-segments/--no-merge-hint-segments",
+    default=True,
+    show_default=True,
+    help="Merge segment ids from hints/*.md YAML front matter (docgen.segment.create).",
+)
 @click.pass_context
 def yaml_generate_cmd(
     ctx: click.Context,
@@ -1172,6 +1178,7 @@ def yaml_generate_cmd(
     model: str | None,
     dry_run: bool,
     list_gaps: bool,
+    merge_hint_segments: bool,
 ) -> None:
     """Merge structural defaults and optionally LLM-authored TTS/wizard prose into docgen.yaml.
 
@@ -1197,7 +1204,7 @@ def yaml_generate_cmd(
 
     changes: list[str] = []
     if merge_defaults:
-        changes.extend(yg.merge_defaults(raw, cfg))
+        changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
     if llm:
         try:
             hints = yg.generate_llm_hints(cfg, model=model)

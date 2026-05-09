@@ -16,7 +16,7 @@ A. **Cursor edits OK** (code, tests, wrappers, rules, top-level docs):
 - `milestones/**`
 
 B. **Hand-authored INPUTS / fixtures** (Cursor edits OK; **never** deleted by `clean-bundle` / reset; **not** LLM outputs):
-- `docs/demos/hints/**` — **maintainer hint files** (`.md`, `.txt`, …) wired into `docgen.yaml` via `narration_from_source.context.paths`, `manim_scene_generation.context.paths`, or similar. These steer **`docgen narration-generate`**, **`docgen scene-spec-generate`**, **`docgen scene-generate`**, etc. **They are not OpenAI outputs**; creating or editing them in Cursor is encouraged instead of stuffing long prose into generated-only artifacts. Other demo bundles may use the same `<bundle>/hints/**` convention.
+- `docs/demos/hints/**` — **maintainer hint files** (`.md`, …). Use YAML **front matter** (`docgen.segment`, `docgen.wiring`) so **`docgen yaml-generate`** merges segment list, `visual_map`, and per-segment narration/manim paths into `docgen.yaml`. Do **not** hand-edit those merged keys in `docgen.yaml` in Cursor; edit hints and re-run **`yaml-generate`**. Hints also steer **`docgen narration-generate`**, **`docgen scene-spec-generate`**, etc. **They are not OpenAI outputs.** Other demo bundles may use the same `<bundle>/hints/**` convention.
 - `docs/demos/terminal/*.tape` — VHS sources
 - `docs/demos/scripts/*.py` — Playwright capture drivers (matched to segments by id-in-filename)
 - `fixtures/**` — Playwright/Vite/etc. test apps; presence and project-type detected generically. The raw `*.spec.{ts,tsx,js,jsx,mjs}` files inside are the **input** to `docgen per-function-generate`.

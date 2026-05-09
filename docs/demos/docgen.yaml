@@ -15,29 +15,14 @@ segments:
   - '02'
   - '03'
   - '04'
+  - '05'
   all: *id001
 segment_names:
   '01': 01-overview
   '02': 02-init-scaffold
   '03': 03-wizard-gui
   '04': 04-pipeline-hints
-visual_map:
-  '01':
-    type: manim
-    scene: OverviewScene
-    source: OverviewScene.mp4
-  '02':
-    type: manim
-    scene: InitScaffoldScene
-    source: InitScaffoldScene.mp4
-  '03':
-    type: manim
-    scene: WizardGuiScene
-    source: WizardGuiScene.mp4
-  '04':
-    type: manim
-    scene: PipelineHintsScene
-    source: PipelineHintsScene.mp4
+  '05': 05-playwright-demos
 vhs:
   vhs_path: ''
   sync_from_timing: false
@@ -92,11 +77,53 @@ narration_from_source:
   segments:
     '04':
       hints:
-      - This segment explains maintainer hint files (docs/demos/hints) and how segment 04 alone wires them in docgen.yaml.
+      - This segment explains maintainer hint files under docs/demos/hints and how yaml-generate merges them into docgen.yaml.
       context:
         paths:
         - docs/demos/hints/narration-tts.md
         - docs/demos/hints/segment-04-topic.md
+    '05':
+      hints:
+      - 'Long-form explainer path: narration markdown, docgen text-to-speech producing the segment mp3, docgen timestamps
+        using hosted speech-to-text so diagrams can follow the real voice, Manim for the visual, docgen compose with ffmpeg
+        to marry picture and sound, validation for length drift — describe roles only, not file layouts or APIs.'
+      - 'Short browser-demo path: docgen drives Playwright tests with recording and trace enabled, docgen demo-function as
+        the capture entry point, traces as the timing truth for what happened in the browser, optional docgen per-function
+        style steps so narration can match actions — again name tools and purposes, not parsing or alignment algorithms.'
+      - 'One crisp contrast: long pieces align one continuous voice track to a Manim render using timing from that track;
+        short clips lean on Playwright’s own recording and trace timeline instead of re-analyzing one big narration file.'
+      - Optional one-liner that busy clips can be slowed for viewing legibility; do not explain ffmpeg filters or math.
+      context:
+        paths:
+        - docs/demos/hints/narration-tts.md
+        - docs/demos/hints/segment-05-topic.md
+        - docs/demos/hints/playwright-demo-code.md
+      system_prompt: 'You write narration markdown for a technical demo video. The text will be read by text-to-speech.
+
+
+        Focus on which tools and commands participate in the pipeline and what each step is for.
+
+        Name docgen subcommands, OpenAI text-to-speech, Whisper-style timing via docgen timestamps,
+
+        Manim, ffmpeg composition, Playwright, traces, and optional LLM-assisted narration for short
+
+        clips — at the level a maintainer would explain in a walkthrough, not source-code or
+
+        algorithm internals. Do not dive into response formats, JSON shapes, field names, parsing
+
+        rules, or how functions are implemented.
+
+
+        Use a few short paragraphs with blank lines; keep total length moderate (clear but not a
+
+        lecture). No backticks, no hash headings, no bullet lists.
+
+
+        No episode ordinals, no "in this section" meta talk, no YAML front matter, no whole-script
+
+        code fences. Do not lecture the listener about formatting or instructions.
+
+        '
 manim_scene_generation:
   model: gpt-4o
   temperature: 0.4
@@ -121,9 +148,41 @@ manim_scene_generation:
         paths:
         - docs/demos/hints/manim-scene-specs.md
         - docs/demos/hints/segment-04-topic.md
+    '05':
+      class_name: PlaywrightDemosScene
+      hints:
+      - Diagram lists tools in order for long-form versus short-form with short labels only — TTS, timestamps plus Whisper,
+        Manim, compose, then Playwright, trace, and demo-function — no module-level detail.
+      context:
+        paths:
+        - docs/demos/hints/manim-scene-specs.md
+        - docs/demos/hints/segment-05-topic.md
+        - docs/demos/hints/playwright-demo-code.md
+visual_map:
+  '01':
+    type: manim
+    scene: OverviewScene
+    source: OverviewScene.mp4
+  '02':
+    type: manim
+    scene: InitScaffoldScene
+    source: InitScaffoldScene.mp4
+  '03':
+    type: manim
+    scene: WizardGuiScene
+    source: WizardGuiScene.mp4
+  '04':
+    type: manim
+    scene: PipelineHintsScene
+    source: PipelineHintsScene.mp4
+  '05':
+    type: manim
+    scene: PlaywrightDemosScene
+    source: PlaywrightDemosScene.mp4
 manim:
   scenes:
   - OverviewScene
   - InitScaffoldScene
   - WizardGuiScene
   - PipelineHintsScene
+  - PlaywrightDemosScene

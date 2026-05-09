@@ -4,96 +4,105 @@ title:
   text: DocGen Overview
   font_size: 36
   color: C_WHITE
-rows:
-- run_time: 2.0
-  wait_segment: 0
-  boxes:
-  - label: Documentation Generator
-    color: C_GREEN
-    width: 6.0
-    height: 1.0
-    font_size: 24
-  - label: Narrated Demo Videos
-    color: C_BLUE
-    width: 6.0
-    height: 1.0
-    font_size: 24
-- run_time: 2.0
-  wait_segment: 1
-  boxes:
-  - label: 'Manim: Storytelling'
-    color: C_PURPLE
-    width: 5.0
-    height: 1.0
-    font_size: 20
-  - label: 'Playwright: UI Tests'
-    color: C_ORANGE
-    width: 5.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 3
-  boxes:
-  - label: CLI & Python Library
-    color: C_TEAL
-    width: 6.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 6
-  boxes:
-  - label: Modern Video Documentation
-    color: C_ACCENT
-    width: 7.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 8
-  boxes:
-  - label: Scripted Narration
-    color: C_RED
-    width: 5.0
-    height: 1.0
-    font_size: 20
-  - label: Manim Visuals
-    color: C_BLUE
-    width: 4.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 11
-  boxes:
-  - label: 'Features: Validation, Analysis'
-    color: C_GREEN
-    width: 8.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 14
-  boxes:
-  - label: 'Legacy Support: VHS'
-    color: C_ORANGE
-    width: 6.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 17
-  boxes:
-  - label: Easy Installation
-    color: C_TEAL
-    width: 5.0
-    height: 1.0
-    font_size: 20
-  - label: Flexible Workflows
-    color: C_PURPLE
-    width: 5.0
-    height: 1.0
-    font_size: 20
-- run_time: 2.0
-  wait_segment: 19
-  boxes:
-  - label: Comprehensive Solution
-    color: C_ACCENT
-    width: 7.0
-    height: 1.0
-    font_size: 20
+layout:
+  first_row_title_buff: 0.5
+  row_gap: 0.6
+  column_gap: 0.8
+  page_transition: fade
+  page_transition_run_time: 0.45
+pages:
+- rows:
+  - run_time: 2.0
+    wait_segment: 0
+    boxes:
+    - label: Documentation Generator
+      color: C_GREEN
+      width: 6.0
+      height: 1.0
+      font_size: 24
+    - label: Narrated Demo Videos
+      color: C_BLUE
+      width: 6.0
+      height: 1.0
+      font_size: 24
+  - run_time: 2.0
+    wait_segment: 1
+    boxes:
+    - label: 'Manim: Storytelling'
+      color: C_PURPLE
+      width: 5.0
+      height: 1.0
+      font_size: 20
+    - label: 'Playwright: UI Tests'
+      color: C_ORANGE
+      width: 5.0
+      height: 1.0
+      font_size: 20
+  - run_time: 2.0
+    wait_segment: 3
+    boxes:
+    - label: CLI & Python Library
+      color: C_TEAL
+      width: 6.0
+      height: 1.0
+      font_size: 20
+- rows:
+  - run_time: 2.0
+    wait_segment: 6
+    boxes:
+    - label: Modern Video Documentation
+      color: C_ACCENT
+      width: 7.0
+      height: 1.0
+      font_size: 20
+  - run_time: 2.0
+    wait_segment: 8
+    boxes:
+    - label: Scripted Narration
+      color: C_RED
+      width: 5.0
+      height: 1.0
+      font_size: 20
+    - label: Manim Visuals
+      color: C_BLUE
+      width: 4.0
+      height: 1.0
+      font_size: 20
+  - run_time: 2.0
+    wait_segment: 11
+    boxes:
+    - label: 'Features: Validation, Analysis'
+      color: C_GREEN
+      width: 8.0
+      height: 1.0
+      font_size: 20
+- rows:
+  - run_time: 2.0
+    wait_segment: 14
+    boxes:
+    - label: 'Legacy Support: VHS'
+      color: C_ORANGE
+      width: 6.0
+      height: 1.0
+      font_size: 20
+  - run_time: 2.0
+    wait_segment: 17
+    boxes:
+    - label: Easy Installation
+      color: C_TEAL
+      width: 5.0
+      height: 1.0
+      font_size: 20
+    - label: Flexible Workflows
+      color: C_PURPLE
+      width: 5.0
+      height: 1.0
+      font_size: 20
+  - run_time: 2.0
+    wait_segment: 19
+    boxes:
+    - label: Comprehensive Solution
+      color: C_ACCENT
+      width: 7.0
+      height: 1.0
+      font_size: 20

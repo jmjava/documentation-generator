@@ -159,7 +159,7 @@ def _load_timing(segment_key: str) -> list[dict]:
 def _box(label, color, w=2.2, h=0.75, fs=18):
     r = RoundedRectangle(
         corner_radius=0.15, width=w, height=h,
-        stroke_color=color, fill_color=color, fill_opacity=0.12,
+        stroke_color=color, fill_color=color, fill_opacity=0.2,
     )
     t = Text(label, font_size=fs, color=color)
     t.move_to(r.get_center())

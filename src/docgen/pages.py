@@ -38,7 +38,7 @@ class PagesGenerator:
         repo_url = self.pages_cfg.get("repo_url", "")
         demos_sub = self.pages_cfg.get("demos_subdir", "demos")
         extra_links = self.pages_cfg.get("extra_links", [])
-        segments_cfg = self.pages_cfg.get("segments", {})
+        segments_cfg = self._resolve_segments_cfg()
         per_function_cfg = self.pages_cfg.get("per_function", {})
         concat_map = self.config.concat_map
 
@@ -211,6 +211,27 @@ class PagesGenerator:
         print(f"[pages] Updated {out}")
 
     # -- Helpers ---------------------------------------------------------------
+
+    def _resolve_segments_cfg(self) -> dict[str, dict]:
+        """Per-segment metadata for the page grid.
+
+        Prefers explicit ``pages.segments`` from ``docgen.yaml`` (maintainer-authored titles
+        / descriptions). When that is missing or empty, **discovers** segments from
+        ``segments.all`` + ``segment_names`` so the page renders out of the box for any
+        bundle: title is the humanized stem (``"01-overview"`` → ``"Overview"``), description
+        is empty. This keeps ``docs/index.html`` in step with the dogfood without requiring
+        a parallel hand-curated block in ``docgen.yaml``.
+        """
+        explicit = self.pages_cfg.get("segments")
+        if isinstance(explicit, dict) and explicit:
+            return explicit
+        discovered: dict[str, dict] = {}
+        for seg_id in self.config.segments_all:
+            stem = self.config.segment_names.get(seg_id, seg_id)
+            tail = stem[len(seg_id):].lstrip("-_ ") if stem.startswith(seg_id) else stem
+            humanized = " ".join(part.capitalize() for part in tail.replace("_", "-").split("-") if part)
+            discovered[seg_id] = {"title": humanized or stem, "description": ""}
+        return discovered
 
     def _probe_duration(self, seg_id: str) -> str:
         rec = self._find_recording(seg_id)

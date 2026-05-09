@@ -26,6 +26,7 @@ class Config:
     animations_dir: Path = field(init=False)
     terminal_dir: Path = field(init=False)
     recordings_dir: Path = field(init=False)
+    hints_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
         dirs = self.raw.get("dirs", {})
@@ -34,6 +35,7 @@ class Config:
         self.animations_dir = self.base_dir / dirs.get("animations", "animations")
         self.terminal_dir = self.base_dir / dirs.get("terminal", "terminal")
         self.recordings_dir = self.base_dir / dirs.get("recordings", "recordings")
+        self.hints_dir = self.base_dir / dirs.get("hints", "hints")
 
     # -- Segment helpers -------------------------------------------------------
 

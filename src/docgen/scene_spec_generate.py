@@ -24,7 +24,18 @@ from docgen.scene_generate import (
 )
 from docgen.scene_generate import _load_narration as load_narration_for_scene
 from docgen.scene_generate import _load_timing_segments as load_timing_for_scene
-from docgen.scene_spec import ALLOWED_COLORS, SceneSpecError, compile_scene_class, validate_scene_spec
+from docgen.scene_spec import (
+    ALLOWED_COLORS,
+    FRAME_HEIGHT,
+    FRAME_WIDTH,
+    SceneSpecError,
+    align_wait_at_to_words,
+    auto_paginate,
+    compile_scene_class,
+    layout_budget_violations,
+    layout_stack_budget,
+    validate_scene_spec,
+)
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -32,6 +43,12 @@ if TYPE_CHECKING:
 DEFAULT_SCENE_SPEC_TEMPERATURE = 0.35
 
 _SCENE_SPEC_SYSTEM_BASE = f"""You author **declarative Manim scene specs** as a single YAML document (not Python).
+
+**Planning / lookahead (mandatory before you write YAML):**
+1. List every **page** and how many **rows** it will have. The toolchain does **not** auto-scale stacks.
+2. For **each page** separately, compute: (a) **vertical stack height** = sum over rows of ``max(box heights in that row)`` plus ``(n_rows - 1) * row_gap``; (b) **widest row width** = sum of box widths in that row plus ``(n_boxes - 1) * column_gap`` for multi-box rows.
+3. Compare to the **frame budget** in the user message (depends on ``title.font_size`` and ``first_row_title_buff``). If vertical stack exceeds budget **or** any row is wider than the safe width, **redesign**: add ``pages``, reduce ``height`` (often 0.72–0.9 for busy pages), tighten ``row_gap``, split wide rows, or shorten labels — then recompute until every page passes.
+4. Only after all pages pass the mental math, output the YAML.
 
 Output discipline:
 - Output **only** one YAML document. You may wrap it in a ```yaml fenced block.
@@ -44,28 +61,34 @@ Required keys:
 - segment_id: string (echo the value from the user message exactly)
 - class_name: string (echo the value from the user message exactly)
 - title: mapping with text (string), font_size (int, >= 14), color (one of the palette tokens below)
-- rows: non-empty list of row mappings
+- **Exactly one of:** ``rows`` (non-empty list of row mappings, single page) **or** ``pages`` (non-empty list of page mappings; each page has ``rows`` as above, optionally ``transition``: fade | none for pages after the first)
 
 Each row must have:
 - run_time: positive number (seconds for timed_play FadeIn of that row)
 - boxes: non-empty list of box mappings, each with:
   - label: string
   - color: one of the palette tokens
-  - width: positive number (typical 2.0–6.0; frame ~14 wide)
-  - height: positive number (typical 0.65–1.4)
+  - width: positive number (typical 2.0–6.0; safe row total ≤ ~13 wide at dogfood resolution)
+  - height: positive number (typical 0.65–1.1; **smaller when a page has many rows**)
   - font_size: int >= 14
 
-Optional per-row:
-- wait_segment: non-negative int — index into Whisper segments; scene will wait_until that segment's start before showing the row (omit if timing empty).
+Optional per-row (at most one of):
+- wait_segment: non-negative int — wait_until that Whisper segment's **start** (often too early if the label word is spoken mid-segment).
+- wait_at: non-negative number — absolute seconds into the narration audio; use word timings in timing.json when labels must appear on first mention.
 
 Optional top-level:
-- layout: mapping with optional first_row_title_buff, row_gap, column_gap (positive numbers, defaults are fine if omitted)
+- layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
+  for multi-page specs also page_transition: fade | none (default fade), page_transition_run_time (default 0.45, max 5).
+
+Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|none }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
 
 Palette tokens (exact spelling): {", ".join(sorted(ALLOWED_COLORS))}
 
 Design goals:
-- **Rows** are stacked vertically; multiple boxes in one row are arranged horizontally with safe spacing.
-- Mirror the **narration beats**: more rows / boxes when the script introduces distinct ideas; use wait_segment when timing segments exist.
+- **Frame:** dogfood Manim canvas is ~14.22 × 8 units; title + buffer eat the top — see user-message budget. Never stack so many tall rows that boxes would clip off the bottom.
+- **Do not** rely on shrinking: split into **pages** with fade between them.
+- **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
+- Mirror **narration beats**; prefer **wait_at** from word-level times when first mention is not at a segment boundary; otherwise wait_segment is acceptable.
 - Keep labels concise; narration may be longer than on-screen text.
 """
 
@@ -173,16 +196,19 @@ def build_scene_spec_user_message(
         )
         parts.append(reference_scenes)
 
-    if source_snippets:
-        parts.append("")
-        parts.append("--- CONTEXT FILES ---")
-        for label, body in source_snippets:
-            parts.append(f"FILE: {label}\n```\n{body}\n```")
-
     parts.append("")
+    parts.append("--- FRAME / LAYOUT BUDGET (plan every page; scene-spec-generate rejects overflow) ---")
     parts.append(
-        "Respond with the YAML scene spec only (optional ```yaml fence). "
-        "segment_id and class_name must match the required values exactly."
+        f"Dogfood Manim frame ≈ {FRAME_WIDTH} × {FRAME_HEIGHT} Manim units. "
+        "Per page vertical cost = sum over rows of max(box height in row) + (n_rows - 1) * row_gap. "
+        "That total must stay at or below the budget implied by your title.font_size and layout.first_row_title_buff. "
+        "Per row horizontal cost = sum(box widths) + (n_boxes - 1) * column_gap; keep ≤ ~13."
+    )
+    parts.append(
+        f"Reference max stack heights: "
+        f"title 36 + first_row_title_buff 0.5 → ≈ {layout_stack_budget({'font_size': 36}, {'first_row_title_buff': 0.5}):.2f} u; "
+        f"title 32 + buff 0.45 → ≈ {layout_stack_budget({'font_size': 32}, {'first_row_title_buff': 0.45}):.2f} u. "
+        "Recompute if you change those fields."
     )
     return "\n".join(parts)
 
@@ -222,13 +248,27 @@ def spec_to_yaml_text(spec: dict[str, Any]) -> str:
     ).rstrip() + "\n"
 
 
+def _load_timing_words(cfg: Config, timing_key: str) -> list[dict[str, Any]]:
+    """Return the ``words`` list from ``animations/timing.json`` for ``timing_key`` (best effort)."""
+    timing_path = cfg.animations_dir / "timing.json"
+    if not timing_path.exists():
+        return []
+    try:
+        data = json.loads(timing_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    block = data.get(timing_key) or {}
+    words = block.get("words") if isinstance(block, dict) else None
+    return list(words) if isinstance(words, list) else []
+
+
 def linted_class_block_from_spec(
     cfg: Config,
     spec: dict[str, Any],
     *,
     timing_key: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Merge ``timing_key``, compile to Python, run ``manim_scene_lint`` subset."""
+    """Merge ``timing_key``, auto-paginate + word-align, compile, run ``manim_scene_lint``."""
     from docgen.scene_generate import SceneGenerationError, lint_generated_block
 
     merged = dict(spec)
@@ -237,6 +277,13 @@ def linted_class_block_from_spec(
         merged["timing_key"] = timing_key
     elif not merged.get("timing_key"):
         merged["timing_key"] = cfg.resolve_segment_name(sid)
+
+    # Engine-side layout planning + audio sync so authored YAML stays minimal.
+    merged = auto_paginate(merged)
+    words = _load_timing_words(cfg, str(merged["timing_key"]))
+    if words:
+        merged = align_wait_at_to_words(merged, words)
+
     try:
         class_block = compile_scene_class(merged)
     except SceneSpecError as exc:
@@ -367,6 +414,14 @@ def generate_scene_spec(
         raise SceneGenerationError(
             f"segment {seg_id}: scene spec invalid: {exc}. Draft: {draft}"
         ) from exc
+
+    budget_issues = layout_budget_violations(merged_spec)
+    if budget_issues:
+        draft = _save_draft(cfg, seg_id, body)
+        joined = "\n  ".join(budget_issues)
+        raise SceneGenerationError(
+            f"segment {seg_id}: scene spec exceeds frame budget:\n  {joined}\nDraft: {draft}"
+        )
 
     try:
         _, _ = linted_class_block_from_spec(cfg, merged_spec, timing_key=seg_name)

@@ -8,11 +8,17 @@ import yaml
 
 from docgen.config import Config
 from docgen.yaml_generate import (
+    collect_hint_segment_declarations,
+    collect_hint_wirings_by_segment,
     discover_visual_map,
     manim_scene_class_names_in_order,
     merge_defaults,
+    merge_hint_declared_segments,
+    merge_hint_wiring,
     narration_not_in_segments,
     narration_segment_pairs,
+    parse_hint_docgen_front_matter,
+    parse_hint_segment_declaration,
     segments_in_config,
 )
 
@@ -287,6 +293,200 @@ def test_discover_visual_map_skipped_when_disabled(tmp_path: Path) -> None:
     cfg = Config.from_yaml(tmp_path / "docgen.yaml")
     assert discover_visual_map(raw, cfg) == []
     assert raw["visual_map"]["01"]["scene"] == "KeepScene"
+
+
+def test_parse_hint_segment_declaration_requires_create_true(tmp_path: Path) -> None:
+    h = tmp_path / "hints"
+    h.mkdir()
+    (h / "seg.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: false\n    id: \"05\"\n    stem: 05-x\n---\n\nbody\n",
+        encoding="utf-8",
+    )
+    assert parse_hint_segment_declaration(h / "seg.md") is None
+    (h / "ok.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: 5\n    stem: 05-from-hints\n---\n\nx\n",
+        encoding="utf-8",
+    )
+    assert parse_hint_segment_declaration(h / "ok.md") == ("05", "05-from-hints")
+
+
+def test_merge_hint_declared_segments_inserts_sorted_id(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "z-decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"09\"\n    stem: 09-late\n---\n\n",
+        encoding="utf-8",
+    )
+    (hints / "a-decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"02\"\n    stem: 02-mid\n---\n\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "terminal": "terminal",
+            "recordings": "recordings",
+            "hints": "hints",
+        },
+        "segments": {"default": ["01", "03"], "all": ["01", "03"]},
+        "segment_names": {"01": "01-a", "03": "03-c"},
+        "discovery": {"auto_visual_map": False},
+        "visual_map": {"01": {"type": "manim", "scene": "FooScene", "source": "x.mp4"}},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    ch = merge_hint_declared_segments(cfg.raw, cfg)
+    assert cfg.raw["segments"]["all"] == ["01", "02", "03", "09"]
+    assert cfg.raw["segment_names"]["02"] == "02-mid"
+    assert cfg.raw["segment_names"]["09"] == "09-late"
+    assert ch
+
+
+def test_merge_hint_declared_segments_disabled_in_discovery(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"05\"\n    stem: 05-x\n---\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {"hints": "hints"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "discovery": {"merge_hint_segments": False},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert merge_hint_declared_segments(cfg.raw, cfg) == []
+    assert cfg.raw["segments"]["all"] == ["01"]
+
+
+def test_merge_defaults_merge_hint_segments_false(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"08\"\n    stem: 08-y\n---\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "terminal": "terminal",
+            "recordings": "recordings",
+            "hints": "hints",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "discovery": {"auto_visual_map": False},
+        "visual_map": {"01": {"type": "manim", "scene": "S", "source": "S.mp4"}},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    merge_defaults(cfg.raw, cfg, merge_hint_segments=False)
+    assert cfg.raw["segments"]["all"] == ["01"]
+    assert "08" not in cfg.raw.get("segment_names", {})
+
+
+def test_collect_hint_segment_declarations_first_file_wins(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "a.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"04\"\n    stem: 04-first\n---\n",
+        encoding="utf-8",
+    )
+    (hints / "b.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"04\"\n    stem: 04-second\n---\n",
+        encoding="utf-8",
+    )
+    got = collect_hint_segment_declarations(hints)
+    assert got == {"04": "04-first"}
+
+
+def test_merge_hint_wiring_merges_visual_narration_manim(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "topic.md").write_text(
+        "---\n"
+        "docgen:\n"
+        "  segment:\n"
+        "    create: true\n"
+        "    id: \"09\"\n"
+        "    stem: 09-wired\n"
+        "  wiring:\n"
+        "    visual:\n"
+        "      type: manim\n"
+        "      scene: WiredScene\n"
+        "      source: WiredScene.mp4\n"
+        "    narration:\n"
+        "      hints: [explain wiring]\n"
+        "      context:\n"
+        "        paths: [docs/foo.md]\n"
+        "    manim_scene:\n"
+        "      hints: [keep palette]\n"
+        "      context:\n"
+        "        paths: [hints/ext.md]\n"
+        "---\n\n# body\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "terminal": "terminal",
+            "recordings": "recordings",
+            "hints": "hints",
+        },
+        "segments": {"default": ["01", "09"], "all": ["01", "09"]},
+        "segment_names": {"01": "01-a", "09": "09-wired"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "AScene", "source": "A.mp4"},
+            "09": {"type": "manim", "scene": "WrongScene", "source": "Wrong.mp4"},
+        },
+        "narration_from_source": {"segments": {}},
+        "manim_scene_generation": {
+            "model": "gpt-4o",
+            "segments": {"09": {"class_name": "WrongScene"}},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    ch = merge_hint_wiring(cfg.raw, cfg)
+    assert any("visual_map['09']" in x for x in ch)
+    assert cfg.raw["visual_map"]["09"]["scene"] == "WiredScene"
+    assert cfg.raw["narration_from_source"]["segments"]["09"]["hints"] == ["explain wiring"]
+    merged = cfg.raw["manim_scene_generation"]["segments"]["09"]
+    assert merged["class_name"] == "WiredScene"
+    assert merged["hints"] == ["keep palette"]
+
+
+def test_parse_hint_docgen_front_matter_returns_docgen_block(tmp_path: Path) -> None:
+    h = tmp_path / "h.md"
+    h.write_text("---\ndocgen:\n  segment:\n    create: true\n    id: 2\n    stem: 02-x\n---\n")
+    doc = parse_hint_docgen_front_matter(h)
+    assert doc is not None
+    assert doc["segment"]["stem"] == "02-x"
+
+
+def test_collect_hint_wirings_requires_segment_and_wiring(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "a.md").write_text(
+        "---\ndocgen:\n  segment: {create: true, id: '01', stem: 01-x}\n---\n", encoding="utf-8"
+    )
+    assert collect_hint_wirings_by_segment(hints) == {}
+    (hints / "b.md").write_text(
+        "---\ndocgen:\n  segment: {create: true, id: '01', stem: 01-x}\n  wiring:\n    visual: {type: manim, scene: S, source: S.mp4}\n---\n",
+        encoding="utf-8",
+    )
+    w = collect_hint_wirings_by_segment(hints)
+    assert "01" in w and w["01"]["visual"]["scene"] == "S"
 
 
 def test_merge_defaults_syncs_manim_scenes_list_in_segment_order(tmp_path: Path) -> None:

@@ -11,7 +11,12 @@ This does **not** replace an entire ``docgen.yaml`` in one shot. It:
    unless ``discovery.auto_visual_map: false``.
 3. **Syncs** ``manim.scenes`` and ``manim_scene_generation.segments`` from ``visual_map``.
 4. **Reports gaps** between ``narration/*.md`` and ``segments.all`` (opt-in list).
-5. Optionally calls **OpenAI** to draft ``tts.instructions`` and ``wizard.system_prompt``.
+5. **Declares segments** from maintainer ``hints/*.md`` files that include YAML front matter
+   with ``docgen.segment: { create: true, id, stem }`` (see ``merge_hint_declared_segments``).
+   Optional ``docgen.wiring`` in the same front matter merges ``visual_map``, ``narration_from_source.segments``,
+   and ``manim_scene_generation.segments`` after disk discovery (see ``merge_hint_wiring``) — **avoid hand-editing**
+   those keys for hint-driven segments; run ``yaml-generate`` after editing hints.
+6. Optionally calls **OpenAI** to draft ``tts.instructions`` and ``wizard.system_prompt``.
 
 Writing the file uses PyYAML: **YAML comments and key order in the original file are
 not preserved.** Prefer version control for review; keep hand-maintained prose in Git
@@ -79,7 +84,9 @@ def narration_not_in_segments(raw: dict[str, Any], narration_dir: Path) -> list[
     return out
 
 
-def merge_defaults(raw: dict[str, Any], cfg: "Config") -> list[str]:
+def merge_defaults(
+    raw: dict[str, Any], cfg: "Config", *, merge_hint_segments: bool = True
+) -> list[str]:
     """Mutate ``raw`` with idempotent defaults. Returns human-readable changelog lines."""
     changes: list[str] = []
     rr = cfg.repo_root.resolve()
@@ -133,13 +140,238 @@ def merge_defaults(raw: dict[str, Any], cfg: "Config") -> list[str]:
         }
         changes.append("manim_scene_generation: added minimal skeleton")
 
+    if merge_hint_segments:
+        changes.extend(merge_hint_declared_segments(raw, cfg))
+
     changes.extend(discover_visual_map(raw, cfg))
-    changes.extend(_sync_manim_scenes_from_visual_map(raw))
-    changes.extend(_sync_manim_segments_from_visual_map(raw))
+    changes.extend(merge_hint_wiring(raw, cfg))
     return sorted(set(changes))
 
 
 _MANIM_CLASS_RE = re.compile(r"^class\s+([A-Za-z_][A-Za-z0-9_]*Scene)\s*\(", re.MULTILINE)
+_HINT_FRONT_MATTER_RE = re.compile(r"^---\s*\r?\n(?P<body>.*?)\r?\n---\s*(?:\r?\n|$)", re.DOTALL)
+
+
+def _segment_id_sort_key(sid: str) -> tuple[int, str]:
+    s = str(sid).strip()
+    if s.isdigit():
+        return (int(s), "")
+    m = re.match(r"^(\d+)", s)
+    if m:
+        return (int(m.group(1)), s)
+    return (10_000, s)
+
+
+def parse_hint_docgen_front_matter(md_path: Path) -> dict[str, Any] | None:
+    """Return the ``docgen`` mapping from hint file YAML front matter, if present."""
+    try:
+        text = md_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = _HINT_FRONT_MATTER_RE.match(text)
+    if not m:
+        return None
+    try:
+        data = yaml.safe_load(m.group("body"))
+    except yaml.YAMLError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    doc = data.get("docgen")
+    return doc if isinstance(doc, dict) else None
+
+
+def parse_hint_segment_declaration(md_path: Path) -> tuple[str, str] | None:
+    """If ``md_path`` has YAML front matter declaring ``docgen.segment`` with ``create: true``, return (id, stem)."""
+    doc = parse_hint_docgen_front_matter(md_path)
+    if not doc:
+        return None
+    seg = doc.get("segment")
+    if not isinstance(seg, dict) or not seg.get("create"):
+        return None
+    sid = seg.get("id")
+    stem = seg.get("stem")
+    if sid is None or stem is None:
+        return None
+    sid_s = str(sid).strip()
+    stem_s = str(stem).strip()
+    if not sid_s or not stem_s:
+        return None
+    if sid_s.isdigit():
+        sid_s = sid_s.zfill(2)
+    if not re.fullmatch(r"\d{2}", sid_s):
+        return None
+    return sid_s, stem_s
+
+
+def collect_hint_segment_declarations(hints_dir: Path) -> dict[str, str]:
+    """First declaration per segment id wins (paths sorted). Values: segment id → narration stem."""
+    if not hints_dir.is_dir():
+        return {}
+    out: dict[str, str] = {}
+    for path in sorted(hints_dir.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        decl = parse_hint_segment_declaration(path)
+        if not decl:
+            continue
+        sid, stem = decl
+        if sid not in out:
+            out[sid] = stem
+    return out
+
+
+def _segment_lists_to_update(raw: dict[str, Any]) -> list[list[str]]:
+    seg = raw.get("segments")
+    if not isinstance(seg, dict):
+        return []
+    buckets: list[list[str]] = []
+    seen: set[int] = set()
+    for key in ("default", "all"):
+        lst = seg.get(key)
+        if not isinstance(lst, list):
+            continue
+        lid = id(lst)
+        if lid in seen:
+            continue
+        seen.add(lid)
+        buckets.append(lst)
+    return buckets
+
+
+def merge_hint_declared_segments(raw: dict[str, Any], cfg: "Config") -> list[str]:
+    """Insert ids into ``segments`` lists and ``segment_names`` from ``hints/*.md`` front matter."""
+    disc = raw.get("discovery")
+    if isinstance(disc, dict) and disc.get("merge_hint_segments") is False:
+        return []
+    declared = collect_hint_segment_declarations(cfg.hints_dir)
+    if not declared:
+        return []
+
+    lists = _segment_lists_to_update(raw)
+    if not lists:
+        seg_block = raw.setdefault("segments", {})
+        if not isinstance(seg_block, dict):
+            seg_block = {}
+            raw["segments"] = seg_block
+        shared: list[str] = []
+        seg_block["default"] = shared
+        seg_block["all"] = shared
+        lists = _segment_lists_to_update(raw)
+
+    changes: list[str] = []
+    for lst in lists:
+        before = list(lst)
+        for sid in declared:
+            if sid not in lst:
+                lst.append(sid)
+        lst.sort(key=_segment_id_sort_key)
+        if lst != before:
+            changes.append("segments: merged ids from hints/*.md (docgen.segment.create)")
+
+    names = raw.setdefault("segment_names", {})
+    if not isinstance(names, dict):
+        names = {}
+        raw["segment_names"] = names
+    for sid, stem in sorted(declared.items(), key=lambda x: _segment_id_sort_key(x[0])):
+        if names.get(sid) != stem:
+            names[sid] = stem
+            changes.append(f"segment_names[{sid!r}]: set from hints ({stem!r})")
+
+    return sorted(set(changes))
+
+
+def _deep_merge_yaml_mapping(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    for k, v in src.items():
+        if k in dst and isinstance(dst[k], dict) and isinstance(v, dict):
+            _deep_merge_yaml_mapping(dst[k], v)
+        else:
+            dst[k] = v
+
+
+def collect_hint_wirings_by_segment(hints_dir: Path) -> dict[str, dict[str, Any]]:
+    """Segment id -> ``docgen.wiring`` dict. Later paths in sorted order win."""
+    if not hints_dir.is_dir():
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for path in sorted(hints_dir.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        doc = parse_hint_docgen_front_matter(path)
+        if not doc:
+            continue
+        decl = parse_hint_segment_declaration(path)
+        if not decl:
+            continue
+        sid, _stem = decl
+        wiring = doc.get("wiring")
+        if not isinstance(wiring, dict) or not wiring:
+            continue
+        out[sid] = wiring
+    return out
+
+
+def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
+    """Apply ``visual`` overrides from hints, re-sync Manim lists, then merge narration / manim_scene blocks."""
+    disc = raw.get("discovery")
+    hint_merge_off = isinstance(disc, dict) and disc.get("merge_hint_segments") is False
+    wirings = {} if hint_merge_off else collect_hint_wirings_by_segment(cfg.hints_dir)
+    changes: list[str] = []
+
+    if not hint_merge_off:
+        vm = raw.setdefault("visual_map", {})
+        if not isinstance(vm, dict):
+            vm = {}
+            raw["visual_map"] = vm
+        for sid, w in sorted(wirings.items(), key=lambda x: _segment_id_sort_key(x[0])):
+            vis = w.get("visual")
+            if isinstance(vis, dict) and vis:
+                vm[str(sid)] = dict(vis)
+                changes.append(f"visual_map[{sid!r}]: merged from hints/*.md (docgen.wiring)")
+
+    changes.extend(_sync_manim_scenes_from_visual_map(raw))
+    changes.extend(_sync_manim_segments_from_visual_map(raw))
+
+    if hint_merge_off or not wirings:
+        return sorted(set(changes))
+
+    nfs = raw.setdefault("narration_from_source", {})
+    if not isinstance(nfs, dict):
+        nfs = {}
+        raw["narration_from_source"] = nfs
+    nf_segs = nfs.setdefault("segments", {})
+    if not isinstance(nf_segs, dict):
+        nf_segs = {}
+        raw["narration_from_source"]["segments"] = nf_segs
+
+    mg = raw.setdefault("manim_scene_generation", {})
+    if not isinstance(mg, dict):
+        mg = {}
+        raw["manim_scene_generation"] = mg
+    mg_segs = mg.setdefault("segments", {})
+    if not isinstance(mg_segs, dict):
+        mg_segs = {}
+        raw["manim_scene_generation"]["segments"] = mg_segs
+
+    for sid, w in sorted(wirings.items(), key=lambda x: _segment_id_sort_key(x[0])):
+        nar = w.get("narration")
+        if isinstance(nar, dict) and nar:
+            cur = nf_segs.get(str(sid))
+            if isinstance(cur, dict):
+                _deep_merge_yaml_mapping(cur, dict(nar))
+            else:
+                nf_segs[str(sid)] = dict(nar)
+            changes.append(f"narration_from_source.segments[{sid!r}]: merged from hints")
+        ms = w.get("manim_scene")
+        if isinstance(ms, dict) and ms:
+            cur = mg_segs.get(str(sid))
+            if isinstance(cur, dict):
+                _deep_merge_yaml_mapping(cur, dict(ms))
+            else:
+                mg_segs[str(sid)] = dict(ms)
+            changes.append(f"manim_scene_generation.segments[{sid!r}]: merged from hints")
+
+    return sorted(set(changes))
 
 
 def manim_scene_class_names_in_order(scenes_py: Path) -> list[str]:

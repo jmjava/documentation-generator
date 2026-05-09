@@ -1,0 +1,80 @@
+segment_id: '05'
+class_name: PlaywrightDemosScene
+title:
+  text: Playwright Demo Videos
+  font_size: 36
+  color: C_WHITE
+layout:
+  first_row_title_buff: 0.5
+  row_gap: 0.55
+  column_gap: 0.8
+  page_transition: fade
+  page_transition_run_time: 0.45
+pages:
+- rows:
+  - run_time: 1.6
+    wait_at: 21.52
+    boxes:
+    - label: TTS
+      color: C_GREEN
+      width: 3.0
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 25.3
+    boxes:
+    - label: Timestamps
+      color: C_TEAL
+      width: 4.0
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 30.76
+    boxes:
+    - label: Whisper
+      color: C_PURPLE
+      width: 3.5
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 39.92
+    boxes:
+    - label: Manim
+      color: C_BLUE
+      width: 3.5
+      height: 1.0
+      font_size: 22
+- transition: fade
+  rows:
+  - run_time: 1.6
+    wait_at: 48.76
+    boxes:
+    - label: Compose
+      color: C_ORANGE
+      width: 3.8
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 65.64
+    boxes:
+    - label: Playwright
+      color: C_ACCENT
+      width: 4.0
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 67.98
+    boxes:
+    - label: Demo Function
+      color: C_GREEN
+      width: 4.5
+      height: 1.0
+      font_size: 22
+  - run_time: 1.6
+    wait_at: 73.42
+    boxes:
+    - label: Tracing
+      color: C_RED
+      width: 3.5
+      height: 1.0
+      font_size: 22
