@@ -14,11 +14,13 @@ segments:
   - '01'
   - '02'
   - '03'
+  - '04'
   all: *id001
 segment_names:
   '01': 01-overview
   '02': 02-init-scaffold
   '03': 03-wizard-gui
+  '04': 04-pipeline-hints
 visual_map:
   '01':
     type: manim
@@ -32,6 +34,10 @@ visual_map:
     type: manim
     scene: WizardGuiScene
     source: WizardGuiScene.mp4
+  '04':
+    type: manim
+    scene: PipelineHintsScene
+    source: PipelineHintsScene.mp4
 vhs:
   vhs_path: ''
   sync_from_timing: false
@@ -82,8 +88,15 @@ narration_from_source:
     paths:
     - README.md
     - AGENTS.md
-    - docs/demos/hints/narration-tts.md
     globs: []
+  segments:
+    '04':
+      hints:
+      - This segment explains maintainer hint files (docs/demos/hints) and how segment 04 alone wires them in docgen.yaml.
+      context:
+        paths:
+        - docs/demos/hints/narration-tts.md
+        - docs/demos/hints/segment-04-topic.md
 manim_scene_generation:
   model: gpt-4o
   temperature: 0.4
@@ -91,8 +104,7 @@ manim_scene_generation:
   hints:
   - Match palette and _TimedScene timing patterns from existing scenes in animations/scenes.py.
   context:
-    paths:
-    - docs/demos/hints/manim-scene-specs.md
+    paths: []
     globs: []
   segments:
     '01':
@@ -101,8 +113,17 @@ manim_scene_generation:
       class_name: InitScaffoldScene
     '03':
       class_name: WizardGuiScene
+    '04':
+      class_name: PipelineHintsScene
+      hints:
+      - Boxes for Hint files, Declarative YAML, Manim long-form, Playwright shorts; tie labels to segment-04-topic.
+      context:
+        paths:
+        - docs/demos/hints/manim-scene-specs.md
+        - docs/demos/hints/segment-04-topic.md
 manim:
   scenes:
   - OverviewScene
   - InitScaffoldScene
   - WizardGuiScene
+  - PipelineHintsScene

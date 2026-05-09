@@ -253,3 +253,59 @@ class WizardGuiScene(_TimedScene):
         self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
         self.timed_wait(0.5)
 # ── END GENERATED SCENE: 03 ──
+
+
+# ── BEGIN GENERATED SCENE: 04 (PipelineHintsScene) ──
+class PipelineHintsScene(_TimedScene):
+    def construct(self):
+        self.camera.background_color = C_BG
+        timing = _load_timing('04-pipeline-hints')
+
+        title = Text('Pipeline Hints', font_size=36, color=C_WHITE).to_edge(UP)
+        self.timed_play(Write(title), run_time=2.0)
+        if len(timing) > 0:
+            self.wait_until(timing[0]["start"])
+        _bx_0_0 = _box('Document the Generator', C_GREEN, 6.0, 1.0, 24)
+        _bx_0_0.next_to(title, DOWN, buff=0.5)
+        self.timed_play(FadeIn(_bx_0_0), run_time=2.0)
+        if len(timing) > 1:
+            self.wait_until(timing[1]["start"])
+        _bx_1_0 = _box('Manim Diagrams', C_BLUE, 5.0, 1.0, 20)
+        _bx_1_1 = _box('Scripted Narration', C_PURPLE, 5.0, 1.0, 20)
+        _row_1 = VGroup(_bx_1_0, _bx_1_1).arrange(RIGHT, buff=0.8).next_to(_bx_0_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_row_1), run_time=2.0)
+        if len(timing) > 2:
+            self.wait_until(timing[2]["start"])
+        _bx_2_0 = _box('Playwright Tutorials', C_ORANGE, 6.0, 1.0, 20)
+        _bx_2_0.next_to(_row_1, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_2_0), run_time=2.0)
+        if len(timing) > 3:
+            self.wait_until(timing[3]["start"])
+        _bx_3_0 = _box('Hint Files in Git', C_TEAL, 6.0, 1.0, 20)
+        _bx_3_0.next_to(_bx_2_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_3_0), run_time=2.0)
+        if len(timing) > 5:
+            self.wait_until(timing[5]["start"])
+        _bx_4_0 = _box('docgen.yaml Wiring', C_ACCENT, 6.0, 1.0, 20)
+        _bx_4_0.next_to(_bx_3_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_4_0), run_time=2.0)
+        if len(timing) > 8:
+            self.wait_until(timing[8]["start"])
+        _bx_5_0 = _box('Declarative Scene Specs', C_RED, 6.0, 1.0, 20)
+        _bx_5_0.next_to(_bx_4_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_5_0), run_time=2.0)
+        if len(timing) > 11:
+            self.wait_until(timing[11]["start"])
+        _bx_6_0 = _box('Run docgen in Bundle', C_GREEN, 6.0, 1.0, 20)
+        _bx_6_0.next_to(_bx_5_0, DOWN, buff=0.6)
+        self.timed_play(FadeIn(_bx_6_0), run_time=2.0)
+
+        # docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)
+        _docgen_segs = _load_timing('04-pipeline-hints')
+        if _docgen_segs:
+            self.wait_until(
+                max(float(s.get("end", 0.0)) for s in _docgen_segs)
+            )
+        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
+        self.timed_wait(0.5)
+# ── END GENERATED SCENE: 04 ──

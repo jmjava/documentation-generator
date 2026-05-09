@@ -1,12 +1,21 @@
 # Maintainer hints for docgen
 
-Put **Markdown or plain text** here when you want stable, reviewable steering for OpenAI-backed commands—without pasting long prose into generated artifacts.
+Put **Markdown or plain text** here when you want stable, reviewable steering for OpenAI-backed commands—without pasting long prose into generated artifacts. Paths are **repo-root-relative** (see `repo_root:` in `docgen.yaml`).
 
-**Wire paths in `docgen.yaml`**, for example under:
+## Dogfood: segment 04 only
 
-- `narration_from_source.context.paths` — e.g. `docs/demos/hints/narration-tts.md` (this repo)
-- `manim_scene_generation.context.paths` — e.g. `docs/demos/hints/manim-scene-specs.md`
+Segments **01–03** use **only** `README.md` + `AGENTS.md` in the global `narration_from_source` / `manim_scene_generation` context.  
+Segment **`04`** (`04-pipeline-hints`) is the **hint-driven section**: add hint paths under:
 
-Then run `docgen narration-generate`, `docgen scene-spec-generate`, etc. as usual.
+- `narration_from_source.segments."04".context.paths`
+- `manim_scene_generation.segments."04".context.paths`
 
-**Cursor / editors:** creating and editing files under `hints/` is intentional input (see `.cursor/rules/no-asset-edits.mdc` category B). This directory is **not** produced by `docgen`; it is not deleted by `clean-bundle` unless you remove it yourself.
+| File | Role |
+|------|------|
+| `narration-tts.md` | Rules for spoken scripts (no backticks, plain prose). |
+| `manim-scene-specs.md` | Declarative Manim YAML / `_box` row constraints. |
+| `segment-04-topic.md` | What segment 04 should explain (hints + two pipeline modes). |
+
+Typical regen for the new segment (from `docs/demos`): `docgen tts --segment 04` → `docgen timestamps` → `docgen scene-spec-generate --segment 04 --compile` → `docgen manim` → `docgen compose` → `docgen concat full-demo`.
+
+**Cursor / editors:** files under `hints/` are intentional inputs (`.cursor/rules/no-asset-edits.mdc` category B). Not produced by `docgen`; not removed by `clean-bundle` unless you delete them.

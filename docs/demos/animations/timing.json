@@ -1813,11 +1813,11 @@
       },
       {
         "start": 23.239999771118164,
-        "end": 23.68000030517578,
+        "end": 23.700000762939453,
         "word": "and"
       },
       {
-        "start": 23.68000030517578,
+        "start": 23.700000762939453,
         "end": 23.940000534057617,
         "word": "settings"
       },
@@ -2028,11 +2028,11 @@
       },
       {
         "start": 42.15999984741211,
-        "end": 42.41999816894531,
+        "end": 42.439998626708984,
         "word": "you're"
       },
       {
-        "start": 42.41999816894531,
+        "start": 42.439998626708984,
         "end": 42.599998474121094,
         "word": "ready"
       },
@@ -3407,6 +3407,988 @@
         "start": 77.22000122070312,
         "end": 77.66000366210938,
         "word": "videos"
+      }
+    ]
+  },
+  "04-pipeline-hints": {
+    "text": "This segment is about how we document the documentation generator itself. We use two shapes of video. Long form pieces use Manim diagrams and scripted narration. Short tutorials use Playwright to record the same flows you already test in the browser. Maintainers can add hint files under docs, demos, hints. Those files are normal markdown in Git. They steer the language model when we generate narration or declarative scene YAML. They are not machine written outputs. You wire which segment reads which hints in docgen.yaml. For this repo, segment 04 is the only segment that pulls the dedicated hint paths. Segments 01 through 03 still rely on the top level readme and agents context only. Declarative scene specs mean the model emits YAML rows of boxes. Docgen compiles that into safe Manim layout. If you need custom motion beyond stacked boxes, you fall back to scene generate and hand-guided Python. When you rebuild demos, run docgen from the bundle directory next to docgen.yaml. Commit hint files alongside config so CI and reviewers see the same steering the model sees.",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 4.699999809265137,
+        "text": " This segment is about how we document the documentation generator itself."
+      },
+      {
+        "start": 5.480000019073486,
+        "end": 11.319999694824219,
+        "text": " We use two shapes of video. Long form pieces use Manim diagrams and scripted narration."
+      },
+      {
+        "start": 12.460000038146973,
+        "end": 17.559999465942383,
+        "text": " Short tutorials use Playwright to record the same flows you already test in the browser."
+      },
+      {
+        "start": 18.200000762939453,
+        "end": 25.040000915527344,
+        "text": " Maintainers can add hint files under docs, demos, hints. Those files are normal markdown in Git."
+      },
+      {
+        "start": 25.040000915527344,
+        "end": 31.420000076293945,
+        "text": " They steer the language model when we generate narration or declarative scene YAML. They are"
+      },
+      {
+        "start": 31.420000076293945,
+        "end": 37.400001525878906,
+        "text": " not machine written outputs. You wire which segment reads which hints in docgen.yaml."
+      },
+      {
+        "start": 38.02000045776367,
+        "end": 42.900001525878906,
+        "text": " For this repo, segment 04 is the only segment that pulls the dedicated hint paths."
+      },
+      {
+        "start": 44.040000915527344,
+        "end": 49.52000045776367,
+        "text": " Segments 01 through 03 still rely on the top level readme and agents context only."
+      },
+      {
+        "start": 50.720001220703125,
+        "end": 54.0,
+        "text": " Declarative scene specs mean the model emits YAML rows of boxes."
+      },
+      {
+        "start": 54.720001220703125,
+        "end": 60.63999938964844,
+        "text": " Docgen compiles that into safe Manim layout. If you need custom motion beyond stacked boxes,"
+      },
+      {
+        "start": 61.060001373291016,
+        "end": 64.4800033569336,
+        "text": " you fall back to scene generate and hand-guided Python."
+      },
+      {
+        "start": 64.91999816894531,
+        "end": 70.5199966430664,
+        "text": " When you rebuild demos, run docgen from the bundle directory next to docgen.yaml."
+      },
+      {
+        "start": 71.16000366210938,
+        "end": 76.72000122070312,
+        "text": " Commit hint files alongside config so CI and reviewers see the same steering the model sees."
+      }
+    ],
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.4399999976158142,
+        "word": "This"
+      },
+      {
+        "start": 0.4399999976158142,
+        "end": 0.8999999761581421,
+        "word": "segment"
+      },
+      {
+        "start": 0.8999999761581421,
+        "end": 1.340000033378601,
+        "word": "is"
+      },
+      {
+        "start": 1.340000033378601,
+        "end": 1.600000023841858,
+        "word": "about"
+      },
+      {
+        "start": 1.600000023841858,
+        "end": 1.840000033378601,
+        "word": "how"
+      },
+      {
+        "start": 1.840000033378601,
+        "end": 2.180000066757202,
+        "word": "we"
+      },
+      {
+        "start": 2.180000066757202,
+        "end": 2.640000104904175,
+        "word": "document"
+      },
+      {
+        "start": 2.640000104904175,
+        "end": 2.940000057220459,
+        "word": "the"
+      },
+      {
+        "start": 2.940000057220459,
+        "end": 3.619999885559082,
+        "word": "documentation"
+      },
+      {
+        "start": 3.619999885559082,
+        "end": 4.119999885559082,
+        "word": "generator"
+      },
+      {
+        "start": 4.119999885559082,
+        "end": 4.699999809265137,
+        "word": "itself"
+      },
+      {
+        "start": 5.480000019073486,
+        "end": 5.559999942779541,
+        "word": "We"
+      },
+      {
+        "start": 5.559999942779541,
+        "end": 5.820000171661377,
+        "word": "use"
+      },
+      {
+        "start": 5.820000171661377,
+        "end": 6.199999809265137,
+        "word": "two"
+      },
+      {
+        "start": 6.199999809265137,
+        "end": 6.460000038146973,
+        "word": "shapes"
+      },
+      {
+        "start": 6.460000038146973,
+        "end": 7.260000228881836,
+        "word": "of"
+      },
+      {
+        "start": 7.260000228881836,
+        "end": 7.260000228881836,
+        "word": "video"
+      },
+      {
+        "start": 8.0600004196167,
+        "end": 8.0600004196167,
+        "word": "Long"
+      },
+      {
+        "start": 8.0600004196167,
+        "end": 8.399999618530273,
+        "word": "form"
+      },
+      {
+        "start": 8.399999618530273,
+        "end": 8.760000228881836,
+        "word": "pieces"
+      },
+      {
+        "start": 8.760000228881836,
+        "end": 9.140000343322754,
+        "word": "use"
+      },
+      {
+        "start": 9.140000343322754,
+        "end": 9.5,
+        "word": "Manim"
+      },
+      {
+        "start": 9.5,
+        "end": 10.039999961853027,
+        "word": "diagrams"
+      },
+      {
+        "start": 10.039999961853027,
+        "end": 10.460000038146973,
+        "word": "and"
+      },
+      {
+        "start": 10.460000038146973,
+        "end": 11.319999694824219,
+        "word": "scripted"
+      },
+      {
+        "start": 11.319999694824219,
+        "end": 11.319999694824219,
+        "word": "narration"
+      },
+      {
+        "start": 12.460000038146973,
+        "end": 12.539999961853027,
+        "word": "Short"
+      },
+      {
+        "start": 12.539999961853027,
+        "end": 13.079999923706055,
+        "word": "tutorials"
+      },
+      {
+        "start": 13.079999923706055,
+        "end": 13.640000343322754,
+        "word": "use"
+      },
+      {
+        "start": 13.640000343322754,
+        "end": 14.100000381469727,
+        "word": "Playwright"
+      },
+      {
+        "start": 14.100000381469727,
+        "end": 14.5600004196167,
+        "word": "to"
+      },
+      {
+        "start": 14.5600004196167,
+        "end": 14.84000015258789,
+        "word": "record"
+      },
+      {
+        "start": 14.84000015258789,
+        "end": 15.100000381469727,
+        "word": "the"
+      },
+      {
+        "start": 15.100000381469727,
+        "end": 15.460000038146973,
+        "word": "same"
+      },
+      {
+        "start": 15.460000038146973,
+        "end": 15.699999809265137,
+        "word": "flows"
+      },
+      {
+        "start": 15.699999809265137,
+        "end": 15.9399995803833,
+        "word": "you"
+      },
+      {
+        "start": 15.9399995803833,
+        "end": 16.399999618530273,
+        "word": "already"
+      },
+      {
+        "start": 16.399999618530273,
+        "end": 16.700000762939453,
+        "word": "test"
+      },
+      {
+        "start": 16.700000762939453,
+        "end": 16.860000610351562,
+        "word": "in"
+      },
+      {
+        "start": 16.860000610351562,
+        "end": 17.34000015258789,
+        "word": "the"
+      },
+      {
+        "start": 17.34000015258789,
+        "end": 17.559999465942383,
+        "word": "browser"
+      },
+      {
+        "start": 18.200000762939453,
+        "end": 18.719999313354492,
+        "word": "Maintainers"
+      },
+      {
+        "start": 18.719999313354492,
+        "end": 19.0,
+        "word": "can"
+      },
+      {
+        "start": 19.0,
+        "end": 19.299999237060547,
+        "word": "add"
+      },
+      {
+        "start": 19.299999237060547,
+        "end": 19.579999923706055,
+        "word": "hint"
+      },
+      {
+        "start": 19.579999923706055,
+        "end": 19.940000534057617,
+        "word": "files"
+      },
+      {
+        "start": 19.940000534057617,
+        "end": 20.540000915527344,
+        "word": "under"
+      },
+      {
+        "start": 20.540000915527344,
+        "end": 21.020000457763672,
+        "word": "docs"
+      },
+      {
+        "start": 21.260000228881836,
+        "end": 21.559999465942383,
+        "word": "demos"
+      },
+      {
+        "start": 21.739999771118164,
+        "end": 22.0,
+        "word": "hints"
+      },
+      {
+        "start": 22.81999969482422,
+        "end": 23.139999389648438,
+        "word": "Those"
+      },
+      {
+        "start": 23.139999389648438,
+        "end": 23.440000534057617,
+        "word": "files"
+      },
+      {
+        "start": 23.440000534057617,
+        "end": 23.760000228881836,
+        "word": "are"
+      },
+      {
+        "start": 23.760000228881836,
+        "end": 24.139999389648438,
+        "word": "normal"
+      },
+      {
+        "start": 24.139999389648438,
+        "end": 24.639999389648438,
+        "word": "markdown"
+      },
+      {
+        "start": 24.639999389648438,
+        "end": 25.040000915527344,
+        "word": "in"
+      },
+      {
+        "start": 25.040000915527344,
+        "end": 25.040000915527344,
+        "word": "Git"
+      },
+      {
+        "start": 25.040000915527344,
+        "end": 25.81999969482422,
+        "word": "They"
+      },
+      {
+        "start": 25.81999969482422,
+        "end": 26.239999771118164,
+        "word": "steer"
+      },
+      {
+        "start": 26.239999771118164,
+        "end": 26.459999084472656,
+        "word": "the"
+      },
+      {
+        "start": 26.459999084472656,
+        "end": 26.81999969482422,
+        "word": "language"
+      },
+      {
+        "start": 26.81999969482422,
+        "end": 27.139999389648438,
+        "word": "model"
+      },
+      {
+        "start": 27.139999389648438,
+        "end": 27.559999465942383,
+        "word": "when"
+      },
+      {
+        "start": 27.559999465942383,
+        "end": 27.8799991607666,
+        "word": "we"
+      },
+      {
+        "start": 27.8799991607666,
+        "end": 28.18000030517578,
+        "word": "generate"
+      },
+      {
+        "start": 28.18000030517578,
+        "end": 28.6200008392334,
+        "word": "narration"
+      },
+      {
+        "start": 28.6200008392334,
+        "end": 29.219999313354492,
+        "word": "or"
+      },
+      {
+        "start": 29.219999313354492,
+        "end": 29.719999313354492,
+        "word": "declarative"
+      },
+      {
+        "start": 29.719999313354492,
+        "end": 30.18000030517578,
+        "word": "scene"
+      },
+      {
+        "start": 30.18000030517578,
+        "end": 30.3799991607666,
+        "word": "YAML"
+      },
+      {
+        "start": 31.1200008392334,
+        "end": 31.219999313354492,
+        "word": "They"
+      },
+      {
+        "start": 31.219999313354492,
+        "end": 31.420000076293945,
+        "word": "are"
+      },
+      {
+        "start": 31.420000076293945,
+        "end": 31.719999313354492,
+        "word": "not"
+      },
+      {
+        "start": 31.719999313354492,
+        "end": 32.119998931884766,
+        "word": "machine"
+      },
+      {
+        "start": 32.119998931884766,
+        "end": 32.439998626708984,
+        "word": "written"
+      },
+      {
+        "start": 32.439998626708984,
+        "end": 32.900001525878906,
+        "word": "outputs"
+      },
+      {
+        "start": 33.7599983215332,
+        "end": 33.84000015258789,
+        "word": "You"
+      },
+      {
+        "start": 33.84000015258789,
+        "end": 34.220001220703125,
+        "word": "wire"
+      },
+      {
+        "start": 34.220001220703125,
+        "end": 34.619998931884766,
+        "word": "which"
+      },
+      {
+        "start": 34.619998931884766,
+        "end": 34.86000061035156,
+        "word": "segment"
+      },
+      {
+        "start": 34.86000061035156,
+        "end": 35.18000030517578,
+        "word": "reads"
+      },
+      {
+        "start": 35.18000030517578,
+        "end": 35.779998779296875,
+        "word": "which"
+      },
+      {
+        "start": 35.779998779296875,
+        "end": 35.779998779296875,
+        "word": "hints"
+      },
+      {
+        "start": 35.779998779296875,
+        "end": 36.29999923706055,
+        "word": "in"
+      },
+      {
+        "start": 36.29999923706055,
+        "end": 36.7400016784668,
+        "word": "docgen"
+      },
+      {
+        "start": 36.7400016784668,
+        "end": 37.400001525878906,
+        "word": "yaml"
+      },
+      {
+        "start": 38.02000045776367,
+        "end": 38.119998931884766,
+        "word": "For"
+      },
+      {
+        "start": 38.119998931884766,
+        "end": 38.400001525878906,
+        "word": "this"
+      },
+      {
+        "start": 38.400001525878906,
+        "end": 38.7400016784668,
+        "word": "repo"
+      },
+      {
+        "start": 39.47999954223633,
+        "end": 39.5,
+        "word": "segment"
+      },
+      {
+        "start": 39.5,
+        "end": 40.02000045776367,
+        "word": "04"
+      },
+      {
+        "start": 40.02000045776367,
+        "end": 40.36000061035156,
+        "word": "is"
+      },
+      {
+        "start": 40.36000061035156,
+        "end": 40.540000915527344,
+        "word": "the"
+      },
+      {
+        "start": 40.540000915527344,
+        "end": 40.959999084472656,
+        "word": "only"
+      },
+      {
+        "start": 40.959999084472656,
+        "end": 41.18000030517578,
+        "word": "segment"
+      },
+      {
+        "start": 41.18000030517578,
+        "end": 41.41999816894531,
+        "word": "that"
+      },
+      {
+        "start": 41.41999816894531,
+        "end": 41.63999938964844,
+        "word": "pulls"
+      },
+      {
+        "start": 41.63999938964844,
+        "end": 41.97999954223633,
+        "word": "the"
+      },
+      {
+        "start": 41.97999954223633,
+        "end": 42.2400016784668,
+        "word": "dedicated"
+      },
+      {
+        "start": 42.2400016784668,
+        "end": 42.560001373291016,
+        "word": "hint"
+      },
+      {
+        "start": 42.560001373291016,
+        "end": 42.900001525878906,
+        "word": "paths"
+      },
+      {
+        "start": 44.040000915527344,
+        "end": 44.040000915527344,
+        "word": "Segments"
+      },
+      {
+        "start": 44.040000915527344,
+        "end": 44.58000183105469,
+        "word": "01"
+      },
+      {
+        "start": 44.58000183105469,
+        "end": 44.900001525878906,
+        "word": "through"
+      },
+      {
+        "start": 44.900001525878906,
+        "end": 45.5,
+        "word": "03"
+      },
+      {
+        "start": 45.5,
+        "end": 46.20000076293945,
+        "word": "still"
+      },
+      {
+        "start": 46.20000076293945,
+        "end": 46.5,
+        "word": "rely"
+      },
+      {
+        "start": 46.5,
+        "end": 46.68000030517578,
+        "word": "on"
+      },
+      {
+        "start": 46.68000030517578,
+        "end": 46.84000015258789,
+        "word": "the"
+      },
+      {
+        "start": 46.84000015258789,
+        "end": 47.119998931884766,
+        "word": "top"
+      },
+      {
+        "start": 47.119998931884766,
+        "end": 47.36000061035156,
+        "word": "level"
+      },
+      {
+        "start": 47.36000061035156,
+        "end": 47.7400016784668,
+        "word": "readme"
+      },
+      {
+        "start": 47.7400016784668,
+        "end": 48.20000076293945,
+        "word": "and"
+      },
+      {
+        "start": 48.20000076293945,
+        "end": 48.63999938964844,
+        "word": "agents"
+      },
+      {
+        "start": 48.63999938964844,
+        "end": 49.08000183105469,
+        "word": "context"
+      },
+      {
+        "start": 49.08000183105469,
+        "end": 49.52000045776367,
+        "word": "only"
+      },
+      {
+        "start": 50.720001220703125,
+        "end": 50.91999816894531,
+        "word": "Declarative"
+      },
+      {
+        "start": 50.91999816894531,
+        "end": 51.29999923706055,
+        "word": "scene"
+      },
+      {
+        "start": 51.29999923706055,
+        "end": 51.58000183105469,
+        "word": "specs"
+      },
+      {
+        "start": 51.58000183105469,
+        "end": 51.97999954223633,
+        "word": "mean"
+      },
+      {
+        "start": 51.97999954223633,
+        "end": 52.439998626708984,
+        "word": "the"
+      },
+      {
+        "start": 52.439998626708984,
+        "end": 52.439998626708984,
+        "word": "model"
+      },
+      {
+        "start": 52.439998626708984,
+        "end": 52.779998779296875,
+        "word": "emits"
+      },
+      {
+        "start": 52.779998779296875,
+        "end": 53.20000076293945,
+        "word": "YAML"
+      },
+      {
+        "start": 53.20000076293945,
+        "end": 53.439998626708984,
+        "word": "rows"
+      },
+      {
+        "start": 53.439998626708984,
+        "end": 53.720001220703125,
+        "word": "of"
+      },
+      {
+        "start": 53.720001220703125,
+        "end": 54.0,
+        "word": "boxes"
+      },
+      {
+        "start": 54.720001220703125,
+        "end": 55.220001220703125,
+        "word": "Docgen"
+      },
+      {
+        "start": 55.220001220703125,
+        "end": 55.84000015258789,
+        "word": "compiles"
+      },
+      {
+        "start": 55.84000015258789,
+        "end": 56.099998474121094,
+        "word": "that"
+      },
+      {
+        "start": 56.099998474121094,
+        "end": 56.29999923706055,
+        "word": "into"
+      },
+      {
+        "start": 56.29999923706055,
+        "end": 56.720001220703125,
+        "word": "safe"
+      },
+      {
+        "start": 56.720001220703125,
+        "end": 56.939998626708984,
+        "word": "Manim"
+      },
+      {
+        "start": 56.939998626708984,
+        "end": 57.36000061035156,
+        "word": "layout"
+      },
+      {
+        "start": 58.060001373291016,
+        "end": 58.18000030517578,
+        "word": "If"
+      },
+      {
+        "start": 58.18000030517578,
+        "end": 58.31999969482422,
+        "word": "you"
+      },
+      {
+        "start": 58.31999969482422,
+        "end": 58.540000915527344,
+        "word": "need"
+      },
+      {
+        "start": 58.540000915527344,
+        "end": 58.959999084472656,
+        "word": "custom"
+      },
+      {
+        "start": 58.959999084472656,
+        "end": 59.34000015258789,
+        "word": "motion"
+      },
+      {
+        "start": 59.34000015258789,
+        "end": 59.79999923706055,
+        "word": "beyond"
+      },
+      {
+        "start": 59.79999923706055,
+        "end": 60.20000076293945,
+        "word": "stacked"
+      },
+      {
+        "start": 60.20000076293945,
+        "end": 60.63999938964844,
+        "word": "boxes"
+      },
+      {
+        "start": 61.060001373291016,
+        "end": 61.58000183105469,
+        "word": "you"
+      },
+      {
+        "start": 61.58000183105469,
+        "end": 61.84000015258789,
+        "word": "fall"
+      },
+      {
+        "start": 61.84000015258789,
+        "end": 62.08000183105469,
+        "word": "back"
+      },
+      {
+        "start": 62.08000183105469,
+        "end": 62.5,
+        "word": "to"
+      },
+      {
+        "start": 62.5,
+        "end": 62.63999938964844,
+        "word": "scene"
+      },
+      {
+        "start": 62.63999938964844,
+        "end": 63.0,
+        "word": "generate"
+      },
+      {
+        "start": 63.0,
+        "end": 63.5,
+        "word": "and"
+      },
+      {
+        "start": 63.5,
+        "end": 63.91999816894531,
+        "word": "hand"
+      },
+      {
+        "start": 63.91999816894531,
+        "end": 63.97999954223633,
+        "word": "guided"
+      },
+      {
+        "start": 63.97999954223633,
+        "end": 64.4800033569336,
+        "word": "Python"
+      },
+      {
+        "start": 64.91999816894531,
+        "end": 65.04000091552734,
+        "word": "When"
+      },
+      {
+        "start": 65.04000091552734,
+        "end": 65.27999877929688,
+        "word": "you"
+      },
+      {
+        "start": 65.27999877929688,
+        "end": 65.66000366210938,
+        "word": "rebuild"
+      },
+      {
+        "start": 65.66000366210938,
+        "end": 66.08000183105469,
+        "word": "demos"
+      },
+      {
+        "start": 66.55999755859375,
+        "end": 66.72000122070312,
+        "word": "run"
+      },
+      {
+        "start": 66.72000122070312,
+        "end": 67.18000030517578,
+        "word": "docgen"
+      },
+      {
+        "start": 67.18000030517578,
+        "end": 67.41999816894531,
+        "word": "from"
+      },
+      {
+        "start": 67.41999816894531,
+        "end": 67.66000366210938,
+        "word": "the"
+      },
+      {
+        "start": 67.66000366210938,
+        "end": 67.86000061035156,
+        "word": "bundle"
+      },
+      {
+        "start": 67.86000061035156,
+        "end": 68.36000061035156,
+        "word": "directory"
+      },
+      {
+        "start": 68.36000061035156,
+        "end": 68.91999816894531,
+        "word": "next"
+      },
+      {
+        "start": 68.91999816894531,
+        "end": 69.23999786376953,
+        "word": "to"
+      },
+      {
+        "start": 69.23999786376953,
+        "end": 69.58000183105469,
+        "word": "docgen"
+      },
+      {
+        "start": 69.58000183105469,
+        "end": 70.5199966430664,
+        "word": "yaml"
+      },
+      {
+        "start": 71.16000366210938,
+        "end": 71.19999694824219,
+        "word": "Commit"
+      },
+      {
+        "start": 71.19999694824219,
+        "end": 71.4800033569336,
+        "word": "hint"
+      },
+      {
+        "start": 71.4800033569336,
+        "end": 71.80000305175781,
+        "word": "files"
+      },
+      {
+        "start": 71.80000305175781,
+        "end": 72.4000015258789,
+        "word": "alongside"
+      },
+      {
+        "start": 72.4000015258789,
+        "end": 72.83999633789062,
+        "word": "config"
+      },
+      {
+        "start": 72.83999633789062,
+        "end": 73.4800033569336,
+        "word": "so"
+      },
+      {
+        "start": 73.4800033569336,
+        "end": 73.9000015258789,
+        "word": "CI"
+      },
+      {
+        "start": 73.9000015258789,
+        "end": 74.23999786376953,
+        "word": "and"
+      },
+      {
+        "start": 74.23999786376953,
+        "end": 74.5999984741211,
+        "word": "reviewers"
+      },
+      {
+        "start": 74.5999984741211,
+        "end": 75.08000183105469,
+        "word": "see"
+      },
+      {
+        "start": 75.08000183105469,
+        "end": 75.26000213623047,
+        "word": "the"
+      },
+      {
+        "start": 75.26000213623047,
+        "end": 75.58000183105469,
+        "word": "same"
+      },
+      {
+        "start": 75.58000183105469,
+        "end": 75.91999816894531,
+        "word": "steering"
+      },
+      {
+        "start": 75.91999816894531,
+        "end": 76.13999938964844,
+        "word": "the"
+      },
+      {
+        "start": 76.13999938964844,
+        "end": 76.33999633789062,
+        "word": "model"
+      },
+      {
+        "start": 76.33999633789062,
+        "end": 76.72000122070312,
+        "word": "sees"
       }
     ]
   }
