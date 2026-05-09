@@ -62,7 +62,7 @@ wizard:
 discover_tests:
   roots:
   - .
-  - ../../fixtures/playwright-vite-dogfood
+  - fixtures/playwright-vite-dogfood
 env_file: ../../.env
 narration_from_source:
   model: gpt-4o-mini

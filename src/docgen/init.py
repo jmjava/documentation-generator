@@ -122,17 +122,21 @@ def detect_playwright_project_dirs(repo_root: Path, *, max_depth: int = 6) -> li
     return sorted(found, key=lambda p: (len(p.relative_to(repo_root).parts), str(p)))
 
 
-def discover_default_discover_roots(repo_root: Path, demo_dir: Path) -> list[str]:
+def discover_default_discover_roots(repo_root: Path, _demo_dir: Path) -> list[str]:
     """Default ``discover_tests.roots`` based on actual Playwright signals.
 
-    Always starts with ``.`` (the demo dir). For each detected Playwright
-    project (see :func:`detect_playwright_project_dirs`), append its path
-    relative to ``demo_dir``. No fixture name is hardcoded.
+    Always starts with ``.`` (repo root — same base as :meth:`Config.discover_tests_scan_roots`).
+    For each detected Playwright project (see :func:`detect_playwright_project_dirs`), append
+    its path **relative to** ``repo_root``. No fixture name is hardcoded.
+
+    ``_demo_dir`` is kept for call-site compatibility; it is not used (roots must match YAML
+    semantics where ``discover_tests.roots`` entries join ``repo_root``, not the bundle dir).
     """
+    rr = repo_root.resolve()
     roots: list[str] = ["."]
     for proj in detect_playwright_project_dirs(repo_root):
         try:
-            rel = os.path.relpath(proj, demo_dir)
+            rel = os.path.relpath(proj, rr)
         except ValueError:
             continue
         rel = rel.replace(os.sep, "/")

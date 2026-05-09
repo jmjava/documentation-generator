@@ -228,7 +228,7 @@ def test_discover_default_discover_roots_with_playwright(tmp_path: Path) -> None
     )
     roots = discover_default_discover_roots(tmp_path, demo)
     assert roots[0] == "."
-    assert "../../apps/frontend" in roots
+    assert "apps/frontend" in roots
 
 
 def test_discover_default_discover_roots_blank_repo(tmp_path: Path) -> None:
@@ -255,7 +255,7 @@ def test_build_defaults_plan_detects_playwright_signal(tmp_path: Path, monkeypat
         '{"devDependencies": {"@playwright/test": "^1.0"}}', encoding="utf-8"
     )
     plan = build_defaults_plan(target_dir=None)
-    assert "../../fixtures/any-fixture" in plan.discover_roots
+    assert "fixtures/any-fixture" in plan.discover_roots
 
 
 def test_read_segments_file_basic(tmp_path: Path) -> None:
