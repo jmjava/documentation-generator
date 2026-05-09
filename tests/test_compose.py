@@ -37,6 +37,23 @@ def test_manim_source_uses_configured_quality_dir(tmp_path: Path) -> None:
     assert resolved == target / "Scene01.mp4"
 
 
+def test_compose_skips_unmapped_segment(tmp_path: Path, capsys) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "terminal": "terminal", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {},
+        "manim": {"quality": "1080p30"},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+    n = Composer(c).compose_segments(["01"], strict=True)
+    assert n == 0
+    out = capsys.readouterr().out
+    assert "unmapped" in out
+    assert "SKIP: no visual_map" in out
+
+
 def test_compose_freeze_playwright_uses_higher_effective_ceiling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

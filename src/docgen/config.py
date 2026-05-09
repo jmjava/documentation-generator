@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,38 @@ class Config:
     def resolve_segment_name(self, seg_id: str) -> str:
         """Return the full name for a segment, falling back to the ID itself."""
         return self.segment_names.get(seg_id, seg_id)
+
+    def narration_topic_label(self, seg_id: str) -> str:
+        """Human-facing focus line for narration LLM prompts (no numeric segment ids).
+
+        Prefer ``pages.segments.<id>.title``, then ``narration_from_source.segments.<id>.topic``,
+        then the segment stem with a leading ``NN-`` / ``NN_`` prefix removed. Internal ids and
+        file names stay in ``segment_names``; spoken scripts should not mention them.
+        """
+        sid = str(seg_id)
+        pages = self.raw.get("pages")
+        if isinstance(pages, dict):
+            segs = pages.get("segments")
+            if isinstance(segs, dict):
+                block = segs.get(sid) or segs.get(seg_id)
+                if isinstance(block, dict):
+                    t = block.get("title")
+                    if isinstance(t, str) and t.strip():
+                        return t.strip()
+        nfs = self.raw.get("narration_from_source")
+        if isinstance(nfs, dict):
+            seg_map = nfs.get("segments")
+            if isinstance(seg_map, dict):
+                seg_cfg = seg_map.get(sid) or seg_map.get(seg_id)
+                if isinstance(seg_cfg, dict):
+                    topic = seg_cfg.get("topic")
+                    if isinstance(topic, str) and topic.strip():
+                        return topic.strip()
+        stem = str(self.resolve_segment_name(sid))
+        cleaned = re.sub(r"^\d{2}[-_]", "", stem).strip("-_").strip()
+        if cleaned and not re.fullmatch(r"\d+", cleaned):
+            return cleaned
+        return "Following the on-screen workflow"
 
     @property
     def visual_map(self) -> dict[str, Any]:
@@ -131,6 +164,11 @@ class Config:
     def manim_min_font_size(self) -> int:
         """Minimum font size enforced in Manim scene lint (default: 14)."""
         return int(self.raw.get("manim", {}).get("min_font_size", 14))
+
+    @property
+    def manim_scene_lint_enabled(self) -> bool:
+        """When false, ``docgen validate`` skips Text()/unicode lint on ``animations/scenes.py``."""
+        return bool(self.raw.get("manim", {}).get("scene_lint", True))
 
     @property
     def manim_path(self) -> str | None:

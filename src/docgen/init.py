@@ -1,7 +1,15 @@
-"""Interactive project scaffolding wizard for docgen."""
+"""Interactive project scaffolding wizard for docgen.
+
+`docgen init` writes structure only (directories, wrapper scripts, an empty
+``visual_map`` in ``docgen.yaml``) and **never** hardcodes segment numbers,
+fixture paths, or visual-tool wiring. Specific bundles (e.g. the dogfood
+``docs/demos`` tree) come from running ``docgen yaml-generate`` against the
+files that already exist on disk, not from baked-in presets.
+"""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import stat
@@ -27,6 +35,173 @@ class InitPlan:
     install_pre_push: bool = False
     env_file_rel: str = ""
     existing_narrations: list[Path] = field(default_factory=list)
+    discover_roots: list[str] = field(default_factory=lambda: ["."])
+
+
+def deep_merge(base: dict, overlay: dict) -> dict:
+    """Recursively merge ``overlay`` into ``copy(base)`` (dict values only)."""
+    out = dict(base)
+    for key, val in overlay.items():
+        if key in out and isinstance(out[key], dict) and isinstance(val, dict):
+            out[key] = deep_merge(out[key], val)
+        else:
+            out[key] = val
+    return out
+
+
+_PLAYWRIGHT_PKG_DEPS: tuple[str, ...] = ("@playwright/test", "playwright", "playwright-core")
+_PLAYWRIGHT_CONFIG_NAMES: tuple[str, ...] = (
+    "playwright.config.js",
+    "playwright.config.ts",
+    "playwright.config.mjs",
+    "playwright.config.cjs",
+)
+_DETECT_SKIP_DIRS: frozenset[str] = frozenset({
+    "node_modules",
+    ".git",
+    ".venv",
+    "venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    "__pycache__",
+    "dist",
+    "build",
+    "target",
+    "archive",
+})
+
+
+def _package_json_has_playwright(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+        deps = data.get(section)
+        if isinstance(deps, dict) and any(name in deps for name in _PLAYWRIGHT_PKG_DEPS):
+            return True
+    return False
+
+
+def detect_playwright_project_dirs(repo_root: Path, *, max_depth: int = 6) -> list[Path]:
+    """Return directories under ``repo_root`` that look like Playwright projects.
+
+    Detection signals (no path or fixture name is hardcoded):
+
+    - A ``package.json`` listing ``@playwright/test`` / ``playwright`` /
+      ``playwright-core`` in any deps section.
+    - A ``playwright.config.{js,ts,mjs,cjs}`` file.
+
+    Walks up to ``max_depth`` levels deep, skipping common build / vendor dirs.
+    Results are deduplicated and sorted (shallowest, then alphabetical).
+    """
+    repo_root = repo_root.resolve()
+    if not repo_root.is_dir():
+        return []
+    found: set[Path] = set()
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        d = Path(dirpath)
+        try:
+            depth = len(d.resolve().relative_to(repo_root).parts)
+        except ValueError:
+            dirnames[:] = []
+            continue
+        if depth > max_depth:
+            dirnames[:] = []
+            continue
+        dirnames[:] = sorted(n for n in dirnames if n not in _DETECT_SKIP_DIRS and not n.startswith("."))
+        names = set(filenames)
+        if names & set(_PLAYWRIGHT_CONFIG_NAMES):
+            found.add(d)
+            continue
+        if "package.json" in names and _package_json_has_playwright(d / "package.json"):
+            found.add(d)
+    return sorted(found, key=lambda p: (len(p.relative_to(repo_root).parts), str(p)))
+
+
+def discover_default_discover_roots(repo_root: Path, demo_dir: Path) -> list[str]:
+    """Default ``discover_tests.roots`` based on actual Playwright signals.
+
+    Always starts with ``.`` (the demo dir). For each detected Playwright
+    project (see :func:`detect_playwright_project_dirs`), append its path
+    relative to ``demo_dir``. No fixture name is hardcoded.
+    """
+    roots: list[str] = ["."]
+    for proj in detect_playwright_project_dirs(repo_root):
+        try:
+            rel = os.path.relpath(proj, demo_dir)
+        except ValueError:
+            continue
+        rel = rel.replace(os.sep, "/")
+        if rel and rel not in roots:
+            roots.append(rel)
+    return roots
+
+
+def read_segments_file(path: Path) -> list[dict[str, str]]:
+    """Parse a plain-text segments file: one stem per line.
+
+    Blank lines and ``#`` comment lines are ignored. Each remaining line is a
+    segment ``name`` (e.g. ``01-overview``). The segment ``id`` is the leading
+    two-digit prefix when present, otherwise a 1-based zero-padded ordinal.
+    Duplicate names are deduplicated, preserving first occurrence.
+    """
+    raw = path.read_text(encoding="utf-8")
+    segments: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped in seen:
+            continue
+        seen.add(stripped)
+        match = re.match(r"^(\d{2})", stripped)
+        seg_id = match.group(1) if match else str(len(segments) + 1).zfill(2)
+        segments.append({"id": seg_id, "name": stripped})
+    return segments
+
+
+def build_defaults_plan(
+    target_dir: Path | None,
+    *,
+    discover_roots: tuple[str, ...] = (),
+    segments_file: Path | None = None,
+) -> InitPlan:
+    """Non-interactive plan: git root, demo dir, segments from a segments file,
+    existing narration filenames, or a single starter (in that order)."""
+    plan = InitPlan()
+    git_root = detect_git_root(target_dir)
+    plan.repo_root = git_root.resolve() if git_root else (target_dir or Path.cwd()).resolve()
+    if target_dir is not None:
+        plan.demo_dir = Path(target_dir).resolve()
+    else:
+        plan.demo_dir = (plan.repo_root / "docs" / "demos").resolve()
+    plan.project_name = plan.repo_root.name
+
+    if plan.repo_root.joinpath(".env").is_file():
+        plan.env_file_rel = os.path.relpath(plan.repo_root / ".env", plan.demo_dir)
+
+    if discover_roots:
+        plan.discover_roots = list(discover_roots)
+    else:
+        plan.discover_roots = discover_default_discover_roots(plan.repo_root, plan.demo_dir)
+
+    plan.existing_narrations = scan_narrations(plan.demo_dir)
+    if segments_file is not None:
+        plan.segments = read_segments_file(segments_file)
+        if not plan.segments:
+            plan.segments = [{"id": "01", "name": "01-intro"}]
+    elif plan.existing_narrations:
+        plan.segments = infer_segments_from_narrations(plan.existing_narrations)
+    else:
+        plan.segments = [{"id": "01", "name": "01-intro"}]
+
+    plan.install_pre_push = False
+    return plan
 
 
 def detect_git_root(start: Path | None = None) -> Path | None:
@@ -236,10 +411,6 @@ def _write_config(plan: InitPlan) -> str:
     segment_ids = [s["id"] for s in plan.segments]
     segment_names = {s["id"]: s["name"] for s in plan.segments}
 
-    visual_map: dict[str, dict] = {}
-    for s in plan.segments:
-        visual_map[s["id"]] = {"type": "manim", "scene": f"Scene{s['id']}", "source": f"Scene{s['id']}.mp4"}
-
     config = {
         "repo_root": rel_root,
         "dirs": {
@@ -254,14 +425,7 @@ def _write_config(plan: InitPlan) -> str:
             "all": segment_ids,
         },
         "segment_names": segment_names,
-        "visual_map": visual_map,
-        "manim": {
-            "quality": "1080p30",
-            "font": "Liberation Sans",
-            "min_font_size": 14,
-            "scenes": [f"Scene{s['id']}" for s in plan.segments],
-            "manim_path": "",
-        },
+        "visual_map": {},
         "vhs": {
             "vhs_path": "",
             "sync_from_timing": False,
@@ -309,10 +473,11 @@ def _write_config(plan: InitPlan) -> str:
                 "**/.pytest_cache/**",
                 "**/__pycache__/**",
                 "**/.venv/**",
+                "**/archive/**",
             ],
         },
         "discover_tests": {
-            "roots": ["."],
+            "roots": list(plan.discover_roots),
         },
     }
 
@@ -351,8 +516,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
     scripts = {
         "generate-all.sh": "\n".join([
             "#!/usr/bin/env bash",
-            "# Full pipeline: TTS → Manim → VHS → compose → validate → concat.",
-            "# Wraps: docgen generate-all",
+            "# Full pipeline (TTS, segment visuals, compose, validate, concat). Wraps: docgen generate-all",
             "set -euo pipefail",
             _bash_dir,
             _venv_activate,
@@ -378,7 +542,7 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
         ]),
         "rebuild-after-audio.sh": "\n".join([
             "#!/usr/bin/env bash",
-            "# Rebuild everything after new audio: Manim → VHS → compose → validate → concat.",
+            "# Rebuild visuals and downstream stages after new audio (skips TTS).",
             "# Wraps: docgen rebuild-after-audio",
             "set -euo pipefail",
             _bash_dir,
@@ -428,7 +592,7 @@ def _write_narration_readme(plan: InitPlan) -> str:
 
         ```bash
         docgen tts                     # regenerate audio
-        docgen rebuild-after-audio     # Manim + VHS + compose + validate + concat
+        docgen rebuild-after-audio     # re-render visuals + compose + validate + concat
         ```
     """)
     path = plan.demo_dir / "narration" / "README.md"
@@ -540,9 +704,9 @@ def print_summary(plan: InitPlan, created: list[str]) -> None:
     click.echo("    docgen wizard              # launch GUI to draft narrations")
     click.echo("    docgen tts --dry-run       # preview TTS text stripping")
     click.echo("    docgen validate            # check recordings")
-    click.echo("    docgen generate-all        # full pipeline (needs Manim, VHS, ffmpeg)")
+    click.echo("    docgen generate-all        # full pipeline (see docgen generate-all --help)")
     click.echo()
-    click.echo("  Edit docgen.yaml to customize segments, visual sources, and TTS settings.")
+    click.echo("  Run docgen yaml-generate next, then edit docgen.yaml for segments, visuals, and TTS as needed.")
     try:
         from docgen.test_discovery import node_playwright_project_ready
 

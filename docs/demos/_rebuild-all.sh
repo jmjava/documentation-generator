@@ -19,6 +19,9 @@ for tape in 02-init-scaffold 04-tts-pipeline 05-compose-validate 06-ci-integrati
     docgen --config docgen.yaml vhs --tape "${tape}.tape"
 done
 
+echo "=== [$(date +%H:%M:%S)] Step 3b: Rendering per-function micro-demos ==="
+"$SCRIPT_DIR/_rebuild-per-function.sh"
+
 echo "=== [$(date +%H:%M:%S)] Step 4: Durations check ==="
 echo "  Manim:"
 for f in animations/media/videos/scenes/720p30/*.mp4; do

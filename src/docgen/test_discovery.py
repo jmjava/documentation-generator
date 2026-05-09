@@ -225,7 +225,8 @@ def parse_playwright_config_insights(config_path: Path) -> dict[str, Any]:
     """Best-effort extract of common fields from ``playwright.config.{ts,js,...}``.
 
     Used for docs / wizard / LLM context (not a full TypeScript parser). Keys may be
-    missing: ``base_url``, ``web_server_url``, ``video``, ``trace``, ``output_dir``.
+    missing: ``base_url``, ``web_server_url``, ``web_server_command``, ``video``,
+    ``trace``, ``output_dir``.
     """
     out: dict[str, Any] = {}
     if not config_path.is_file():
@@ -238,12 +239,17 @@ def parse_playwright_config_insights(config_path: Path) -> dict[str, Any]:
     m = _quoted("baseURL")
     if m:
         out["base_url"] = m.group(1).strip()
-    m = re.search(
-        r"url\s*:\s*['\"]([^'\"]+)['\"]",
-        text,
-    )
-    if m and "webServer" in text:
-        out["web_server_url"] = m.group(1).strip()
+    if "webServer" in text:
+        ws_match = re.search(
+            r"webServer\s*:\s*\{([^}]*)\}", text, re.DOTALL
+        )
+        ws_block = ws_match.group(1) if ws_match else text
+        m = re.search(r"url\s*:\s*['\"]([^'\"]+)['\"]", ws_block)
+        if m:
+            out["web_server_url"] = m.group(1).strip()
+        m = re.search(r"command\s*:\s*['\"]([^'\"]+)['\"]", ws_block)
+        if m:
+            out["web_server_command"] = m.group(1).strip()
     m = re.search(r"video\s*:\s*['\"]([^'\"]+)['\"]", text)
     if m:
         out["video"] = m.group(1).strip()
@@ -275,6 +281,8 @@ def _normalize_spec_to_repo(repo_root: Path, scan_root: Path, spec: str) -> str:
 
 def discover_all_node_playwright_tests(repo_root: Path, scan_roots: list[Path]) -> list[NodePlaywrightTest]:
     """Discover from each scan root; de-dupe by (spec relative to *repo_root*, title)."""
+    from docgen.path_filters import is_under_archive_dir
+
     rr = repo_root.resolve()
     uniq: dict[tuple[str, str], NodePlaywrightTest] = {}
     for root in scan_roots:
@@ -283,6 +291,8 @@ def discover_all_node_playwright_tests(repo_root: Path, scan_roots: list[Path]) 
             continue
         for t in discover_node_playwright_tests(root):
             spec = _normalize_spec_to_repo(rr, root, t.spec_path)
+            if is_under_archive_dir(spec):
+                continue
             key = (spec, t.title)
             uniq[key] = NodePlaywrightTest(
                 spec_path=spec,

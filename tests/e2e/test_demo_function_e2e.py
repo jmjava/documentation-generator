@@ -5,11 +5,17 @@ Drives the full pipeline against the canonical fixture in
 
 1. Real Chromium captures the declarative actions against the sibling
    ``demo-page.html`` (loaded via ``file://``).
-2. The captured clip is retimed by ``output_budget.playback_speed_factor``.
-3. Per-action ``say`` strings are sent to OpenAI ``gpt-4o-mini-tts`` and
-   the resulting clips are mixed onto the slowed video at their captured
-   timestamps; a matching WebVTT track is burned in as captions.
-4. Snapshot artifacts are written to ``--output-dir``.
+2. All ``say`` strings are concatenated and sent to OpenAI
+   ``gpt-4o-mini-tts`` in ONE pass. Whisper word-level timestamps then
+   give us a ``(start_ms, end_ms)`` window for each line inside that
+   single MP3.
+3. Candidate frames sampled from the recording are passed to the OpenAI
+   vision model (``gpt-4o-mini``); it picks ONE frame per narration line
+   that best shows the on-screen state being described.
+4. Those chosen stills are concatenated into a slideshow MP4 with each
+   image held for its line's Whisper-aligned duration; the single MP3
+   is muxed underneath as the last step.
+5. Snapshot artifacts are written to ``--output-dir``.
 
 Skips (never silent fallback):
 
@@ -17,12 +23,20 @@ Skips (never silent fallback):
 - Playwright Chromium not installed.
 - ``ffmpeg`` / ``ffprobe`` missing from PATH.
 
-Asserts invariants (not byte equality — TTS output is non-deterministic):
+Asserts invariants (not byte equality — TTS / vision / Whisper outputs
+are all non-deterministic):
 
 - ``rendered.mp4`` has both a video stream and an audio stream.
-- Audio duration matches video duration within 0.3s (proves padded mux).
-- ``timeline`` records one entry per action with monotonic timestamps.
-- Snapshot exposes ``playback_speed_factor`` and per-action ``say`` round-tripped.
+- Audio duration matches video duration within 0.3s (this is the core
+  sync invariant of the audio-driven slideshow — audio is the master
+  clock, video must match).
+- Snapshot exposes ``playback_speed_factor`` and per-action ``say``
+  round-tripped.
+- ``timeline`` is the slideshow's *narration*-shaped timeline (one
+  entry per ``say``-having action, NOT one per playwright action),
+  with monotonic timestamps.
+- Cache hit on a second render proves the cache_key is stable across
+  the new TTS+Whisper+vision pipeline.
 
 Run locally::
 
@@ -36,6 +50,9 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -44,6 +61,65 @@ from docgen import demo_function as df
 
 FIXTURE_DIR = Path(__file__).parent / "demo-function"
 URL_PLACEHOLDER = "file://__FIXTURE__/demo-page.html"
+
+
+def _render_in_subprocess(
+    manifest_path: Path,
+    out_dir: Path,
+    *,
+    cache_dir: Path | None = None,
+    no_narration: bool = False,
+) -> dict[str, str | int | None]:
+    """Run ``df.render`` in a fresh Python interpreter and return its result.
+
+    Why a subprocess and not a direct call? Sibling browser tests in
+    ``tests/e2e/`` use ``pytest-playwright``'s session-scoped Playwright
+    instance, which keeps an asyncio loop alive on this thread for the
+    rest of the run. The renderer's ``_drive_playwright`` opens its own
+    ``sync_playwright()`` context which refuses to enter when *any*
+    asyncio loop is already running on the calling thread. Running the
+    render in a fresh process gives us a clean asyncio context and is
+    far cheaper than the alternatives (forked workers, async-API rewrite).
+
+    Returns a dict with ``cache_status`` so the test can assert on it.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = out_dir / "_subprocess_result.json"
+    cache_arg = (
+        f"Path({str(cache_dir)!r})" if cache_dir is not None else "None"
+    )
+    script = textwrap.dedent(
+        f"""
+        from pathlib import Path
+        import json
+        from docgen import demo_function as df
+
+        manifest = df.load_manifest(Path({str(manifest_path)!r}))
+        result = df.render(
+            manifest,
+            Path({str(out_dir)!r}),
+            cache_dir={cache_arg},
+            no_narration={no_narration!r},
+        )
+        Path({str(summary_path)!r}).write_text(
+            json.dumps({{"cache_status": result.cache_status}}),
+            encoding="utf-8",
+        )
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env={**os.environ},
+    )
+    if proc.returncode != 0:
+        raise AssertionError(
+            f"subprocess render failed (exit {proc.returncode}):\n"
+            f"STDOUT:\n{proc.stdout[-1500:]}\n"
+            f"STDERR:\n{proc.stderr[-1500:]}"
+        )
+    return json.loads(summary_path.read_text(encoding="utf-8"))
 
 
 def _ffmpeg_available() -> bool:
@@ -100,13 +176,13 @@ def test_demo_function_real_chromium_with_per_action_narration(
     fixture_manifest_path: Path,
     tmp_path: Path,
 ) -> None:
-    """Full pipeline: Chromium → slowdown → per-action TTS → padded mux."""
+    """Full pipeline: Chromium recording → one-shot TTS + Whisper → vision-LLM
+    keyframe slideshow → audio mux."""
     out_dir = tmp_path / "out"
     manifest = df.load_manifest(fixture_manifest_path)
 
-    result = df.render(manifest, out_dir, no_narration=False)
-
-    assert result.cache_status == "miss"
+    result = _render_in_subprocess(fixture_manifest_path, out_dir)
+    assert result["cache_status"] == "miss"
 
     rendered = out_dir / "rendered.mp4"
     poster = out_dir / "poster.png"
@@ -148,25 +224,40 @@ def test_demo_function_real_chromium_with_per_action_narration(
         f"expected 5 actions with `say`, got {len(captioned_actions)}"
     )
 
+    # The slideshow's timeline is narration-shaped: one entry per
+    # ``say``-having action, NOT one per playwright action. Trailing
+    # ``wait`` actions with no ``say`` legitimately don't appear because
+    # the slideshow only knows about narration lines, not the underlying
+    # action kind. ``t_start_ms`` is the Whisper-derived start of the
+    # spoken line inside the muxed audio, so captions land at the exact
+    # word boundary.
     timeline = snapshot["timeline"]
-    assert len(timeline) == len(manifest.actions), (
-        "one timeline entry per executed action"
+    assert len(timeline) == len(captioned_actions), (
+        f"slideshow timeline has one entry per say; expected "
+        f"{len(captioned_actions)}, got {len(timeline)}"
     )
     for entry in timeline:
-        assert "kind" in entry
-        assert "t_start_ms" in entry and "t_end_ms" in entry
-        assert entry["t_end_ms"] >= entry["t_start_ms"]
+        assert isinstance(entry.get("say"), str) and entry["say"].strip()
+        assert "t_start_ms" in entry
+        assert isinstance(entry["t_start_ms"], int)
+        assert entry["t_start_ms"] >= 0
+        # ``api_name`` is preserved as a soft hint (may be None for non-
+        # spec action-list manifests where the action has no api_name).
+        assert "api_name" in entry
     starts = [e["t_start_ms"] for e in timeline]
     assert starts == sorted(starts), "timeline starts must be monotonically increasing"
+    assert starts[0] >= 0, "first narration line cannot start before t=0"
 
     # Cache layer: a second render against the same cache_dir should hit the cache
     # (proves cache_key is stable for identical fixture + manifest + speed factor).
     cache_dir = tmp_path / "cache"
     out_dir2 = tmp_path / "out-cached"
     out_dir3 = tmp_path / "out-rerun"
-    df.render(manifest, out_dir2, cache_dir=cache_dir, no_narration=False)
-    rerun = df.render(manifest, out_dir3, cache_dir=cache_dir, no_narration=False)
-    assert rerun.cache_status == "hit"
+    _render_in_subprocess(fixture_manifest_path, out_dir2, cache_dir=cache_dir)
+    rerun = _render_in_subprocess(
+        fixture_manifest_path, out_dir3, cache_dir=cache_dir
+    )
+    assert rerun["cache_status"] == "hit"
 
 
 def test_demo_function_fail_loud_when_key_missing(

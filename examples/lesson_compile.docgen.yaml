@@ -1,43 +1,42 @@
-# Per-function demo manifest example for `docgen demo-function`.
-#
-# Demonstrates:
-#   * Per-action narration: `actions[*].say` — one TTS clip per action,
-#     synced to the captured timeline of when each action ran.
-#   * Slowdown: `output_budget.playback_speed_factor` (0.7 = ~1.4x duration).
-#   * Both produce a polished, audio-bearing MP4. See docs/demo-function.md.
-identifier: "course-builder/src/lessons/compileLesson.ts:compileLesson"
-intent: |
-  Compiles a lesson markdown file into structured checkpoints and emits a status badge.
-setup:
-  fixtures:
-    - tests/fixtures/lessons/intro.md
+# Synced from docs/demos/per-function/lesson-compile.docgen.yaml
+# Regenerate: docs/demos/_seed-examples.sh (or _full-reset-regenerate.sh)
+
+# In-repo dogfood manifest exercised by `_rebuild-per-function.sh`.
+# Drives Playwright (Chromium) against the sibling lesson-compile.html, then
+# renders a slowed clip with per-action TTS narration. The rebuild script
+# rewrites the placeholder URL to a real `file://` pointer before invoking
+# `docgen demo-function`. Update this fixture whenever the manifest schema
+# grows new user-facing fields, and update docs/demo-function.md in lockstep.
+identifier: "documentation-generator/dogfood/lesson-compile:onCompile"
+intent: "Compile a lesson from a topic input — the canonical per-function dogfood demo."
 demonstration:
   kind: playwright
-  url: "http://127.0.0.1:3000/lessons/new"
+  url: "file://__FIXTURE__/lesson-compile.html"
   actions:
-    - kind: type
+    - kind: wait_for
       selector: '[data-testid="title"]'
-      value: "Intro to TS"
-      delay_ms: 30
-      say: "We name the lesson — Intro to TS."
+      timeout_ms: 5000
+      say: "Course Builder loads with an empty lesson form."
+    - kind: click
+      selector: '[data-testid="topic"]'
+      say: "We focus the topic input."
+    - kind: type
+      selector: '[data-testid="topic"]'
+      value: "Async iterators"
+      delay_ms: 70
+      say: "And type a lesson topic — async iterators in this case."
     - kind: click
       selector: '[data-testid="compile"]'
       say: "Clicking compile runs the lesson generator."
     - kind: wait_for_text
-      selector: '[data-testid="status"]'
-      text: "compiled"
-      timeout_ms: 10000
-      say: "When the status badge flips to compiled the lesson is ready."
+      selector: '[data-testid="output"]'
+      text: "Compiled lesson"
+      timeout_ms: 5000
+      say: "The compiled lesson appears in the result panel."
     - kind: wait
-      ms: 600
-assertions_to_surface:
-  - "lesson.status === 'compiled'"
-  - "checkpoint count = 3"
+      ms: 1500
 output_budget:
-  duration_seconds: 30
-  segments: 1
+  duration_seconds: 25
   resolution: "1280x720"
-  # 0.7 = play back at 70% speed, so the visual is ~1.43x longer than the raw
-  # recording. Narration clips remain at natural pace and are placed at
-  # `t_action / playback_speed_factor` in the slowed timeline.
   playback_speed_factor: 0.7
+assertions_to_surface: []

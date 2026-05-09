@@ -6,8 +6,10 @@ import os
 from pathlib import Path
 
 import click
+import yaml
 
 from docgen.config import Config
+from docgen.yaml_generate import DEFAULT_LLM_MODEL
 
 
 def _parse_env_file_pairs(env_path: Path) -> list[tuple[str, str]]:
@@ -105,16 +107,64 @@ def main(ctx: click.Context, config_path: str | None) -> None:
 
 @main.command()
 @click.argument("target_dir", required=False, default=None, type=click.Path())
+@click.option(
+    "--defaults",
+    is_flag=True,
+    help="Non-interactive: detect git root, infer segments from narration/*.md (or 01-intro), then write docgen.yaml.",
+)
+@click.option(
+    "--discover-root",
+    "discover_roots",
+    multiple=True,
+    help=(
+        "Repo-relative root for discover-tests (repeatable). "
+        "Default: '.' plus any directory under the repo with a Playwright signal "
+        "(`@playwright/test`/`playwright` in package.json or a `playwright.config.{js,ts,mjs,cjs}`)."
+    ),
+)
+@click.option(
+    "--segments-file",
+    "segments_file",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help=(
+        "Path to a plain-text file listing one segment stem per line "
+        "(e.g. ``01-overview``). Used instead of scanning ``narration/*.md``. "
+        "Lets a reset wipe narration completely and still recreate the same "
+        "segment list deterministically. Requires --defaults."
+    ),
+)
 @click.pass_context
-def init(ctx: click.Context, target_dir: str | None) -> None:
+def init(
+    ctx: click.Context,
+    target_dir: str | None,
+    defaults: bool,
+    discover_roots: tuple[str, ...],
+    segments_file: Path | None,
+) -> None:
     """Scaffold a new project: docgen.yaml, wrapper scripts, directories.
 
-    Optionally pass a target directory (defaults to current directory).
-    """
-    from docgen.init import generate_files, print_summary, run_wizard
+    Optionally pass a target directory (defaults to current directory for interactive mode,
+    or repo ``docs/demos`` for ``--defaults`` with no argument).
 
-    target = Path(target_dir).resolve() if target_dir else None
-    plan = run_wizard(target_dir=target)
+    **Start clean:** ``docgen init PATH --defaults`` then ``docgen yaml-generate``.
+    """
+    from docgen.init import build_defaults_plan, generate_files, print_summary, run_wizard
+
+    td = Path(target_dir).resolve() if target_dir else None
+    if defaults:
+        plan = build_defaults_plan(
+            td,
+            discover_roots=discover_roots,
+            segments_file=segments_file.resolve() if segments_file else None,
+        )
+    else:
+        if discover_roots:
+            raise click.ClickException("--discover-root requires --defaults.")
+        if segments_file is not None:
+            raise click.ClickException("--segments-file requires --defaults.")
+        plan = run_wizard(target_dir=td)
+
     created = generate_files(plan)
     print_summary(plan, created)
 
@@ -252,7 +302,7 @@ def playwright(
     "--manifest",
     "manifest_arg",
     required=True,
-    help="Path to *.docgen.yaml sidecar OR <path>.py::<test_name> for @pytest.mark.docgen.",
+    help="*.docgen.yaml, Playwright *.spec.ts/.tsx, or <path>.py::<test> (@pytest.mark.docgen).",
 )
 @click.option(
     "--output",
@@ -297,7 +347,10 @@ def demo_function(
     cache_dir_arg: str | None,
     no_narration: bool,
 ) -> None:
-    """Render a single per-function demo video from a declarative manifest."""
+    """Render one short tutorial/demo MP4. Primary path: **Playwright** (spec or declarative
+    browser manifest). ``kind: cli`` + VHS is **legacy** and may be deprecated; prefer **Manim**
+    (long-form) or **Playwright** (UI) for new work.
+    """
     from docgen.demo_function import run_cli
 
     out = output_dir_arg or output_dir_legacy
@@ -431,7 +484,17 @@ def lint(ctx: click.Context, segment: str | None) -> None:
 
 
 @main.command("narration-generate")
-@click.option("--segment", required=True, help="Segment id (e.g. 01); output name uses segment_names if set.")
+@click.option(
+    "--segment",
+    default=None,
+    help="Segment id (e.g. 01). Mutually exclusive with --all.",
+)
+@click.option(
+    "--all",
+    "all_segments",
+    is_flag=True,
+    help="Generate narration for every id in segments.all (use --force to overwrite).",
+)
 @click.option(
     "--extra-path",
     "extra_paths",
@@ -459,7 +522,8 @@ def lint(ctx: click.Context, segment: str | None) -> None:
 @click.pass_context
 def narration_generate(
     ctx: click.Context,
-    segment: str,
+    segment: str | None,
+    all_segments: bool,
     extra_paths: tuple[str, ...],
     extra_hints: tuple[str, ...],
     dry_run: bool,
@@ -469,13 +533,48 @@ def narration_generate(
 
     Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
     Requires ``OPENAI_API_KEY`` unless using a future offline stub.
+
+    Use ``--segment <id>`` to drive a single segment, or ``--all`` to iterate
+    every id in ``segments.all`` (used by full-reset orchestration).
     """
     if ctx.obj.get("config") is None:
         raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    if all_segments and segment:
+        raise click.ClickException("--all and --segment are mutually exclusive")
+    if not all_segments and not segment:
+        raise click.ClickException("provide --segment <id> or --all")
 
     from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
 
     cfg = ctx.obj["config"]
+
+    if all_segments:
+        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
+        if not ids:
+            raise click.ClickException("segments.all is empty in docgen.yaml")
+        for seg_id in ids:
+            seg_str = str(seg_id)
+            click.echo(f"=== narration-generate --segment {seg_str} ===")
+            try:
+                body = generate_narration_markdown(
+                    cfg,
+                    seg_str,
+                    extra_paths=list(extra_paths),
+                    extra_hints=list(extra_hints),
+                )
+            except ValueError as exc:
+                raise click.ClickException(f"segment {seg_str}: {exc}") from exc
+            if dry_run:
+                click.echo(body)
+                continue
+            try:
+                out = write_narration_markdown(cfg, seg_str, body, force=force)
+            except FileExistsError as exc:
+                raise click.ClickException(f"segment {seg_str}: {exc} (use --force)") from exc
+            click.echo(f"  -> {out}")
+        return
+
+    assert segment is not None  # for type-checker
     try:
         body = generate_narration_markdown(
             cfg,
@@ -497,8 +596,538 @@ def narration_generate(
     click.echo(f"[narration-generate] wrote {out}")
 
 
-@main.command()
-@click.option("--config-name", "concat_name", default=None, help="Concat config name.")
+@main.command("per-function-generate")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing per-function/<slug>.docgen.yaml.",
+)
+@click.option(
+    "--list-only",
+    is_flag=True,
+    help="Print discovered Playwright (project, spec, test) tuples and exit; do not call OpenAI.",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="OpenAI model override (default: per_function_generate.model in docgen.yaml or gpt-4o-mini).",
+)
+@click.pass_context
+def per_function_generate(
+    ctx: click.Context,
+    force: bool,
+    list_only: bool,
+    model: str | None,
+) -> None:
+    """Discover raw Playwright specs and write ``per-function/<slug>.docgen.yaml`` manifests via OpenAI.
+
+    Each manifest is Category C output under ``<base_dir>/per-function/`` and is
+    consumable by ``docgen demo-function``: ``demonstration.kind: playwright``
+    + ``spec`` + ``grep`` + ``cwd`` triggers spec-record mode (``npx playwright
+    test --trace=on --video=on`` against the project's own ``webServer:``).
+    The manifest also embeds ``narration_steps`` so the renderer can sync each
+    spoken sentence to the matching trace event without a second LLM call.
+
+    Requires ``OPENAI_API_KEY`` unless ``--list-only``.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+
+    from docgen.per_function import (
+        discover_playwright_specs,
+        per_function_output_dir,
+        write_per_function_manifests,
+    )
+
+    cfg = ctx.obj["config"]
+    bindings = discover_playwright_specs(cfg.repo_root)
+    if not bindings:
+        click.echo(
+            "[per-function-generate] no Playwright projects with discoverable tests "
+            "(need package.json + @playwright/test + playwright.config.* + npm install).",
+        )
+        return
+
+    if list_only:
+        click.echo(f"[per-function-generate] discovered {len(bindings)} test(s):")
+        for b in bindings:
+            try:
+                rel_spec = b.spec_path.relative_to(cfg.repo_root)
+            except ValueError:
+                rel_spec = b.spec_path
+            click.echo(f"  - slug={b.slug}  spec={rel_spec}::{b.test_title}")
+        return
+
+    out_dir = per_function_output_dir(cfg)
+    click.echo(
+        f"[per-function-generate] generating {len(bindings)} manifest(s) under {out_dir} "
+        f"(force={force})",
+    )
+    try:
+        results = write_per_function_manifests(
+            cfg, bindings=bindings, model=model, force=force
+        )
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not results:
+        click.echo("[per-function-generate] all manifests already exist (pass --force to regenerate).")
+        return
+    for r in results:
+        steps_n = len(r.manifest.get("narration_steps", []))
+        click.echo(f"  -> {r.manifest_path.name}  ({steps_n} narration steps)")
+
+
+@main.command("per-function-render")
+@click.option(
+    "--manifest",
+    "manifest_filter",
+    default=None,
+    help="Render only the manifest with this slug (e.g. 'home-greeting'); default: all.",
+)
+@click.option(
+    "--no-narration",
+    is_flag=True,
+    help="Render visual-only clips (skips OPENAI_API_KEY check; no TTS).",
+)
+@click.pass_context
+def per_function_render(
+    ctx: click.Context,
+    manifest_filter: str | None,
+    no_narration: bool,
+) -> None:
+    """Render every ``per-function/*.docgen.yaml`` to ``recordings/per-function/<slug>/``.
+
+    Wraps ``docgen demo-function`` for batch use. Each manifest points at a real
+    Playwright spec via ``demonstration.spec`` / ``grep`` / ``cwd``; the renderer
+    shells out to ``npx playwright test --trace=on --video=on``, which reads the
+    project's own ``playwright.config.*`` ``webServer:`` block to start the dev
+    server, runs the test against the real app, records video + trace, then tears
+    the server down. Trace timestamps drive ``narration_steps`` syncing.
+
+    Outputs land at:
+
+    \b
+      recordings/per-function/<slug>/rendered.mp4
+      recordings/per-function/<slug>/poster.png
+      recordings/per-function/<slug>/manifest.json
+      recordings/per-function/<slug>.mp4   (stable top-level alias)
+      recordings/per-function/<slug>.poster.png
+    """
+    import shutil
+    import sys
+
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+
+    from docgen.demo_function import (
+        ManifestError,
+        PlaceholderManifest,
+        ToolingMissingError,
+        load_manifest,
+        render,
+    )
+    from docgen.per_function import per_function_output_dir
+
+    cfg = ctx.obj["config"]
+    manifest_dir = per_function_output_dir(cfg)
+    if not manifest_dir.is_dir():
+        click.echo(
+            f"[per-function-render] no per-function dir found at {manifest_dir}; "
+            "run `docgen per-function-generate` first.",
+        )
+        return
+
+    candidates = sorted(manifest_dir.glob("*.docgen.yaml"))
+    if not candidates:
+        click.echo(
+            f"[per-function-render] no manifests under {manifest_dir}; "
+            "run `docgen per-function-generate` first.",
+        )
+        return
+    if manifest_filter:
+        candidates = [
+            p for p in candidates if p.stem.removesuffix(".docgen") == manifest_filter
+        ]
+        if not candidates:
+            raise click.ClickException(
+                f"no manifest matched --manifest={manifest_filter!r} in {manifest_dir}"
+            )
+
+    out_root = cfg.recordings_dir / "per-function"
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    failures: list[tuple[str, str]] = []
+    for manifest_path in candidates:
+        slug = manifest_path.name.removesuffix(".docgen.yaml")
+        click.echo(f"=== per-function-render: {slug} ===")
+        try:
+            manifest = load_manifest(manifest_path)
+        except (ManifestError, FileNotFoundError) as exc:
+            failures.append((slug, f"load: {exc}"))
+            click.echo(f"  ERROR: {exc}", err=True)
+            continue
+
+        out_dir = out_root / slug
+        if out_dir.exists():
+            shutil.rmtree(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            result = render(
+                manifest,
+                out_dir,
+                no_narration=no_narration,
+                stderr=sys.stderr,
+            )
+        except (
+            ManifestError,
+            PlaceholderManifest,
+            ToolingMissingError,
+            RuntimeError,
+        ) as exc:
+            failures.append((slug, str(exc)))
+            click.echo(f"  ERROR: {exc}", err=True)
+            continue
+
+        rendered = result.output_dir / "rendered.mp4"
+        poster = result.output_dir / "poster.png"
+        alias_mp4 = out_root / f"{slug}.mp4"
+        alias_poster = out_root / f"{slug}.poster.png"
+        if rendered.is_file():
+            shutil.copyfile(rendered, alias_mp4)
+        if poster.is_file():
+            shutil.copyfile(poster, alias_poster)
+        click.echo(f"  -> {alias_mp4}")
+
+    if failures:
+        msg = "; ".join(f"{slug}: {err}" for slug, err in failures)
+        raise click.ClickException(f"per-function-render failures: {msg}")
+
+
+@main.command("scene-generate")
+@click.option(
+    "--segment",
+    default=None,
+    help="Segment id (e.g. 08). Mutually exclusive with --all.",
+)
+@click.option(
+    "--all",
+    "all_segments",
+    is_flag=True,
+    help="Generate a scene class for every segment in segments.all that has no "
+    "VHS tape under <terminal_dir>/<name>.tape and no capture script under "
+    "scripts/*<id>*.py (Manim is the fallback visual source).",
+)
+@click.option(
+    "--class-name",
+    "class_name_override",
+    default=None,
+    help="Override the generated class name (defaults to manim_scene_generation.segments.<id>.class_name "
+    "or CamelCase(segment_name)+Scene). Ignored with --all.",
+)
+@click.option(
+    "--extra-path",
+    "extra_paths",
+    multiple=True,
+    type=str,
+    help="Repo-root-relative source file to include (repeatable). Adds to manim_scene_generation.context.paths.",
+)
+@click.option(
+    "--hint",
+    "extra_hints",
+    multiple=True,
+    type=str,
+    help="Project-owner hint for the model (repeatable). Adds to YAML hints.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print the assembled prompt to stdout; do not call OpenAI or write scenes.py.",
+)
+@click.option(
+    "--print-only",
+    is_flag=True,
+    help="Call OpenAI and validate the response, but print the class to stdout instead of writing it.",
+)
+@click.pass_context
+def scene_generate(
+    ctx: click.Context,
+    segment: str | None,
+    all_segments: bool,
+    class_name_override: str | None,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    dry_run: bool,
+    print_only: bool,
+) -> None:
+    """Generate (or regenerate) a Manim scene class for a segment via OpenAI.
+
+    Reads narration/<seg>.md + animations/timing.json + manim_scene_generation
+    settings from docgen.yaml, then writes a single class block into
+    animations/scenes.py between idempotent marker comments. Re-running the
+    command replaces the block in place.
+
+    Use ``--segment <id>`` for one segment, or ``--all`` to iterate every id in
+    ``segments.all`` whose visual source is not already a VHS tape or a
+    capture script (used by full-reset orchestration so an init-from-empty
+    bundle gets a Manim scene per segment by default).
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    if all_segments and segment:
+        raise click.ClickException("--all and --segment are mutually exclusive")
+    if not all_segments and not segment:
+        raise click.ClickException("provide --segment <id> or --all")
+    if all_segments and class_name_override:
+        raise click.ClickException("--class-name cannot be combined with --all")
+
+    from docgen.scene_generate import SceneGenerationError, generate_scene
+
+    cfg = ctx.obj["config"]
+
+    if all_segments:
+        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
+        if not ids:
+            raise click.ClickException("segments.all is empty in docgen.yaml")
+        names = (cfg.raw.get("segment_names") or {})
+        terminal_dir = cfg.terminal_dir
+        scripts_dir = cfg.base_dir / "scripts"
+        for seg_id in ids:
+            sid = str(seg_id)
+            name = names.get(sid) or names.get(seg_id) or sid
+            tape = terminal_dir / f"{name}.tape"
+            script_match = (
+                list(scripts_dir.glob(f"*{sid}*.py")) if scripts_dir.is_dir() else []
+            )
+            if tape.is_file() or script_match:
+                click.echo(
+                    f"[scene-generate --all] skip {sid} ({name}): existing visual "
+                    f"{'tape' if tape.is_file() else 'capture script'}"
+                )
+                continue
+            click.echo(f"=== scene-generate --segment {sid} ===")
+            try:
+                result = generate_scene(
+                    cfg,
+                    sid,
+                    extra_paths=list(extra_paths),
+                    extra_hints=list(extra_hints),
+                    class_name_override=None,
+                    dry_run=dry_run,
+                    print_only=print_only,
+                )
+            except SceneGenerationError as exc:
+                raise click.ClickException(f"segment {sid}: {exc}") from exc
+            if dry_run:
+                click.echo(result.prompt)
+                continue
+            if print_only:
+                click.echo(result.cleaned_code)
+                continue
+            click.echo(
+                f"  -> {result.class_name} in {result.scenes_path} "
+                f"(segment {result.seg_id} → {result.seg_name})"
+            )
+        return
+
+    assert segment is not None  # type-checker
+    try:
+        result = generate_scene(
+            cfg,
+            segment,
+            extra_paths=list(extra_paths),
+            extra_hints=list(extra_hints),
+            class_name_override=class_name_override,
+            dry_run=dry_run,
+            print_only=print_only,
+        )
+    except SceneGenerationError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if dry_run:
+        click.echo(result.prompt)
+        return
+    if print_only:
+        click.echo(result.cleaned_code)
+        return
+    click.echo(
+        f"[scene-generate] wrote {result.class_name} to {result.scenes_path} "
+        f"(segment {result.seg_id} → {result.seg_name})"
+    )
+
+
+@main.command("yaml-generate")
+@click.option(
+    "--merge-defaults/--no-merge-defaults",
+    default=True,
+    help="Merge safe defaults (archive exclude, optional skeleton blocks).",
+)
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Call OpenAI to refresh tts.instructions and wizard.system_prompt from README/AGENTS.",
+)
+@click.option(
+    "--model",
+    default=None,
+    help=f"Chat model for --llm (default: {DEFAULT_LLM_MODEL}).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print actions and merged YAML to stdout; do not write docgen.yaml.",
+)
+@click.option(
+    "--list-gaps",
+    is_flag=True,
+    help="Print narration segment ids missing from segments.all; exit 1 if any.",
+)
+@click.pass_context
+def yaml_generate_cmd(
+    ctx: click.Context,
+    merge_defaults: bool,
+    llm: bool,
+    model: str | None,
+    dry_run: bool,
+    list_gaps: bool,
+) -> None:
+    """Merge structural defaults and optionally LLM-authored TTS/wizard prose into docgen.yaml.
+
+    Rewrites the config file with PyYAML (comments are not preserved). Use Git to review.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+
+    from docgen import yaml_generate as yg
+
+    cfg = ctx.obj["config"]
+    path = cfg.yaml_path
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+    if list_gaps:
+        gaps = yg.narration_not_in_segments(raw, cfg.narration_dir)
+        if not gaps:
+            click.echo("[yaml-generate] no narration segments missing from segments.all")
+            return
+        for seg_id, stem in gaps:
+            click.echo(f"gap: {seg_id} ({stem}.md) not in segments.all")
+        raise SystemExit(1)
+
+    changes: list[str] = []
+    if merge_defaults:
+        changes.extend(yg.merge_defaults(raw, cfg))
+    if llm:
+        try:
+            hints = yg.generate_llm_hints(cfg, model=model)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc)) from exc
+        yg.apply_llm_hints(raw, hints)
+        changes.append("tts.instructions + wizard.system_prompt: refreshed via OpenAI")
+
+    if not changes and not dry_run:
+        click.echo("[yaml-generate] nothing to do (already up to date)")
+        return
+
+    for line in changes:
+        click.echo(f"[yaml-generate] {line}")
+
+    if dry_run:
+        click.echo("--- merged yaml ---")
+        click.echo(
+            yaml.safe_dump(
+                raw, default_flow_style=False, sort_keys=False, allow_unicode=True, width=120
+            ),
+            nl=False,
+        )
+        return
+
+    header = yg.default_header(path) if changes else None
+    yg.write_docgen_yaml(path, raw, header=header)
+    click.echo(f"[yaml-generate] wrote {path}")
+
+
+@main.command("clean-bundle")
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    help="Confirm delete without interactive prompt (required for CI/scripts).",
+)
+@click.option(
+    "--reset-catalog/--no-reset-catalog",
+    default=True,
+    show_default=True,
+    help="Also clear catalog entries at repo root (docgen.catalog.yaml).",
+)
+@click.option(
+    "--delete-config",
+    is_flag=True,
+    help="Remove docgen.yaml first, then clean generated assets (paths come from the config loaded at startup).",
+)
+@click.option(
+    "--keep-narration/--no-keep-narration",
+    default=False,
+    show_default=True,
+    help="Keep narration/*.md segment scripts (still keeps README). Useful before docgen init reinfers segments.",
+)
+@click.pass_context
+def clean_bundle(
+    ctx: click.Context,
+    yes: bool,
+    reset_catalog: bool,
+    delete_config: bool,
+    keep_narration: bool,
+) -> None:
+    """Remove regenerable outputs under this bundle (animations, audio, terminal, recordings, wizard state).
+
+    With **``--delete-config``**, ``docgen.yaml`` is removed **first**, then the same asset cleanup runs
+    (using directory layout from the config that was loaded before removal).
+
+    Does **not** remove ``per-function/*.docgen.yaml`` / HTML, or fixtures under ``repo_root``.
+
+    Typical fresh start: ``docgen --config docgen.yaml clean-bundle -y --delete-config [--keep-narration]``,
+    then ``docgen init …`` and ``docgen yaml-generate``.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    cfg = ctx.obj["config"]
+    if not yes:
+        click.confirm(
+            "Delete bundle outputs"
+            + (" and docgen.yaml" if delete_config else "")
+            + "? (see docgen clean-bundle --help)",
+            abort=True,
+        )
+
+    from docgen.bundle_clean import clean_bundle_regenerable_outputs
+
+    yaml_path = cfg.yaml_path.resolve()
+    if delete_config:
+        if yaml_path.is_file():
+            yaml_path.unlink()
+            click.echo(f"[clean-bundle] removed {yaml_path}")
+        else:
+            click.echo(f"[clean-bundle] docgen.yaml already missing: {yaml_path}", err=True)
+
+    summary = clean_bundle_regenerable_outputs(cfg, keep_narration=keep_narration)
+    for key in sorted(summary.keys()):
+        click.echo(f"[clean-bundle] {key}: {summary[key]}")
+    if reset_catalog:
+        from docgen import __version__ as docgen_version
+        from docgen.source_catalog import reset_catalog_for_repo
+
+        reset_catalog_for_repo(
+            catalog_path=cfg.catalog_file_path,
+            repo_root=cfg.repo_root,
+            docgen_version=docgen_version,
+        )
+        click.echo(f"[clean-bundle] catalog reset -> {cfg.catalog_file_path}")
+
+
+@main.command("concat")
+@click.argument("concat_name", required=False)
 @click.pass_context
 def concat(ctx: click.Context, concat_name: str | None) -> None:
     """Concatenate full demo files from composed segments."""
@@ -604,6 +1233,32 @@ def catalog_init(ctx: click.Context, force: bool) -> None:
         data = new_catalog(repo_root=cfg.repo_root, docgen_version=docgen_version)
     save_catalog(path, data)
     click.echo(f"[catalog] wrote {path}")
+
+
+@catalog_cmd.command("reset")
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Skip confirmation (for non-interactive CI).",
+)
+@click.pass_context
+def catalog_reset(ctx: click.Context, yes: bool) -> None:
+    """Clear every catalog entry (fresh incremental state). Header/metadata only."""
+    from docgen import __version__ as docgen_version
+    from docgen.source_catalog import reset_catalog_for_repo
+
+    cfg = ctx.obj["config"]
+    path = cfg.catalog_file_path
+    if not yes and not click.confirm(f"Wipe all entries in {path}?", default=False):
+        click.echo("[catalog] aborted")
+        return
+    reset_catalog_for_repo(
+        catalog_path=path,
+        repo_root=cfg.repo_root,
+        docgen_version=docgen_version,
+    )
+    click.echo(f"[catalog] reset (empty entries) -> {path}")
 
 
 @catalog_cmd.command("stale")

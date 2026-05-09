@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Full pipeline: TTS → Manim → VHS → compose → validate → concat.
-# Wraps: docgen generate-all
+# Full pipeline (TTS, segment visuals, compose, validate, concat). Wraps: docgen generate-all
 set -euo pipefail
 DEMOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$DEMOS_DIR/../.." && pwd)"

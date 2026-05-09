@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -171,6 +172,12 @@ class Manifest:
     pw_grep: str | None = None
     pw_cwd: Path | None = None
     pw_base_url: str | None = None
+    # Optional per-step narration plan for kind=playwright + spec mode. Each
+    # entry is ``{"api_name": "page.click", "say": "..."}`` in spec execution
+    # order; the renderer parses Playwright's ``trace.zip`` after the run and
+    # zips real recording timestamps onto these ``say`` lines so the TTS
+    # narration syncs to the actual moment each action fires on screen.
+    pw_narration_steps: list[dict[str, str]] = field(default_factory=list)
     # CLI / VHS demo: path to a `.tape` file (relative paths resolve near manifest).
     cli_tape: Path | None = None
 
@@ -211,12 +218,18 @@ class Manifest:
                 fix.update(content)
             fix.update(b"\x00")
         fixture_sha = fix.hexdigest()
+        narration_blob = json.dumps(
+            self.pw_narration_steps, sort_keys=True
+        ).encode("utf-8")
+        narration_sha = hashlib.sha256(narration_blob).hexdigest()
         h = hashlib.sha256()
         h.update(fn_src.encode("ascii"))
         h.update(b"\x00")
         h.update(intent_sha.encode("ascii"))
         h.update(b"\x00")
         h.update(fixture_sha.encode("ascii"))
+        h.update(b"\x00")
+        h.update(narration_sha.encode("ascii"))
         h.update(b"\x00")
         h.update(f"speed={self.playback_speed_factor:.6f}".encode("ascii"))
         return h.hexdigest()[:16]
@@ -774,6 +787,30 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
         raise ManifestError("demonstration.actions must be a list")
     actions = [Action.from_mapping(a) for a in actions_raw]
 
+    pw_narration_steps: list[dict[str, str]] = []
+    narration_steps_raw = raw.get("narration_steps")
+    if narration_steps_raw is not None:
+        if not isinstance(narration_steps_raw, list):
+            raise ManifestError("narration_steps must be a list")
+        for i, step in enumerate(narration_steps_raw):
+            if not isinstance(step, dict):
+                raise ManifestError(
+                    f"narration_steps[{i}] must be a mapping, got: {type(step).__name__}"
+                )
+            api_name = step.get("api_name")
+            say = step.get("say")
+            if not isinstance(api_name, str) or not api_name.strip():
+                raise ManifestError(
+                    f"narration_steps[{i}].api_name must be a non-empty string"
+                )
+            if not isinstance(say, str) or not say.strip():
+                raise ManifestError(
+                    f"narration_steps[{i}].say must be a non-empty string"
+                )
+            pw_narration_steps.append(
+                {"api_name": api_name.strip(), "say": say.strip()}
+            )
+
     setup = raw.get("setup") or {}
     fixtures_raw = setup.get("fixtures", []) if isinstance(setup, dict) else []
     if not isinstance(fixtures_raw, list):
@@ -858,6 +895,7 @@ def _coerce(raw: dict[str, Any], *, source_path: Path | None = None) -> Manifest
         pw_grep=pw_grep,
         pw_cwd=pw_cwd,
         pw_base_url=pw_base_url,
+        pw_narration_steps=pw_narration_steps,
         cli_tape=cli_tape,
     )
 
@@ -1121,6 +1159,327 @@ def _mux_audio_padded(video: Path, audio: Path, dst: Path) -> None:
         raise RuntimeError(f"ffmpeg padded mux failed: {proc.stderr[-400:]}")
 
 
+def _align_visual_to_narration(
+    *,
+    source_visual: Path,
+    raw_timeline: list[dict[str, Any]],
+    work_dir: Path,
+    width: int,
+    height: int,
+    voice: str = "coral",
+    tts_model: str = "gpt-4o-mini-tts",
+    tail_pad_ms: int = 600,
+) -> tuple[Path, "NarrationResult", list[dict[str, Any]]]:
+    """Audio-driven slideshow: ONE TTS + Whisper + vision-picked stills.
+
+    Pipeline (audio is the master clock — never spliced, never re-mixed):
+
+    1. Concatenate every ``raw_timeline[*].say`` into one paragraph and
+       synthesise it as a single MP3. Natural prosody and inter-sentence
+       breath fall out for free.
+    2. Run Whisper with word-level timestamps over that MP3 and walk the
+       word stream, greedily matching each step to its tokens. Each step
+       gets a ``(start_ms, end_ms)`` window inside the audio.
+    3. Sample candidate frames from ``source_visual`` at uniform intervals
+       (``pf_keyframes.extract_candidates``).
+    4. A vision LLM (``pf_keyframes.match_steps_to_keyframes``) picks the
+       SINGLE candidate that best shows what each narration line describes.
+       This is what makes the slideshow correct even when Playwright's
+       screencast warmup ate the earliest frames — the LLM simply doesn't
+       pick a frame whose visible state contradicts the line.
+    5. Build a slideshow MP4: each chosen still held for its line's
+       Whisper-aligned duration. The single MP3 is muxed under the
+       slideshow as the LAST step (handled by the orchestrator).
+
+    Returns ``(slideshow_path, narration_result, target_timeline)``.
+    ``target_timeline[i].t_start_ms`` is the whisper-derived start time
+    of line ``i`` inside the muxed audio, ready for caption burning at
+    ``speed_factor=1.0``.
+    """
+    from docgen.pf_align import (
+        StepTiming,
+        synthesize_full_narration,
+        whisper_align_steps,
+    )
+    from docgen.pf_keyframes import (
+        extract_candidates,
+        match_steps_to_keyframes,
+    )
+
+    timeline = [t for t in raw_timeline if t.get("say")]
+    if not timeline:
+        raise RuntimeError(
+            "audio-driven sync requires a non-empty say-timeline"
+        )
+    work_dir = Path(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    narration_path = work_dir / "narration.mp3"
+    transcript = synthesize_full_narration(
+        timeline,
+        narration_path,
+        voice=voice,
+        model=tts_model,
+        tts_synthesize=_tts_synthesize,
+    )
+    audio_total_ms = _probe_audio_ms(narration_path) or 0
+    if audio_total_ms <= 0:
+        raise RuntimeError(
+            f"narration audio probed as 0ms ({narration_path}); cannot align"
+        )
+
+    step_timings: list[StepTiming] = whisper_align_steps(
+        narration_path,
+        timeline,
+        transcript_prompt=transcript,
+    )
+    if len(step_timings) != len(timeline):
+        raise RuntimeError(
+            f"whisper produced {len(step_timings)} step timings, "
+            f"expected {len(timeline)}"
+        )
+
+    candidates = extract_candidates(
+        source_visual,
+        work_dir / "keyframe_candidates",
+    )
+    chosen = match_steps_to_keyframes(candidates, timeline)
+    if len(chosen) != len(timeline):
+        raise RuntimeError(
+            f"vision matcher returned {len(chosen)} frames, "
+            f"expected {len(timeline)}"
+        )
+    # Debug log: which candidate index the vision LLM picked for each
+    # narration step. The slideshow's quality depends on this mapping
+    # being non-degenerate (all-same-index → "stuck" demo); logging it
+    # at INFO level makes that obvious without requiring keep-tmp.
+    _log_keyframe_picks(timeline, chosen, candidates)
+
+    # Per-step visible duration: each frame is held until the matching
+    # narration line ENDS in audio. The very last frame is held a bit
+    # longer (``tail_pad_ms``) so the final state lingers past the last
+    # spoken word before the audio fades.
+    durations_ms: list[int] = []
+    target_offsets_ms: list[int] = []
+    cumulative_ms = 0
+    prev_anchor_audio_ms = 0
+    for i, t in enumerate(step_timings):
+        line_end_audio_ms = t.end_ms
+        if i == len(step_timings) - 1:
+            line_end_audio_ms = max(line_end_audio_ms, audio_total_ms) + tail_pad_ms
+        dur_ms = max(50, line_end_audio_ms - prev_anchor_audio_ms)
+        durations_ms.append(dur_ms)
+        offset_into_seg = max(0, t.start_ms - prev_anchor_audio_ms)
+        target_offsets_ms.append(cumulative_ms + offset_into_seg)
+        cumulative_ms += dur_ms
+        prev_anchor_audio_ms = line_end_audio_ms
+
+    slideshow_path = work_dir / "visual_slideshow.mp4"
+    _build_slideshow(
+        frames=[c.path for c in chosen],
+        durations_sec=[d / 1000.0 for d in durations_ms],
+        out_video=slideshow_path,
+        width=width,
+        height=height,
+        work_dir=work_dir / "slideshow",
+    )
+
+    target_timeline: list[dict[str, Any]] = [
+        {
+            "say": str(timeline[i]["say"]),
+            "t_start_ms": int(target_offsets_ms[i]),
+            "api_name": timeline[i].get("api_name"),
+        }
+        for i in range(len(timeline))
+    ]
+    narration_result = NarrationResult(
+        audio_path=narration_path,
+        voice=voice,
+        model=tts_model,
+        ms=audio_total_ms,
+    )
+    return slideshow_path, narration_result, target_timeline
+
+
+def _log_keyframe_picks(
+    timeline: list[dict[str, Any]],
+    chosen: list[Any],
+    candidates: list[Any],
+) -> None:
+    """Print the vision LLM's keyframe pick for each narration step.
+
+    Surfaces the failure mode where the LLM picks the same candidate for
+    every step (slideshow appears frozen on one frame). When the picks
+    are non-degenerate this is a single concise dump; when they're
+    degenerate the pattern is immediately visible in stderr.
+    """
+    n_unique = len({c.index for c in chosen})
+    sys.stderr.write(
+        f"[docgen] vision LLM keyframe picks "
+        f"({n_unique} unique / {len(chosen)} steps from "
+        f"{len(candidates)} candidates):\n"
+    )
+    for i, (step, frame) in enumerate(zip(timeline, chosen)):
+        say = str(step.get("say") or "").strip()
+        sys.stderr.write(
+            f"  step {i}: candidate #{frame.index:02d} "
+            f"(t={frame.t_seconds:.2f}s) ← {say!r}\n"
+        )
+    if n_unique == 1:
+        sys.stderr.write(
+            "[docgen] WARNING: all narration steps map to the SAME "
+            "candidate frame — slideshow will appear frozen. "
+            "Re-run with DOCGEN_DEBUG_KEEP_TMP=1 to inspect "
+            "keyframe_candidates/ and tune pf_keyframes._SYSTEM_PROMPT.\n"
+        )
+
+
+def _build_slideshow(
+    *,
+    frames: list[Path],
+    durations_sec: list[float],
+    out_video: Path,
+    width: int,
+    height: int,
+    work_dir: Path,
+) -> None:
+    """Concat per-step still images into a CFR slideshow MP4.
+
+    For each ``(frame_path, duration_sec)`` pair we render a tiny MP4 of
+    the still looped for ``duration_sec`` (CFR 30, libx264, yuv420p).
+    All sub-clips share codec / pixel format / framerate, so the final
+    concat-demuxer pass runs without re-encode.
+
+    Why per-image clips and not a single ``concat=`` filter graph? The
+    demuxer-without-reencode path is dramatically faster on long
+    slideshows AND lets us debug a bad slide by playing the offending
+    sub-clip in isolation. The cost (one ffmpeg fork per slide) is
+    negligible for the 5-15 slide demos this pipeline produces.
+
+    The output has no audio track — the orchestrator muxes the single
+    Whisper-aligned MP3 underneath as the LAST step.
+    """
+    if not frames:
+        raise ValueError("no frames provided to slideshow builder")
+    if len(frames) != len(durations_sec):
+        raise ValueError(
+            f"frames/durations length mismatch: "
+            f"{len(frames)} frames vs {len(durations_sec)} durations"
+        )
+    _ensure_ffmpeg()
+    work_dir = Path(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    seg_files: list[Path] = []
+    for i, (frame, dur) in enumerate(zip(frames, durations_sec)):
+        seg_dur = max(0.05, float(dur))
+        seg_path = work_dir / f"slide_{i:03d}.mp4"
+        cmd = [
+            "ffmpeg",
+            "-nostdin",
+            "-y",
+            "-loglevel",
+            "error",
+            "-loop",
+            "1",
+            "-i",
+            str(frame),
+            "-t",
+            f"{seg_dur:.3f}",
+            "-vf",
+            f"scale={int(width)}:{int(height)},setsar=1,format=yuv420p,fps=30",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            str(seg_path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"ffmpeg slideshow segment failed "
+                f"(slide {i}, frame={frame.name}, dur={seg_dur:.3f}s): "
+                f"{proc.stderr[-500:]}"
+            )
+        seg_files.append(seg_path)
+
+    concat_list = work_dir / "slideshow_concat.txt"
+    concat_list.write_text(
+        "".join(f"file '{p.resolve().as_posix()}'\n" for p in seg_files),
+        encoding="utf-8",
+    )
+    cmd = [
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-loglevel",
+        "error",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_list),
+        "-c:v",
+        "copy",
+        "-movflags",
+        "+faststart",
+        str(out_video),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg slideshow concat failed: {proc.stderr[-500:]}"
+        )
+
+
+def _extend_video_with_freeze(
+    video_in: Path,
+    video_out: Path,
+    *,
+    target_seconds: float,
+    tail_padding_seconds: float = 0.5,
+) -> None:
+    """Extend ``video_in`` to ``target_seconds`` by repeating the last frame.
+
+    No-op (copy) when the input is already at least ``target_seconds`` long.
+    The ``tail_padding_seconds`` is added on top of ``target_seconds`` so the
+    final state lingers briefly after narration ends instead of cutting to
+    black abruptly.
+
+    Implementation uses ffmpeg's ``tpad=stop_mode=clone:stop_duration=<delta>``
+    which clones the last decoded frame; reliable in ffmpeg 4.3+.
+    """
+    _ensure_ffmpeg()
+    src_sec = _probe_video_duration_sec(video_in) or 0.0
+    needed = max(0.0, float(target_seconds) + float(tail_padding_seconds) - src_sec)
+    if needed <= 1e-3:
+        shutil.copy2(video_in, video_out)
+        return
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_in),
+        "-vf", f"tpad=stop_mode=clone:stop_duration={needed:.3f}",
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(video_out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg freeze-extend failed: {proc.stderr[-400:]}"
+        )
+
+
 def _retime_video(video_in: Path, video_out: Path, *, speed_factor: float) -> None:
     """Retime video by ``speed_factor`` via ffmpeg ``setpts``.
 
@@ -1344,54 +1703,6 @@ def _burn_timed_captions(
     _burn_captions_from_vtt(video_in, video_out, vtt_path)
 
 
-def _compose_action_audio(
-    *,
-    clips: list[tuple[Path, float]],
-    out_path: Path,
-    total_sec: float,
-) -> None:
-    """Compose per-action MP3s at given delays into one narration track.
-
-    ``clips`` is a list of ``(mp3_path, delay_seconds)``. Each clip is shifted
-    via ``adelay`` and the result mixed with ``amix``; ``apad=whole_dur`` pads
-    the tail with silence so the output is exactly ``total_sec`` seconds —
-    matching the (already-retimed) video length.
-    """
-    if not clips:
-        raise RuntimeError("no audio clips to compose")
-    _ensure_ffmpeg()
-    cmd: list[str] = ["ffmpeg", "-y"]
-    for clip_path, _ in clips:
-        cmd += ["-i", str(clip_path)]
-    filters: list[str] = []
-    labels: list[str] = []
-    for i, (_, delay_sec) in enumerate(clips):
-        delay_ms = max(0, int(round(delay_sec * 1000)))
-        filters.append(f"[{i}:a]adelay={delay_ms}|{delay_ms}[a{i}]")
-        labels.append(f"[a{i}]")
-    if len(clips) == 1:
-        filters.append(f"{labels[0]}apad=whole_dur={total_sec:.3f}[aout]")
-    else:
-        filters.append(
-            f"{''.join(labels)}amix=inputs={len(clips)}:"
-            f"duration=longest:normalize=0,"
-            f"apad=whole_dur={total_sec:.3f}[aout]"
-        )
-    cmd += [
-        "-filter_complex", ";".join(filters),
-        "-map", "[aout]",
-        "-c:a", "libmp3lame",
-        "-q:a", "4",
-        "-t", f"{total_sec:.3f}",
-        str(out_path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"ffmpeg audio compose failed: {proc.stderr[-500:]}"
-        )
-
-
 def _trim_video_head(path: Path, *, max_seconds: float) -> None:
     """Trim in place when duration exceeds ``max_seconds`` (copy streams)."""
     dur = _probe_video_duration_sec(path)
@@ -1493,65 +1804,15 @@ def _generate_narration(
     """Generate a single-clip narration MP3 from ``intent``.
 
     Used when no action provides a ``say`` — the whole clip plays a single
-    sentence. See :func:`_generate_action_narration` for action-synced
-    narration with one TTS clip per ``actions[*].say``.
+    sentence. When a say-timeline is available the orchestrator instead
+    routes through :func:`_align_visual_to_narration`, which performs
+    ONE TTS pass over all lines, uses Whisper word timings to set per-step
+    durations, and assembles a vision-LLM keyframe slideshow.
     """
     out = work_dir / "narration.mp3"
     _tts_synthesize(intent, out, voice=voice, model=model)
     ms = _probe_audio_ms(out) or 0
     return NarrationResult(audio_path=out, voice=voice, model=model, ms=ms)
-
-
-def _generate_action_narration(
-    *,
-    timeline: list[dict[str, Any]],
-    work_dir: Path,
-    total_video_sec: float,
-    speed_factor: float,
-    voice: str = "coral",
-    model: str = "gpt-4o-mini-tts",
-) -> NarrationResult | None:
-    """Generate one TTS clip per captioned action and compose them in time.
-
-    Returns ``None`` when no entry has a ``say`` field. The composed track is
-    exactly ``total_video_sec`` seconds long; each per-action clip is placed
-    at ``(t_start_ms / 1000) / speed_factor`` (the recording timestamp scaled
-    onto the slowed-down playback) and the tail is padded with silence.
-    """
-    captioned: list[tuple[int, str]] = [
-        (i, str(entry["say"]))
-        for i, entry in enumerate(timeline)
-        if entry.get("say")
-    ]
-    if not captioned:
-        return None
-
-    speed = max(speed_factor, 1e-6)
-    clips_dir = work_dir / "narration_clips"
-    clips_dir.mkdir(parents=True, exist_ok=True)
-    clips: list[tuple[Path, float]] = []
-    last_end_sec = 0.0
-    breathing_room_sec = 0.1
-    for i, text in captioned:
-        clip_path = clips_dir / f"clip_{i:03d}.mp3"
-        _tts_synthesize(text, clip_path, voice=voice, model=model)
-        clip_ms = _probe_audio_ms(clip_path) or 0
-        clip_sec = clip_ms / 1000.0
-        desired_start = (timeline[i].get("t_start_ms", 0) / 1000.0) / speed
-        # Push later clips past their predecessor's tail so concurrent ``say``
-        # narrations never overlap in the mixed audio track.
-        actual_start = max(desired_start, last_end_sec)
-        clips.append((clip_path, actual_start))
-        last_end_sec = actual_start + clip_sec + breathing_room_sec
-
-    composed = work_dir / "narration.mp3"
-    _compose_action_audio(
-        clips=clips,
-        out_path=composed,
-        total_sec=total_video_sec,
-    )
-    ms = _probe_audio_ms(composed) or int(total_video_sec * 1000)
-    return NarrationResult(audio_path=composed, voice=voice, model=model, ms=ms)
 
 
 # ---------------------------------------------------------------------------
@@ -1627,7 +1888,36 @@ def render(
 
     width, height = manifest.viewport
 
-    with tempfile.TemporaryDirectory(prefix="docgen-demo-") as tmp:
+    # ``DOCGEN_DEBUG_KEEP_TMP=1`` preserves the per-render scratch directory
+    # ( normally cleaned up after success ) so the candidate keyframes,
+    # vision LLM picks, slideshow segments, and intermediate audio/video
+    # are inspectable when debugging matcher / sync issues. Path is logged
+    # to stderr at the start of the run.
+    keep_tmp = bool(os.environ.get("DOCGEN_DEBUG_KEEP_TMP", "").strip())
+    tmp_ctx: Any
+    if keep_tmp:
+        tmp_root = tempfile.mkdtemp(prefix="docgen-demo-")
+        if stderr is not None:
+            stderr.write(
+                f"[docgen] DOCGEN_DEBUG_KEEP_TMP=1 → preserving scratch dir: {tmp_root}\n"
+            )
+        else:
+            sys.stderr.write(
+                f"[docgen] DOCGEN_DEBUG_KEEP_TMP=1 → preserving scratch dir: {tmp_root}\n"
+            )
+
+        class _NoopCtx:
+            def __enter__(self) -> str:
+                return tmp_root
+
+            def __exit__(self, *_a: Any) -> None:
+                return None
+
+        tmp_ctx = _NoopCtx()
+    else:
+        tmp_ctx = tempfile.TemporaryDirectory(prefix="docgen-demo-")
+
+    with tmp_ctx as tmp:
         tmp_path = Path(tmp)
         _stage_fixtures(manifest, tmp_path, stderr=stderr)
 
@@ -1636,10 +1926,15 @@ def render(
         if manifest.kind == "playwright":
             visual_mp4 = tmp_path / "visual.mp4"
             if manifest.pw_spec is not None:
-                _run_playwright_test_video(
+                trace_zip = _run_playwright_test_video(
                     manifest,
                     output_path=visual_mp4,
                     work_dir=tmp_path,
+                )
+                timeline = _build_spec_mode_timeline(
+                    manifest=manifest,
+                    trace_zip=trace_zip,
+                    stderr=stderr,
                 )
             else:
                 _drive_playwright(
@@ -1660,12 +1955,48 @@ def render(
         else:
             raise ManifestError(f"unsupported demonstration.kind: '{manifest.kind}'")
 
-        if abs(manifest.playback_speed_factor - 1.0) > 1e-6:
+        # The narration pipeline has exactly ONE path when there is a
+        # say-timeline: audio-driven Whisper alignment with a vision-LLM
+        # keyframe slideshow.
+        #
+        #   1. Synthesise ALL ``say`` lines as one continuous TTS pass.
+        #   2. Whisper word-level timestamps tell us when each line starts
+        #      and ends inside that single MP3.
+        #   3. Sample candidate frames from the source recording and ask
+        #      a vision LLM to pick the BEST candidate per narration step
+        #      (the frame whose visible state matches what the line says).
+        #   4. Build a slideshow MP4: each chosen still held for its
+        #      Whisper-aligned duration. Audio is the master clock.
+        #   5. The single MP3 is muxed under the slideshow as the LAST
+        #      step (no audio splicing, mixing, or re-timing).
+        #
+        # When there is no say-timeline (CLI / VHS modes, action-list with
+        # no captions), we fall back to a single-clip ``intent`` narration
+        # over a uniformly slowed-down visual.
+        audio_driven = bool(timeline) and any(e.get("say") for e in timeline)
+
+        narration: NarrationResult | None = None
+        retime_factor = manifest.playback_speed_factor
+        if audio_driven and not no_narration:
+            visual_synced, narration, target_timeline = (
+                _align_visual_to_narration(
+                    source_visual=visual_mp4,
+                    raw_timeline=timeline,
+                    work_dir=tmp_path,
+                    width=width,
+                    height=height,
+                )
+            )
+            timeline = target_timeline
+            visual_mp4 = visual_synced
+            retime_factor = 1.0
+
+        if abs(retime_factor - 1.0) > 1e-6:
             visual_retimed = tmp_path / "visual_retimed.mp4"
             _retime_video(
                 visual_mp4,
                 visual_retimed,
-                speed_factor=manifest.playback_speed_factor,
+                speed_factor=retime_factor,
             )
             visual_mp4 = visual_retimed
 
@@ -1678,7 +2009,7 @@ def render(
                 visual_mp4,
                 visual_captioned,
                 timeline,
-                speed_factor=manifest.playback_speed_factor,
+                speed_factor=retime_factor,
                 work_dir=tmp_path,
             )
         else:
@@ -1689,23 +2020,23 @@ def render(
                 work_dir=tmp_path,
             )
 
-        # Key presence was validated up-front by ``render``; here we just
-        # decide between single-clip narration and per-action sync.
-        narration: NarrationResult | None = None
-        if not no_narration:
-            if timed_captions:
-                total_video_sec = (
-                    _probe_video_duration_sec(visual_captioned)
-                    or float(manifest.duration_seconds)
+        if not no_narration and narration is None:
+            narration = _generate_narration(manifest.intent, tmp_path)
+
+        # Freeze-extend the visual when (rare) the audio runs longer than
+        # the captioned video — a safety net for the intent-only path,
+        # since the audio-driven path already sized the video to the audio.
+        if narration is not None:
+            visual_sec = _probe_video_duration_sec(visual_captioned) or 0.0
+            narration_sec = (narration.ms or 0) / 1000.0
+            if narration_sec > visual_sec + 0.01:
+                visual_extended = tmp_path / "visual_extended.mp4"
+                _extend_video_with_freeze(
+                    visual_captioned,
+                    visual_extended,
+                    target_seconds=narration_sec,
                 )
-                narration = _generate_action_narration(
-                    timeline=timeline,
-                    work_dir=tmp_path,
-                    total_video_sec=total_video_sec,
-                    speed_factor=manifest.playback_speed_factor,
-                )
-            if narration is None:
-                narration = _generate_narration(manifest.intent, tmp_path)
+                visual_captioned = visual_extended
 
         if narration is not None:
             _mux_audio_padded(visual_captioned, narration.audio_path, rendered_mp4)
@@ -1896,13 +2227,187 @@ def _drive_playwright(
         )
 
 
+def _build_spec_mode_timeline(
+    *,
+    manifest: Manifest,
+    trace_zip: Path | None,
+    stderr,
+) -> list[dict[str, Any]]:
+    """Zip ``manifest.pw_narration_steps`` onto real ``trace.zip`` timestamps.
+
+    Returns ``[]`` when no narration steps are declared, when the trace is
+    missing/empty, or when zero user-visible actions were recorded — in those
+    cases the orchestrator falls back to single-clip ``intent`` narration.
+    A length mismatch between narration steps and trace actions is logged on
+    ``stderr`` and the timeline is truncated to the shorter of the two.
+    """
+    steps = manifest.pw_narration_steps
+    if not steps:
+        return []
+    if trace_zip is None or not trace_zip.is_file():
+        if stderr is not None:
+            stderr.write(
+                "demo-function: spec-mode narration_steps present but no trace.zip "
+                "produced; falling back to single-clip narration.\n"
+            )
+        return []
+
+    from docgen.pf_trace import build_timeline, parse_trace_zip
+
+    actions = parse_trace_zip(trace_zip)
+    if not actions:
+        if stderr is not None:
+            stderr.write(
+                "demo-function: trace.zip contained no user-visible actions; "
+                "falling back to single-clip narration.\n"
+            )
+        return []
+    if len(actions) != len(steps) and stderr is not None:
+        stderr.write(
+            f"demo-function: narration_steps count ({len(steps)}) differs from "
+            f"trace actions ({len(actions)}); aligning by index up to "
+            f"{min(len(steps), len(actions))}.\n"
+        )
+    return build_timeline(actions, steps)
+
+
+_PLAYWRIGHT_OVERRIDE_CONFIG_NAME = "playwright.docgen-override.config.ts"
+# Per-action delay applied via Playwright ``launchOptions.slowMo``. Beyond
+# making typing/clicks visible at native playback speed, slowMo serves a
+# second purpose: Playwright's screencast service has a ~200ms warmup before
+# the first frame lands in the WebM. Without slowMo, the first 1-2 user
+# actions fire before the recorder is ready and end up off-camera — leaving
+# narration lines for actions that the viewer never sees performed. A 500ms
+# pre-action delay is generous enough to push every action past the recorder
+# warmup and to let interactions read naturally on screen.
+_DEFAULT_PLAYWRIGHT_SLOWMO_MS = 500
+
+
+def _kill_process_group(proc: subprocess.Popen[Any]) -> None:
+    """SIGKILL the whole process group of ``proc`` and reap the leader.
+
+    We spawn ``npx playwright`` with ``start_new_session=True`` so its grand-
+    children (vite/next/etc. spawned via ``webServer``) live in the same
+    process group; killing the group ensures the dev server can't outlive the
+    test and keep file descriptors / sockets / ports alive.
+    """
+    if proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            proc.wait(timeout=3)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=3)
+
+
+def _tail_log(path: Path, *, max_bytes: int = 3000) -> str:
+    """Read the last ``max_bytes`` of a log file as text (best-effort)."""
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            return f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _write_playwright_override_config(
+    *,
+    project_dir: Path,
+    output_dir: Path,
+    width: int,
+    height: int,
+    base_url: str | None,
+    web_server_command: str | None,
+    web_server_url: str | None,
+    slow_mo_ms: int = _DEFAULT_PLAYWRIGHT_SLOWMO_MS,
+) -> Path:
+    """Write a temporary Playwright config in ``project_dir`` that forces
+    ``video: on``, ``trace: on``, the docgen viewport, and a ``slowMo`` delay
+    so each action is visible on screen, while reusing the project's own
+    ``webServer`` declaration when one was discovered.
+
+    The override is placed alongside the user's ``playwright.config.*`` so
+    ``testDir: '.'`` and Node module resolution behave identically. Caller is
+    responsible for deleting it (try/finally).
+    """
+    cfg_lines: list[str] = [
+        "// AUTO-GENERATED by docgen — safe to delete; recreated per render.",
+        'import { defineConfig, devices } from "@playwright/test";',
+        "",
+        "export default defineConfig({",
+        '  testDir: ".",',
+        "  fullyParallel: false,",
+        "  retries: 0,",
+        '  reporter: "line",',
+        f"  outputDir: {json.dumps(str(output_dir))},",
+        "  use: {",
+        '    ...devices["Desktop Chrome"],',
+    ]
+    if base_url:
+        cfg_lines.append(f"    baseURL: {json.dumps(base_url)},")
+    cfg_lines.extend(
+        [
+            f"    viewport: {{ width: {int(width)}, height: {int(height)} }},",
+            '    video: "on",',
+            '    trace: "on",',
+            f"    launchOptions: {{ slowMo: {int(slow_mo_ms)} }},",
+            "  },",
+        ]
+    )
+    if web_server_command and web_server_url:
+        cfg_lines.extend(
+            [
+                "  webServer: {",
+                f"    command: {json.dumps(web_server_command)},",
+                f"    url: {json.dumps(web_server_url)},",
+                "    reuseExistingServer: true,",
+                "    timeout: 120000,",
+                "  },",
+            ]
+        )
+    cfg_lines.append("});")
+    cfg_lines.append("")
+
+    path = project_dir / _PLAYWRIGHT_OVERRIDE_CONFIG_NAME
+    path.write_text("\n".join(cfg_lines), encoding="utf-8")
+    return path
+
+
 def _run_playwright_test_video(
     manifest: Manifest,
     *,
     output_path: Path,
     work_dir: Path,
-) -> None:
-    """Run ``npx playwright test`` on a spec with ``--grep`` and capture WebM → MP4."""
+) -> Path | None:
+    """Run ``npx playwright test`` on a spec with ``--grep`` and capture WebM → MP4.
+
+    Returns the absolute path to the run's ``trace.zip`` when one was produced
+    (``--trace=on``), else ``None``. The trace is the source of truth for
+    per-step recording timestamps used by ``narration_steps`` syncing.
+
+    Implementation notes:
+
+    * Playwright 1.49+ removed ``--video``, ``--viewport-size``, and
+      ``--output-dir`` from the CLI surface; they must be set in the config's
+      ``use:`` block. We therefore generate a transient
+      ``playwright.docgen-override.config.ts`` next to the user's own config
+      that pins ``video: on``, ``trace: on``, the manifest viewport, the
+      base URL, and (when discovered) the user's ``webServer`` declaration.
+      The override is removed in a ``finally`` after the run.
+    * ``cwd`` is set to the project dir so Node module resolution finds
+      ``@playwright/test`` from the project's ``node_modules``.
+    """
     if manifest.pw_spec is None or not manifest.pw_grep:
         raise ManifestError("internal: spec/grep required for Playwright test mode")
 
@@ -1921,45 +2426,104 @@ def _run_playwright_test_video(
     width, height = manifest.viewport
     timeout_ms = min(max(manifest.duration_seconds, 5) * 1000 + 10_000, 120_000)
 
-    cmd: list[str] = [
-        "npx",
-        "playwright",
-        "test",
-        str(spec),
-        "-g",
-        manifest.pw_grep,
-        f"--timeout={int(timeout_ms)}",
-        "--video=on",
-        f"--viewport-size={width},{height}",
-        f"--output-dir={out_pw}",
-        "--reporter=line",
-    ]
-    if manifest.pw_base_url:
-        cmd.append(f"--base-url={manifest.pw_base_url}")
+    project_dir = (manifest.pw_cwd or spec.parent).resolve()
 
-    cwd = (manifest.pw_cwd or spec.parent).resolve()
-
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd),
-        capture_output=True,
-        text=True,
-        timeout=max(60, int(timeout_ms / 1000) + 30),
+    from docgen.test_discovery import (
+        find_playwright_config,
+        parse_playwright_config_insights,
     )
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "")[-800:]
-        raise RuntimeError(
-            f"playwright test failed (exit {proc.returncode}): {tail}"
-        )
 
-    webms = sorted(out_pw.rglob("*.webm"))
-    if not webms:
-        raise RuntimeError(
-            f"playwright test produced no .webm under {out_pw}"
-        )
-    raw_video = max(webms, key=lambda p: p.stat().st_size)
+    cfg_insights: dict[str, Any] = {}
+    user_cfg = find_playwright_config(project_dir)
+    if user_cfg is not None:
+        cfg_insights = parse_playwright_config_insights(user_cfg)
+    base_url = manifest.pw_base_url or cfg_insights.get("base_url")
 
-    _transcode_to_mp4(raw_video, output_path, width=width, height=height)
+    override_cfg = _write_playwright_override_config(
+        project_dir=project_dir,
+        output_dir=out_pw,
+        width=width,
+        height=height,
+        base_url=base_url,
+        web_server_command=cfg_insights.get("web_server_command"),
+        web_server_url=cfg_insights.get("web_server_url"),
+    )
+
+    proc: subprocess.Popen[bytes] | None = None
+    try:
+        cmd: list[str] = [
+            "npx",
+            "playwright",
+            "test",
+            str(spec),
+            "-g",
+            manifest.pw_grep,
+            f"--config={override_cfg}",
+            f"--timeout={int(timeout_ms)}",
+            "--trace=on",
+            f"--output={out_pw}",
+            "--reporter=line",
+        ]
+
+        # We CANNOT use ``capture_output=True`` here. Playwright's
+        # ``webServer`` block spawns the project's dev server (e.g. vite) as a
+        # grandchild that inherits our stdout/stderr pipes. Even after the
+        # test itself finishes and writes ``trace.zip`` / ``video.webm``, the
+        # dev server keeps those file descriptors open, so ``communicate()``
+        # would block forever waiting for EOF. Redirect to log files instead
+        # (file descriptors don't keep us blocked) and spawn the whole tree
+        # in a fresh process group so we can SIGKILL it cleanly in finally.
+        stdout_log = work_dir / "playwright.stdout.log"
+        stderr_log = work_dir / "playwright.stderr.log"
+        timeout_sec = max(60, int(timeout_ms / 1000) + 30)
+        with stdout_log.open("wb") as out_f, stderr_log.open("wb") as err_f:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(project_dir),
+                stdout=out_f,
+                stderr=err_f,
+                start_new_session=True,
+            )
+            try:
+                rc = proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                _kill_process_group(proc)
+                raise RuntimeError(
+                    f"playwright test timed out after {timeout_sec}s "
+                    f"(stdout tail: {_tail_log(stdout_log)})"
+                )
+
+        if rc != 0:
+            tail = (
+                _tail_log(stderr_log) + "\n" + _tail_log(stdout_log)
+            ).strip()
+            raise RuntimeError(
+                f"playwright test failed (exit {rc}):\n{tail[-3_000:]}"
+            )
+
+        webms = sorted(out_pw.rglob("*.webm"))
+        if not webms:
+            raise RuntimeError(
+                f"playwright test produced no .webm under {out_pw}"
+            )
+        raw_video = max(webms, key=lambda p: p.stat().st_size)
+
+        _transcode_to_mp4(raw_video, output_path, width=width, height=height)
+
+        from docgen.pf_trace import find_trace_zip
+
+        return find_trace_zip(out_pw)
+    finally:
+        # Always kill the entire process group — Playwright's ``webServer``
+        # (vite, next dev, etc.) is a grandchild and won't die just because
+        # the npx wrapper got SIGTERM. We don't care if everything already
+        # exited cleanly; SIGKILL on a dead group is a no-op.
+        if proc is not None:
+            _kill_process_group(proc)
+        try:
+            override_cfg.unlink()
+        except OSError:
+            pass
 
 
 def _render_cli_vhs(

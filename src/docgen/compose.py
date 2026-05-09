@@ -27,8 +27,16 @@ class Composer:
         composed = 0
         for seg_id in segment_ids:
             vmap = self.config.visual_map.get(seg_id, {})
-            vtype = vmap.get("type", "vhs")
             seg_name = self.config.resolve_segment_name(seg_id)
+            if not isinstance(vmap, dict) or not str(vmap.get("type", "")).strip():
+                print(f"  [{seg_id}] {seg_name} (unmapped)")
+                print(
+                    f"    SKIP: no visual_map entry for {seg_id} — add a tape, capture script, "
+                    "or Manim scene class, then run docgen yaml-generate (or edit docgen.yaml)."
+                )
+                continue
+
+            vtype = str(vmap["type"]).strip()
             print(f"  [{seg_id}] {seg_name} ({vtype})")
 
             ok = False

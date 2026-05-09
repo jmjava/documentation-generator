@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-test("home page shows dogfood heading", async ({ page }) => {
+test("compile lesson flow", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("heading")).toContainText("dogfood");
+  await expect(page.getByTestId("heading")).toContainText("Course Builder");
+
+  await page.getByTestId("topic").pressSequentially("Async iterators", {
+    delay: 150,
+  });
+  await page.getByTestId("compile").click();
+
+  await expect(page.getByTestId("output")).toContainText(
+    "Compiled lesson: Async iterators",
+  );
 });

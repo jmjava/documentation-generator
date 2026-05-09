@@ -404,6 +404,24 @@ class Demo(Scene):
         check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
         assert check["passed"], check["details"]
 
+    def test_skipped_when_scene_lint_disabled(self, cfg_dir):
+        config = self._configure_manim(
+            cfg_dir,
+            """
+from manim import *
+
+class Demo(Scene):
+    def construct(self):
+        Text("Tiny", font_size=8, weight=BOLD)
+""".strip(),
+            extra_cfg={"manim": {"scene_lint": False}},
+        )
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert check["passed"]
+        assert "skipped" in " ".join(check["details"]).lower()
+
     def test_flags_small_font_size(self, cfg_dir):
         """Font sizes below the configured minimum should be flagged."""
         config = self._configure_manim(

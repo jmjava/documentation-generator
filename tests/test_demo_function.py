@@ -966,7 +966,7 @@ def test_vtt_from_timeline_empty_when_no_say() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _retime_video / _mux_audio_padded / _compose_action_audio: ffmpeg helpers
+# _retime_video / _mux_audio_padded: ffmpeg helpers
 # ---------------------------------------------------------------------------
 
 
@@ -1047,30 +1047,12 @@ def test_mux_audio_padded_keeps_video_length(tmp_path: Path) -> None:
     assert out_dur == pytest.approx(4.0, abs=0.3)
 
 
-def test_compose_action_audio_pads_to_total(tmp_path: Path) -> None:
-    a1 = tmp_path / "a1.mp3"
-    a2 = tmp_path / "a2.mp3"
-    _make_silent_audio(a1, seconds=0.5)
-    _make_silent_audio(a2, seconds=0.5)
-    out = tmp_path / "narration.mp3"
-    df._compose_action_audio(
-        clips=[(a1, 0.0), (a2, 2.5)],
-        out_path=out,
-        total_sec=5.0,
-    )
-    dur = df._probe_audio_ms(out)
-    assert dur is not None
-    assert dur == pytest.approx(5000, abs=300)
-
-
-def test_compose_action_audio_single_clip_pads_to_total(tmp_path: Path) -> None:
-    a1 = tmp_path / "a1.mp3"
-    _make_silent_audio(a1, seconds=0.5)
-    out = tmp_path / "narration.mp3"
-    df._compose_action_audio(clips=[(a1, 1.0)], out_path=out, total_sec=4.0)
-    dur = df._probe_audio_ms(out)
-    assert dur is not None
-    assert dur == pytest.approx(4000, abs=300)
+# NOTE: ``_compose_action_audio`` and ``_generate_action_narration`` were
+# removed when the narration pipeline collapsed to a single audio-driven path
+# (one TTS pass + Whisper word timings → freeze-padded video, mux as the last
+# step). See :func:`docgen.demo_function._align_visual_to_narration` and
+# :mod:`docgen.pf_align` for the replacement; alignment behavior is exercised
+# directly in ``tests/test_pf_align.py``.
 
 
 # ---------------------------------------------------------------------------

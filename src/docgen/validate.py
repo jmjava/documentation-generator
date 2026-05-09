@@ -227,8 +227,8 @@ class Validator:
         elif rec:
             vmap0 = self.config.visual_map.get(seg_id, {})
             vt0 = vmap0.get("type") if isinstance(vmap0, dict) else None
-            report.checks.append(self._check_streams(rec))
-            report.checks.append(self._check_drift(rec, max_drift))
+            report.checks.append(self._check_streams(rec, visual_type=vt0))
+            report.checks.append(self._check_drift(rec, max_drift, visual_type=vt0))
 
             samples = _sample_frames(rec, interval_sec=2.0)
             report.checks.append(self._check_freeze_ratio(rec, samples, visual_type=vt0))
@@ -440,6 +440,15 @@ class Validator:
         if self._manim_lint_cache is not None:
             return self._manim_lint_cache
 
+        if not self.config.manim_scene_lint_enabled:
+            result = CheckResult(
+                "manim_scene_lint",
+                True,
+                ["manim.scene_lint disabled in config (skipped)"],
+            )
+            self._manim_lint_cache = result
+            return result
+
         scenes = self.config.animations_dir / "scenes.py"
         if not scenes.exists():
             result = CheckResult("manim_scene_lint", True, ["No animations/scenes.py (skipped)"])
@@ -483,7 +492,7 @@ class Validator:
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 
-    def _check_streams(self, path: Path) -> CheckResult:
+    def _check_streams(self, path: Path, *, visual_type: str | None = None) -> CheckResult:
         try:
             out = subprocess.run(
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
@@ -493,16 +502,26 @@ class Validator:
             streams = data.get("streams", [])
             has_video = any(s.get("codec_type") == "video" for s in streams)
             has_audio = any(s.get("codec_type") == "audio" for s in streams)
-            issues = []
+            issues: list[str] = []
             if not has_video:
                 issues.append("Missing video stream")
+            if visual_type == "playwright_test":
+                if not has_video:
+                    return CheckResult("stream_presence", False, issues)
+                if not has_audio:
+                    return CheckResult(
+                        "stream_presence",
+                        True,
+                        ["Video stream OK; no audio yet (muxed with narration at compose)"],
+                    )
+                return CheckResult("stream_presence", True, ["Video + audio present"])
             if not has_audio:
                 issues.append("Missing audio stream")
             return CheckResult("stream_presence", has_video and has_audio, issues)
         except Exception as exc:
             return CheckResult("stream_presence", False, [str(exc)])
 
-    def _check_drift(self, path: Path, max_drift: float) -> CheckResult:
+    def _check_drift(self, path: Path, max_drift: float, *, visual_type: str | None = None) -> CheckResult:
         try:
             out = subprocess.run(
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(path)],
@@ -515,6 +534,28 @@ class Validator:
                 dur = float(s.get("duration", 0))
                 if ct in ("video", "audio") and dur > 0:
                     durations[ct] = dur
+
+            has_video_stream = any(
+                s.get("codec_type") == "video" for s in data.get("streams", [])
+            )
+            fmt_dur_raw = data.get("format", {}).get("duration")
+            if has_video_stream and "video" not in durations and fmt_dur_raw is not None:
+                try:
+                    fd = float(fmt_dur_raw)
+                    if fd > 0:
+                        durations["video"] = fd
+                except (TypeError, ValueError):
+                    pass
+
+            if visual_type == "playwright_test" and "video" in durations and "audio" not in durations:
+                return CheckResult(
+                    "av_drift",
+                    True,
+                    [
+                        f"Video-only source ({durations['video']:.2f}s); "
+                        "A/V drift is checked on the composed segment output"
+                    ],
+                )
 
             if "video" not in durations or "audio" not in durations:
                 return CheckResult("av_drift", False, ["Cannot determine both stream durations"])
@@ -545,6 +586,11 @@ class Validator:
         return None
 
     def _find_recording(self, seg_id: str) -> Path | None:
+        vmap = self.config.visual_map.get(seg_id, {})
+        if isinstance(vmap, dict) and vmap.get("type") == "playwright_test":
+            p = self._playwright_test_video_path(vmap)
+            return p if p.exists() else None
+
         d = self.config.recordings_dir
         if not d.exists():
             return None
@@ -555,6 +601,19 @@ class Validator:
         for mp4 in d.glob(f"*{seg_id}*.mp4"):
             return mp4
         return None
+
+    def _playwright_test_video_path(self, vmap: dict[str, Any]) -> Path:
+        """Match ``compose.ComposeStep._playwright_test_video_path`` resolution."""
+        src = str(vmap.get("source", "")).strip()
+        if not src:
+            return self.config.terminal_dir / "rendered" / "playwright-test.mp4"
+        p = Path(src)
+        if p.is_absolute():
+            return p
+        under_repo = self.config.base_dir / src
+        if under_repo.exists():
+            return under_repo
+        return self.config.terminal_dir / "rendered" / src
 
     # ── Playwright test video (visual_map type: playwright_test) ───────────
 

@@ -6,6 +6,16 @@ Pair with **[in-repo dogfood](next-session-dogfood.md)** (this repo’s `docs/de
 
 **Designated consumer repo:** **`courseforge/course-builder`** — local clone: **`/home/ubuntu/github/courseforge/course-builder`**. All upstream dogfood work lands there; friction feeds back here.
 
+### Full docgen reset (repeatable)
+
+When **`docgen.yaml`**, **`docgen.catalog.yaml`**, and CI layout are **already** aligned with the current north star, use the **repeatable** playbook in **`AGENTS.md`** → [Consumer “full docgen reset” (repeatable)](AGENTS.md#consumer-full-docgen-reset-repeatable) (`yaml-generate` → catalog `reset -y` or `DOCGEN_CATALOG_FORCE_ALL` → regenerate outputs → validate / commit). There is no single CLI that wipes a whole repo.
+
+### One-time: extra cleanup after a refactor
+
+**Workflow moves, Tekton/infrastructure pin tables, manifest location changes**, and other **suite-wide** edits belong to a **one-time migration**, not to every reset. See **`AGENTS.md`** → [One-time: migration cleanup (related repos)](AGENTS.md#one-time-migration-cleanup-related-repos).
+
+**Pins (suite-wide one-time bump):** `courseforge/course-builder` workflows **`docgen-demo-function.yml`** / **`docgen-render.yml`** and **`courseforge/infrastructure`** (`docs/tekton-dag-reuse.md`, `deploy/.../docgen-task.yaml` default) should stay aligned with the canonical SHA in **tekton-dag-reuse**; `docgen-generate-demos` may continue installing from **`main`** until you standardize on one ref everywhere.
+
 ---
 
 ## 0 — Preconditions (course-builder)

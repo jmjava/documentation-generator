@@ -1,11 +1,13 @@
-docgen is a Python library and CLI that turns Markdown narration scripts into polished demo videos, automatically.
+Docgen is a powerful documentation generator designed to create narrated demo videos using Python. It focuses on two primary tools: Manim for long-form storytelling and Playwright for creating tutorials from UI tests.
 
-Most developer tools need recorded demos, but keeping them in sync with the codebase is tedious. Every time you refactor an API or change a UI flow, the old recording is stale. docgen solves this by making demo production reproducible.
+The library provides a command-line interface and a reusable Python library to streamline the process of generating video documentation. It allows users to create engaging content that explains how a system works, making it easier to understand complex concepts.
 
-You write narration in plain Markdown. docgen strips the formatting, sends the text to OpenAI text-to-speech, and produces an MP3. Terminal demos are recorded with VHS tape files, animations are rendered with Manim, and ffmpeg composites everything into final segment videos.
+Docgen emphasizes a modern approach to video documentation. It supports scripted narration that can be generated from Markdown scripts using text-to-speech technology. This narration is paired with visuals created in Manim, which serves as the main medium for explaining architecture and workflows. Playwright can be integrated where interactive browser demonstrations are necessary.
 
-The entire pipeline runs from a single command: docgen generate-all. Or you can run each stage independently. TTS, Manim, VHS, compose, validate, concatenate.
+The library provides a suite of features, including validation checks for audio-visual sync, layout analysis, and error detection. It also includes a local web GUI wizard to help bootstrap narration scripts from existing project documentation, making it user-friendly for newcomers.
 
-Validation catches problems before you commit. Missing audio or video streams, audio-visual drift beyond a threshold, and narration text that still contains markdown syntax or metadata that should not be read aloud.
+Legacy support for VHS terminal recordings exists, but users are encouraged to migrate to using Manim and Playwright for new projects. This shift not only improves the quality of the documentation but also aligns with modern development practices.
 
-Everything is configured in one YAML file, docgen dot yaml. Segments, visual source mapping, TTS voice, validation thresholds, and wizard settings all live in a single place.
+Installation is straightforward, allowing users to quickly set up their environment with a simple command. Development workflows are flexible, with the ability to run tests and manage dependencies easily.
+
+Overall, Docgen offers a comprehensive solution for generating high-quality documentation and narrated demo videos, ensuring that both developers and end-users have access to clear, informative content.

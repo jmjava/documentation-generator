@@ -39,6 +39,7 @@ class PagesGenerator:
         demos_sub = self.pages_cfg.get("demos_subdir", "demos")
         extra_links = self.pages_cfg.get("extra_links", [])
         segments_cfg = self.pages_cfg.get("segments", {})
+        per_function_cfg = self.pages_cfg.get("per_function", {})
         concat_map = self.config.concat_map
 
         # Probe durations
@@ -53,6 +54,32 @@ class PagesGenerator:
                 f'                <p>{_esc(meta.get("description", ""))}</p>\n'
                 f'                <video controls preload="metadata">\n'
                 f'                    <source src="{demos_sub}/recordings/{self._find_recording_name(seg_id)}" type="video/mp4">\n'
+                f'                </video>\n'
+                f'            </div>'
+            )
+
+        per_function_cards = []
+        for slug, meta in sorted(per_function_cfg.items()):
+            source = str(meta.get("source") or f"recordings/per-function/{slug}.mp4")
+            poster = meta.get("poster")
+            duration = self._probe_per_function_duration(source)
+            poster_attr = f' poster="{demos_sub}/{poster}"' if poster else ""
+            manifest_link = ""
+            manifest_rel = meta.get("manifest")
+            if manifest_rel:
+                manifest_link = (
+                    f'                <p class="manifest-link">'
+                    f'<a href="{demos_sub}/{_esc(str(manifest_rel))}">manifest</a></p>\n'
+                )
+            per_function_cards.append(
+                f'            <div class="video-card per-function" id="pf-{slug}">\n'
+                f'                <p class="seg-id">#pf-{slug}</p>\n'
+                f'                <h2>{_esc(meta.get("title", slug))}</h2>\n'
+                f'                <span class="duration">{duration}</span>\n'
+                f'                <p>{_esc(meta.get("description", ""))}</p>\n'
+                f"{manifest_link}"
+                f'                <video controls preload="metadata"{poster_attr}>\n'
+                f'                    <source src="{demos_sub}/{source}" type="video/mp4">\n'
                 f'                </video>\n'
                 f'            </div>'
             )
@@ -77,10 +104,22 @@ class PagesGenerator:
         for lnk in extra_links:
             footer_links += f' | <a href="{lnk["href"]}">{_esc(lnk["label"])}</a>'
 
+        per_function_section = ""
+        if per_function_cards:
+            per_function_section = (
+                '\n        <h2 class="section-title">Per-function videos</h2>\n'
+                '        <p class="section-blurb">Long-form <strong>Manim</strong> segments above; short <strong>Playwright</strong> tutorials via '
+                "<code>docgen demo-function</code>. <strong>VHS</strong>/<code>kind: cli</code> is legacy.</p>\n"
+                '        <div class="videos-grid">\n'
+                + "\n\n".join(per_function_cards)
+                + "\n        </div>\n"
+            )
+
         html = _INDEX_TEMPLATE.format(
             title=_esc(title),
             subtitle=_esc(subtitle),
             segment_cards="\n\n".join(seg_cards),
+            per_function_section=per_function_section,
             concat_cards="\n\n".join(concat_cards),
             repo_url=repo_url,
             footer_links=footer_links,
@@ -220,6 +259,24 @@ class PagesGenerator:
             pass
         return "concat"
 
+    def _probe_per_function_duration(self, source: str) -> str:
+        """Resolve a per_function `source` (relative to ``demos_subdir``) and probe its duration."""
+        rec = self.config.base_dir / source
+        if not rec.exists():
+            return "varies"
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(rec)],
+                capture_output=True, text=True, timeout=10,
+            )
+            dur = float(json.loads(out.stdout).get("format", {}).get("duration", 0))
+            if dur > 0:
+                m, s = divmod(int(dur), 60)
+                return f"~{m}m {s}s" if m else f"~{s}s"
+        except Exception:
+            pass
+        return "varies"
+
 
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -239,8 +296,14 @@ _INDEX_TEMPLATE = """<!DOCTYPE html>
         h1{{font-size:2.5rem;margin-bottom:.5rem;text-shadow:2px 2px 4px rgba(0,0,0,.2)}}
         .subtitle{{font-size:1.1rem;opacity:.9}}
         .section-title{{color:#fff;font-size:1.35rem;margin:2rem 0 1rem;text-shadow:1px 1px 2px rgba(0,0,0,.15)}}
+        .section-blurb{{color:#fff;opacity:.9;margin:-.25rem 0 1rem;font-size:.95rem;line-height:1.5}}
+        .section-blurb code{{background:rgba(255,255,255,.18);padding:.05rem .35rem;border-radius:4px;font-size:.85rem}}
         .videos-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:2rem;margin-bottom:2rem}}
         .video-card{{background:#fff;border-radius:12px;padding:1.5rem;box-shadow:0 10px 30px rgba(0,0,0,.2);transition:transform .3s,box-shadow .3s;scroll-margin-top:1.5rem}}
+        .video-card.per-function{{border-top:4px solid #38bdf8}}
+        .video-card.per-function h2{{color:#0284c7}}
+        .video-card .manifest-link{{margin:0 0 .75rem;font-size:.85rem}}
+        .video-card .manifest-link a{{color:#667eea;text-decoration:underline}}
         .video-card:hover{{transform:translateY(-5px);box-shadow:0 15px 40px rgba(0,0,0,.3)}}
         .video-card h2{{font-size:1.35rem;margin-bottom:.5rem;color:#667eea}}
         .video-card .seg-id{{font-size:.8rem;color:#999;font-family:ui-monospace,monospace;margin-bottom:.35rem}}
@@ -263,7 +326,7 @@ _INDEX_TEMPLATE = """<!DOCTYPE html>
         <div class="videos-grid">
 {segment_cards}
         </div>
-
+{per_function_section}
         <h2 class="section-title">Full demos</h2>
         <div class="videos-grid">
 {concat_cards}
@@ -324,6 +387,11 @@ jobs:
               r'src="({demos_sub}/recordings/[^"?]+\\.mp4)(?:\\?[^"]*)?"',
               lambda m: f'src="{{m.group(1)}}?v={{sha}}"',
               text,
+          )
+          new = re.sub(
+              r'poster="({demos_sub}/recordings/[^"?]+\\.(?:png|jpg|jpeg|webp))(?:\\?[^"]*)?"',
+              lambda m: f'poster="{{m.group(1)}}?v={{sha}}"',
+              new,
           )
           path.write_text(new, encoding="utf-8")
           PY

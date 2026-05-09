@@ -48,12 +48,16 @@ def _is_ignored(rel_path: str, gitignore: list[str], extra_excludes: list[str]) 
 
 def scan_md_files(repo_root: Path, exclude_patterns: list[str] | None = None) -> list[dict]:
     """Walk repo_root and return a flat list of .md file info dicts."""
+    from docgen.path_filters import is_under_archive_dir
+
     gitignore = _load_gitignore_patterns(repo_root)
     excludes = exclude_patterns or []
     results: list[dict] = []
     for md in sorted(repo_root.rglob("*.md")):
         rel = str(md.relative_to(repo_root))
         if rel.startswith(".git/"):
+            continue
+        if is_under_archive_dir(rel):
             continue
         if _is_ignored(rel, gitignore, excludes):
             continue
@@ -134,16 +138,21 @@ def generate_narration_via_llm(
     revision_notes: str = "",
     *,
     temperature: float = 0.7,
+    topic_label: str | None = None,
 ) -> str:
     """Call OpenAI to generate a narration draft from source docs + guidance.
 
     ``guidance`` is **caller-supplied** (e.g. project-owner hints from ``docgen.yaml``), not
-    text returned from a prior model call.
+    text returned from a prior model call. ``topic_label`` is a human-facing focus
+    line (e.g. ``Config.narration_topic_label``); when present it is what the model
+    sees in the user prompt so spoken output never echoes file stems / segment ids.
     """
     import openai
 
+    focus = (topic_label or "").strip() or _strip_segment_prefix(segment_name)
     user_parts = [
-        f"Generate a narration script for demo video segment '{segment_name}'.",
+        f"Write a narration script focused on: {focus}.",
+        "Do not mention segment numbers, file stems, ordinals, or any 'segment NN' phrasing.",
         "",
         "--- SOURCE DOCUMENTATION ---",
         *source_texts,
@@ -174,6 +183,14 @@ def generate_narration_via_llm(
 # ---------------------------------------------------------------------------
 # Flask app factory
 # ---------------------------------------------------------------------------
+
+def _strip_segment_prefix(segment_name: str) -> str:
+    """Strip a leading ``NN-`` / ``NN_`` from a file stem so prompts don't see ids."""
+    import re as _re
+
+    cleaned = _re.sub(r"^\d+[-_]", "", segment_name).strip("-_ ").strip()
+    return cleaned or segment_name
+
 
 def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path | None:
     """Find an asset file by segment name, then segment ID prefix, then glob."""
@@ -286,6 +303,14 @@ def create_app(config: Any | None = None) -> Flask:
         guidance: str = data.get("guidance", "")
         segment_name: str = data.get("segment_name", "untitled")
         revision_notes: str = data.get("revision_notes", "")
+        topic_label: str | None = data.get("topic_label") or None
+        if topic_label is None and cfg is not None:
+            seg_id_hint: str | None = data.get("segment_id")
+            if seg_id_hint:
+                try:
+                    topic_label = cfg.narration_topic_label(seg_id_hint)
+                except Exception:
+                    topic_label = None
 
         root = cfg.repo_root if cfg else Path.cwd()
         wiz = cfg.wizard_config if cfg else {}
@@ -306,6 +331,7 @@ def create_app(config: Any | None = None) -> Flask:
                 model=wiz.get("llm_model", "gpt-4o"),
                 segment_name=segment_name,
                 revision_notes=revision_notes,
+                topic_label=topic_label,
             )
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500

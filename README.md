@@ -1,19 +1,34 @@
 # docgen — documentation generator
 
-Reusable Python library and CLI for producing narrated demo videos from Markdown, Manim animations, and VHS terminal recordings.
+Reusable Python library and CLI for **narrated demo videos**, focused on **Manim** (long-form stories) and **Playwright** (tutorials from UI tests). **VHS** terminal tapes are **legacy** and **may be deprecated**.
 
 # Video documentation for this project was generated with the library
 https://jmjava.github.io/documentation-generator/
 
+## Two pillars
+
+1. **Long-form narrative** (`docgen generate-all` and friends) — explain **how a system works**: scripted narration, **Manim** as the main visual, optional **Playwright** capture in `visual_map` where the story needs a real browser, then **ffmpeg** composition. **Do not start new work on VHS** (`.tape` terminal recordings): that stack is **legacy** and **may be deprecated**; prefer Manim for terminal-ish stories (simulated output, diagrams) or migrate segments to Playwright/Manim.
+2. **Playwright tutorial mode** (`docgen demo-function`, `docgen discover-tests`) — turn **existing Playwright UI tests** (or YAML that mirrors them) into **one short MP4 per scenario**, with TTS and captions.
+
+**VHS (terminal tapes)** — **`docgen vhs`**, **`sync-vhs`**, **`tape-lint`**, and **`demo-function`** `kind: cli` remain for **existing projects and CI** until a deprecation window is announced. **New demos** should be **Manim** and/or **Playwright** only.
+
 ## Features
 
+**Story pipeline (long-form segments)**
+
 - **TTS narration** — generate MP3 audio from Markdown scripts via OpenAI gpt-4o-mini-tts
-- **Manim animations** — render programmatic animation scenes
-- **VHS terminal recordings** — render `.tape` files into MP4s
+- **Manim animations** — primary visual for explaining architecture and flows
+- **VHS / `.tape` terminal recordings** — **legacy**; **may be deprecated**. Still supported for existing long-form segments and `kind: cli` manifests; **not** the direction for new docs (use **Manim** + **Playwright**).
 - **ffmpeg composition** — combine audio + video into final segments
 - **Validation** — OCR error detection, layout analysis, audio-visual sync, narration linting
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules, `.gitignore`
 - **Wizard** — local web GUI to bootstrap narration scripts from existing project docs
+
+**Playwright-linked tutorials**
+
+- **Per-function videos** — `docgen demo-function`: short clips from **`@playwright/test`** specs, declarative `url`+`actions`, or `discover-tests` / catalog workflows
+
+**No IDE lock-in:** maintenance workflows are **`docgen` CLI + YAML + shell/CI** (and OpenAI where a command calls the API). Editor assistants such as Cursor are **not** required. The wizard is a **local web app**, not a plugin tied to one editor.
 
 ## Install
 
@@ -38,7 +53,7 @@ pytest                        # unit tests
 pytest tests/e2e/ -x          # end-to-end (Playwright, needs `playwright install chromium`)
 ```
 
-On **Linux**, VHS-backed tests (e.g. `demo_function` CLI render) need **`ttyd`** and a display (**`xvfb-run -a pytest …`** or a real X session). CI installs `ttyd`, `xvfb`, and `ffmpeg` via apt (see `.github/workflows/ci.yml`).
+On **Linux**, **legacy VHS** coverage in tests (e.g. `demo_function` `kind: cli`) may need **`ttyd`** and a display (**`xvfb-run -a pytest …`**). CI installs `ttyd`, `xvfb`, and `ffmpeg` via apt (see `.github/workflows/ci.yml`).
 
 **Roadmap:** [milestones/README.md](milestones/README.md) (active checklist; [in-repo dogfood](milestones/next-session-dogfood.md) & [upstream dogfood](milestones/upstream-dogfood.md) — `courseforge/course-builder`; archived notes).
 
@@ -46,9 +61,10 @@ On **Linux**, VHS-backed tests (e.g. `demo_function` CLI render) need **`ttyd`**
 
 ```bash
 cd your-project/docs/demos
-docgen wizard            # launch setup wizard to create narration from project docs
-docgen generate-all      # run full pipeline: TTS → Manim → VHS → compose → validate → concat → pages
-docgen validate --pre-push  # validate all outputs before committing
+docgen wizard              # optional: bootstrap narration from project docs
+docgen generate-all        # long-form: TTS → Manim (+ optional Playwright segments) → compose → …
+docgen demo-function …     # short Playwright tutorial from a test or sidecar YAML
+docgen validate --pre-push
 ```
 
 ## CLI commands
@@ -58,29 +74,32 @@ docgen validate --pre-push  # validate all outputs before committing
 | `docgen wizard [--port 8501]` | Launch narration setup wizard (local web GUI) |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
-| `docgen vhs [--tape 02-quickstart.tape] [--strict] [--timeout 120]` | Render VHS terminal recordings |
+| `docgen vhs [--tape 02-quickstart.tape] [--strict] [--timeout 120]` | **Legacy** — VHS `.tape` (**may be deprecated**); prefer **Manim** / **Playwright** |
 | `docgen playwright --script scripts/capture.py --url http://localhost:3000 --source demo.mp4` | Capture browser demo video with Playwright script |
-| `docgen demo-function --manifest <path> --output-dir <dir> [--cache-dir <dir>] [--no-narration]` | Render one short, single-purpose video per function from a declarative manifest |
-| `docgen tape-lint [--tape 02-quickstart.tape]` | Lint tapes for commands likely to hang in VHS |
-| `docgen sync-vhs [--segment 01] [--dry-run]` | Rewrite VHS `Sleep` values from `animations/timing.json` |
+| `docgen demo-function --manifest <path> --output <dir> [--cache-dir <dir>] [--no-narration]` | **Playwright-centered:** one short tutorial MP4 per function — from a Playwright test/spec, declarative `url`+`actions`, or `*.docgen.yaml` / pytest marker (`--output-dir` is a deprecated alias) |
+| `docgen tape-lint [--tape 02-quickstart.tape]` | **Legacy** — lint tapes for VHS |
+| `docgen sync-vhs [--segment 01] [--dry-run]` | **Legacy** — rewrite VHS `Sleep` from `animations/timing.json` |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate index.html, pages.yml, .gitattributes, .gitignore |
-| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs] [--retry-manim]` | Run full pipeline (optionally auto-retry Manim after FREEZE GUARD) |
+| `docgen generate-all [--skip-tts] [--skip-manim] [--skip-vhs] [--retry-manim]` | Full pipeline (**`--skip-vhs`** recommended once tapes are retired) |
 | `docgen rebuild-after-audio` | Recompose + validate + concat |
 | `docgen self catalog-issue-template [--path]` | Print bundled GitHub issue template for catalog CI (works after `pip install docgen`) |
 | `docgen catalog init [--force]` | Create ``docgen.catalog.yaml`` at repo root (see `Config.catalog_file_path`) |
+| `docgen catalog reset [--yes]` | Replace catalog with an empty entry list (same schema as init); use `-y` / `--yes` for CI |
 | `docgen catalog stale [--quiet]` | Exit 1 if any entry needs regen (fingerprints / env overrides / pins), else 0 |
 | `docgen catalog refresh [--clear-pins]` | Recompute all ``fingerprints.inputs`` and save the catalog |
 | `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force]` | Generate narration ``.md`` from repo sources + **owner** hints (OpenAI); see ``narration_from_source`` in YAML |
+| `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into ``docgen.yaml`` (e.g. archive excludes, skeleton blocks); optional OpenAI refresh of ``tts.instructions`` / ``wizard.system_prompt``; **rewrites file** (comments not preserved — review in Git) |
+| `docgen scene-generate --segment 08 [--class-name …] [--extra-path …] [--hint …] [--dry-run] [--print-only]` | Generate or replace one Manim scene class in ``animations/scenes.py`` from narration + ``manim_scene_generation`` config (OpenAI) |
 | `docgen discover-tests` | List Node ``@playwright/test`` cases (`--format` yaml, json, catalog). With ``docgen.yaml``, scans ``discover_tests.roots`` (default ``["."]``). ``--repo-root`` limits discovery to one directory (repo root for paths still comes from config). Flags: ``--suggest-visual-map``, ``--write-suggest-visual-map PATH``, ``--playwright-insights``, ``--merge-catalog`` |
 
 **Reusable GitHub Actions:** [`.github/workflows/reusable-docgen-catalog.yml`](.github/workflows/reusable-docgen-catalog.yml) — install docgen from a git ref, `catalog init`, then `catalog stale` and expose `needs_regen` for caller jobs.
 
 ## Configuration
 
-Create a `docgen.yaml` in your demos directory. See [examples/minimal-bundle/docgen.yaml](examples/minimal-bundle/docgen.yaml) for a starting point.
+Create a `docgen.yaml` in your demos directory. Use **`docgen init`** for a fresh layout, or see [`docs/demos/docgen.yaml`](docs/demos/docgen.yaml) for this repo’s full dogfood bundle (`docgen yaml-generate` keeps defaults and `manim_scene_generation.segments` in step with **`visual_map`**). The **`visual_map`** key is **maintainer-owned** wiring (Manim / VHS / Playwright per segment); optional **`discover-tests --suggest-visual-map`** helps draft **`playwright_test`** entries — see [`docs/demos/README.md`](docs/demos/README.md#visual_map-in-docgenyaml).
 
 ### `env_file` and the shell
 
@@ -197,11 +216,15 @@ Script contract:
 
 ### Per-function video docs (`docgen demo-function`)
 
-`docgen demo-function` renders **one short, single-purpose MP4 per function** —
-the docs-site analogue of a single Playwright `test('…')` describing one
-behavior. Inputs are declarative: either a `*.docgen.yaml` sidecar or a
-`@pytest.mark.docgen(...)` decorator on a Python test (read statically via
-`ast` — never imported / `exec`'d). Outputs are five files in `--output-dir`:
+**Primary intent:** **tutorial / demo videos from Playwright** — preferably the **same UI flows you already test** (`@playwright/test`, YAML that mirrors those steps, or `@pytest.mark.docgen`). That keeps clips aligned with real product behavior.
+
+Do **not** default to **VHS** for any new docs: **`demonstration.kind: cli`** and long-form `.tape` segments share the same **legacy / possible deprecation** path. Prefer **`kind: playwright`** for UI and **Manim** in `generate-all` for non-UI explanation. Keep **`kind: cli`** only while maintaining an existing tape.
+
+`docgen demo-function` renders **one short MP4 per function** (one
+scenario). Inputs include a **`*.docgen.yaml` sidecar**, a **Playwright
+`*.spec.ts`** (with annotation or sibling YAML), or a **`@pytest.mark.docgen`
+Python test** (read statically via `ast` — never imported / `exec`'d).
+Outputs land in `--output` as:
 `rendered.mp4` (real ISO MP4 with audio), `poster.png`, `fragment.txt`
 (`fn-<slug>`), `manifest.json` (snapshot, includes captured action `timeline`),
 and `cache-status.txt` (`hit` / `miss`).
@@ -209,7 +232,7 @@ and `cache-status.txt` (`hit` / `miss`).
 ```bash
 docgen demo-function \
   --manifest examples/lesson_compile.docgen.yaml \
-  --output-dir /tmp/out \
+  --output /tmp/out \
   --cache-dir /tmp/docgen-cache
 ```
 
@@ -249,7 +272,9 @@ shapes; [`tests/e2e/test_demo_function_e2e.py`](tests/e2e/test_demo_function_e2e
 is the canonical end-to-end test that drives a real Chromium recording with
 per-action narration synced to the captured timeline.
 
-### VHS safety: avoid real long-running commands in tapes
+### VHS safety (legacy tapes)
+
+> **Product direction:** **VHS may be deprecated.** Prefer **Manim** and **Playwright** for new videos. This section remains for existing `.tape` workflows.
 
 VHS executes commands in a real shell session. For demos, prefer simulated output with `echo`
 instead of invoking real services or model inference in the tape itself.
@@ -290,8 +315,9 @@ docgen generate-all --retry-manim
 
 - **ffmpeg** — composition and probing
 - **tesseract-ocr** — OCR validation
-- **VHS** — terminal recording (charmbracelet/vhs)
-- **Manim** — animation rendering (optional, install with `pip install docgen[manim]`)
+- **Manim** — primary long-form visuals (optional: `pip install docgen[manim]`)
+- **Playwright / Chromium** — `visual_map` browser capture and **`docgen demo-function`**
+- **VHS** — **legacy** terminal recorder (charmbracelet/vhs); **may be deprecated**; avoid for new projects
 
 ## Downstream: open a tracking issue in a parent repo
 

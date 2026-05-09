@@ -12,3 +12,6 @@ __pycache__/
 .docgen-state.json
 
 # recordings/*.mp4 — COMMITTED (tracked via LFS for README/Pages links)
+# recordings/per-function/<slug>.mp4 — same: COMMITTED via LFS, surfaced on the pages site.
+# recordings/per-function/<slug>/ subdirectories are intermediate artifacts:
+recordings/per-function/*/

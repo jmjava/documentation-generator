@@ -1,185 +1,106 @@
-# docgen.yaml — dogfood: docgen's own demo videos
-# See: https://github.com/jmjava/documentation-generator
-# Command cheat sheet: README.md in this directory.
-#
-# This project uses docgen to produce demo videos about docgen itself.
-#   docgen generate-all       # full pipeline
-#   docgen wizard             # interactive GUI
-#   docgen validate           # check recordings
+# docgen.yaml — updated by docgen yaml-generate
+# Source: /home/ubuntu/github/jmjava/documentation-generator/docs/demos/docgen.yaml
+# Note: PyYAML rewrite drops comments; review diff in Git.
 
 repo_root: ../..
-env_file: ../../.env
-
-discover_tests:
-  roots:
-    - "."
-    - "fixtures/playwright-vite-dogfood"
-
-narration_from_source:
-  model: gpt-4o-mini
-  hints:
-    - >
-      Project context: docgen is the documentation-generator CLI/library (see AGENTS.md).
-      Audience: engineers adopting docgen or reviewing its pipeline.
-  context:
-    paths:
-      - README.md
-      - AGENTS.md
-      - src/docgen/pipeline.py
-      - src/docgen/compose.py
-      - src/docgen/config.py
-  segments:
-    "07":
-      hints:
-        - >
-          This segment demonstrates visual_map type playwright_test with a short pre-recorded
-          WebM under terminal/rendered/. Keep the tone consistent with other demo segments.
-
 dirs:
   narration: narration
   audio: audio
   animations: animations
   terminal: terminal
   recordings: recordings
-
 segments:
-  default: &all_segments
-    - "01"
-    - "02"
-    - "03"
-    - "04"
-    - "05"
-    - "06"
-    - "07"
-  all: *all_segments
-
+  default: &id001
+  - '01'
+  - '02'
+  - '03'
+  all: *id001
 segment_names:
-  "01": 01-overview
-  "02": 02-init-scaffold
-  "03": 03-wizard-gui
-  "04": 04-tts-pipeline
-  "05": 05-compose-validate
-  "06": 06-ci-integration
-  "07": 07-playwright-dogfood
-
-# Visual source mapping
-# 01, 03: Manim animations (architecture overview, wizard GUI walkthrough)
-# 02, 04, 05, 06: VHS terminal recordings (live docgen commands)
-# 07: playwright_test — pre-recorded WebM (dogfood; pipeline skips Manim/VHS capture for this id)
+  '01': 01-overview
+  '02': 02-init-scaffold
+  '03': 03-wizard-gui
 visual_map:
-  "01":
+  '01':
     type: manim
-    scene: DocgenOverviewScene
-    source: DocgenOverviewScene.mp4
-  "02":
-    type: vhs
-    tape: 02-init-scaffold.tape
-    source: 02-init-scaffold.mp4
-  "03":
+    scene: _TimedScene
+    source: _TimedScene.mp4
+  '02':
     type: manim
-    scene: WizardGUIScene
-    source: WizardGUIScene.mp4
-  "04":
-    type: vhs
-    tape: 04-tts-pipeline.tape
-    source: 04-tts-pipeline.mp4
-  "05":
-    type: vhs
-    tape: 05-compose-validate.tape
-    source: 05-compose-validate.mp4
-  "06":
-    type: vhs
-    tape: 06-ci-integration.tape
-    source: 06-ci-integration.mp4
-  "07":
-    type: playwright_test
-    test: dogfood/playwright_mux_placeholder.spec.ts
-    source: 07-playwright-dogfood.webm
-
-manim:
-  quality: 720p30
-  manim_path: ""
-  scenes:
-    - DocgenOverviewScene
-    - WizardGUIScene
-
+    scene: OverviewScene
+    source: OverviewScene.mp4
+  '03':
+    type: manim
+    scene: InitScaffoldScene
+    source: InitScaffoldScene.mp4
 vhs:
-  vhs_path: ""
-  sync_from_timing: true
-  typing_ms_per_char: 45
-  max_typing_sec: 2.0
+  vhs_path: ''
+  sync_from_timing: false
+  typing_ms_per_char: 55
+  max_typing_sec: 3.0
   min_sleep_sec: 0.2
-
+  render_timeout_sec: 120
 compose:
   ffmpeg_timeout_sec: 300
   warn_stale_vhs: true
-
 tts:
   model: gpt-4o-mini-tts
   voice: coral
-  instructions: >
-    You are narrating a technical demo video about docgen, a Python library
-    for generating demo videos from Markdown narration. Speak in a calm,
-    professional tone like a senior engineer giving a conference talk.
-    Pronounce technical terms clearly: docgen, Manim, VHS, ffmpeg, Tekton,
-    Kubernetes, Playwright, pytest, Flask, OpenAI, YAML. Say "dot yaml" not
-    "YAML file extension". Say "TTS" as the letters T-T-S.
-
+  instructions: You are narrating a technical demo video about documentation-generator. Speak in a calm, professional tone.
+    Pronounce technical terms clearly.
 concat:
-  full-demo: *all_segments
-
+  full-demo: *id001
 validation:
   max_drift_sec: 2.75
   narration_lint:
     pre_tts_deny_patterns:
-      - "target duration"
-      - "intended length"
-      - "visual:"
-      - "edit for voice"
-
-pages:
-  title: "docgen — Demo Videos"
-  subtitle: "Markdown → polished narrated demo videos, fully automated"
-  repo_url: "https://github.com/jmjava/documentation-generator"
-  docs_dir: docs
-  demos_subdir: demos
-  segments:
-    "01":
-      title: "Architecture Overview"
-      description: "Animated walkthrough of the docgen pipeline: narration → TTS → Manim/VHS → compose → validate."
-    "02":
-      title: "Project Scaffolding"
-      description: "Run docgen init to generate a complete project structure in seconds."
-    "03":
-      title: "Wizard GUI"
-      description: "The local web wizard for authoring and editing narration scripts."
-    "04":
-      title: "TTS Pipeline"
-      description: "Generate audio from narration with OpenAI TTS and preview with dry-run."
-    "05":
-      title: "Compose & Validate"
-      description: "Compose audio + video segments and run quality validation checks."
-    "06":
-      title: "CI Integration"
-      description: "Pre-push hooks and GitHub Actions for continuous validation."
-    "07":
-      title: "Playwright visual mux (dogfood)"
-      description: "Pre-recorded browser-style footage composed like Manim/VHS segments."
-
+    - target duration
+    - intended length
+    - 'visual:'
+    - edit for voice
 wizard:
   llm_model: gpt-4o
-  system_prompt: >
-    You are a technical writer creating narration scripts for demo videos about
-    docgen, a Python CLI and library for generating narrated demo videos.
-    Write in plain spoken English suitable for text-to-speech. No markdown
-    formatting, no headings, no bullet points. Conversational but professional
-    tone, like a senior engineer presenting at a conference.
+  system_prompt: You are a technical writer creating narration scripts for demo videos about documentation-generator. Write
+    in plain spoken English suitable for text-to-speech. No markdown formatting, no headings, no bullet points. Conversational
+    but professional tone, like a senior engineer presenting at a conference.
   exclude_patterns:
-    - "**/node_modules/**"
-    - "**/.pytest_cache/**"
-    - "**/__pycache__/**"
-    - "**/.venv/**"
-    - "**/docs/demos/audio/**"
-    - "**/docs/demos/recordings/**"
-    - "**/docs/demos/terminal/rendered/**"
-    - "**/docs/demos/animations/media/**"
+  - '**/node_modules/**'
+  - '**/.pytest_cache/**'
+  - '**/__pycache__/**'
+  - '**/.venv/**'
+  - '**/archive/**'
+discover_tests:
+  roots:
+  - .
+  - ../../fixtures/playwright-vite-dogfood
+env_file: ../../.env
+narration_from_source:
+  model: gpt-4o-mini
+  temperature: 0.65
+  max_context_bytes: 120000
+  hints: []
+  context:
+    paths:
+    - README.md
+    - AGENTS.md
+    globs: []
+manim_scene_generation:
+  model: gpt-4o
+  temperature: 0.4
+  max_context_bytes: 80000
+  hints:
+  - Match palette and _TimedScene timing patterns from existing scenes in animations/scenes.py.
+  context:
+    paths: []
+    globs: []
+  segments:
+    '01':
+      class_name: _TimedScene
+    '02':
+      class_name: OverviewScene
+    '03':
+      class_name: InitScaffoldScene
+manim:
+  scenes:
+  - _TimedScene
+  - OverviewScene
+  - InitScaffoldScene

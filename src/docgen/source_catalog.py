@@ -74,6 +74,16 @@ def new_catalog(*, repo_root: Path | None, docgen_version: str) -> dict[str, Any
     }
 
 
+def reset_catalog_for_repo(
+    *,
+    catalog_path: Path,
+    repo_root: Path,
+    docgen_version: str,
+) -> None:
+    """Write ``catalog_path`` with an empty ``entries`` list (same as ``docgen catalog reset -y``)."""
+    save_catalog(catalog_path, new_catalog(repo_root=repo_root, docgen_version=docgen_version))
+
+
 def load_catalog(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(str(path))

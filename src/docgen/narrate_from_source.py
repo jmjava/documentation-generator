@@ -30,6 +30,8 @@ Rules:
 - Do not use # headings (they are stripped and not spoken).
 - Prefer flowing prose over bullet lists.
 - Do not wrap stage directions in asterisks or parentheses on their own lines.
+- Do not mention episode numbers, ordinal parts, or meta phrases like "this segment", "the next segment", "in this section", or "moving on to the next part" — describe the product and actions directly.
+- Do not mention internal filenames, numeric prefixes, or authoring pipeline jargon unless it appears as a real user-facing term in the source documentation.
 - Output only the narration body: no YAML front matter, no title line like "Here is the script", no code fences around the whole script."""
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -221,6 +223,7 @@ def generate_narration_markdown(
     source_texts = [f"FILE: {label}\n```\n{body}\n```" for label, body in snippets]
     guidance = build_owner_hints_guidance(settings, extra_hints)
     seg_name = cfg.resolve_segment_name(seg_id)
+    topic = cfg.narration_topic_label(seg_id)
     return generate_narration_via_llm(
         source_texts=source_texts,
         guidance=guidance,
@@ -229,6 +232,7 @@ def generate_narration_markdown(
         segment_name=seg_name,
         revision_notes="",
         temperature=settings.temperature,
+        topic_label=topic,
     )
 
 

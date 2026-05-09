@@ -1,11 +1,13 @@
-The wizard is a local web GUI that helps you draft narration scripts from your existing project documentation.
+The wizard GUI is a local web application designed to streamline the process of creating narration scripts for your projects. 
 
-Run docgen wizard and it launches a Flask server on localhost. The interface has two main views: Setup and Production.
+This intuitive interface allows users to bootstrap narration scripts directly from existing project documentation. By simply launching the wizard, you can quickly generate a narration framework that aligns with your project's content.
 
-In Setup, you see a file tree of your repository. Select the files that are relevant to your demo. These become context for the LLM when generating narration. The wizard respects exclude patterns from docgen dot yaml, so node modules, cache directories, and build artifacts are filtered out automatically.
+The wizard automates the initial setup, pulling relevant information from your project files. This means you spend less time configuring and more time focusing on the actual content of your narration.
 
-Switch to Production and you see every segment listed with its status. Click a segment to load its narration in the editor. You can write narration manually or have the LLM draft it from the selected context files.
+With the wizard, you can easily customize your narration hints, ensuring that the generated scripts are tailored to your specific audience and objectives. 
 
-The editor is a plain textarea because narration should be plain spoken English, not formatted markdown. When you save, the text is written back to the narration file on disk. When you click approve, the segment status updates and the progress bar advances.
+You can launch the wizard using the command line, which opens the GUI in your web browser. This makes the setup process accessible and user-friendly, even for those who may not be familiar with command-line interfaces.
 
-The wizard stores its state in a dot docgen-state dot json file. This tracks which segments are approved, which need revision, and any notes. The file is local to the project and excluded from git by default.
+Once the wizard has completed its task, you will have a solid foundation for your narration scripts, ready for further refinement and integration into your video production pipeline. 
+
+Overall, the wizard GUI enhances productivity by simplifying the initial steps in creating high-quality narrated demo videos.

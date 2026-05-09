@@ -1,4 +1,8 @@
-"""Bootstrap external tools so the full test suite runs without skips."""
+"""Bootstrap external tools so the full test suite runs without skips.
+
+Favor tests that guard CLI and config behavior downstream apps rely on; see
+AGENTS.md "Testing (downstream relevance)".
+"""
 
 from __future__ import annotations
 

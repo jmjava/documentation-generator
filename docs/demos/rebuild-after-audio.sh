@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild everything after new audio: Manim → VHS → compose → validate → concat.
+# Rebuild visuals and downstream stages after new audio (skips TTS).
 # Wraps: docgen rebuild-after-audio
 set -euo pipefail
 DEMOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
