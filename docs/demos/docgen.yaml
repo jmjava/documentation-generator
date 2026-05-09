@@ -82,6 +82,7 @@ narration_from_source:
     paths:
     - README.md
     - AGENTS.md
+    - docs/demos/hints/narration-tts.md
     globs: []
 manim_scene_generation:
   model: gpt-4o
@@ -90,7 +91,8 @@ manim_scene_generation:
   hints:
   - Match palette and _TimedScene timing patterns from existing scenes in animations/scenes.py.
   context:
-    paths: []
+    paths:
+    - docs/demos/hints/manim-scene-specs.md
     globs: []
   segments:
     '01':

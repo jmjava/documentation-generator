@@ -4,8 +4,8 @@ Put **Markdown or plain text** here when you want stable, reviewable steering fo
 
 **Wire paths in `docgen.yaml`**, for example under:
 
-- `narration_from_source.context.paths` — e.g. `hints/overview-topic.md`
-- `manim_scene_generation.context.paths` — same idea for `scene-spec-generate` / `scene-generate`
+- `narration_from_source.context.paths` — e.g. `docs/demos/hints/narration-tts.md` (this repo)
+- `manim_scene_generation.context.paths` — e.g. `docs/demos/hints/manim-scene-specs.md`
 
 Then run `docgen narration-generate`, `docgen scene-spec-generate`, etc. as usual.
 
