@@ -9,7 +9,8 @@ alwaysApply: true
 
 **Allowed for Cursor / humans**
 
-- Edit **inputs** Git is meant to carry: **`docgen.yaml`** (review YAML diff after **`docgen yaml-generate`**), per-function manifests, hints, tests, fixtures, static `docs/*.md` that are not tool outputs.
+- Edit **inputs** Git is meant to carry: **`docgen.yaml`** (review YAML diff after **`docgen yaml-generate`**), per-function **raw** Playwright inputs (not LLM-generated per-function outputs), tests, fixtures, static `docs/*.md` that are not tool outputs.
+- **Create or edit hint files** under **`docs/demos/hints/**`** (or `<bundle>/hints/**`) — maintainer prose referenced from `context.paths` / owner hint lists so **`docgen narration-generate`**, **`scene-spec-generate`**, **`scene-generate`**, etc. have stable, reviewable steering. Prefer committed hint files over ad-hoc pastes into category-C outputs.
 - Edit **docgen implementation** under `src/` (or equivalent package root): new flags, commands, merge logic, validators—so the **tool** can do what you need.
 - Run commands: `docgen …`, bundle shell scripts, tests.
 
