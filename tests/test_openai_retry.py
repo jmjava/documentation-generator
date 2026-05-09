@@ -32,7 +32,7 @@ def test_rate_limit_retries_then_succeeds() -> None:
 def test_rate_limit_exhausted_reraises() -> None:
     import openai
 
-    from docgen.openai_retry import _MAX_RATE_LIMIT_ATTEMPTS, call_with_rate_limit_retries
+    from docgen.openai_retry import call_with_rate_limit_retries
 
     def fn() -> None:
         raise openai.RateLimitError(
