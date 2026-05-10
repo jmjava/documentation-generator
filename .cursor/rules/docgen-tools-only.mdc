@@ -10,10 +10,12 @@ alwaysApply: true
 **Allowed for Cursor / humans**
 
 - Edit **inputs** Git is meant to carry: **`docgen.yaml`** only as the **output** of **`docgen yaml-generate`** (review the YAML diff); for **`docs/demos`**, prefer editing **`hints/*.md`** front matter (`docgen.segment`, `docgen.wiring`) and re-running **`yaml-generate`** instead of hand-editing per-segment `visual_map` or `narration_from_source.segments` in the editor. Other bundles may still commit a hand-maintained `docgen.yaml` if they do not use hint wiring. Also: per-function **raw** Playwright inputs (not LLM-generated per-function outputs), tests, fixtures, static `docs/*.md` that are not tool outputs.
-- **Create or edit hint files** under **`docs/demos/hints/**`** (or `<bundle>/hints/**`) — maintainer prose referenced from `context.paths` / owner hint lists so **`docgen narration-generate`**, **`scene-spec-generate`**, **`scene-generate`**, etc. have stable, reviewable steering. Prefer committed hint files over ad-hoc pastes into category-C outputs.
+- **Create or edit hint files** under **`docs/demos/hints/**`** (or `<bundle>/hints/**`) — maintainer prose referenced from `context.paths` / owner hint lists so **`docgen narration-generate`**, **`scene-spec-generate`**, etc. have stable, reviewable steering. Prefer committed hint files over ad-hoc pastes into category-C outputs.
 - Edit **docgen implementation** under `src/` (or equivalent package root): new flags, commands, merge logic, validators—so the **tool** can do what you need.
 - Run commands: `docgen …`, bundle shell scripts, tests.
 
 **Dogfood (`docs/demos`):** **`docgen.yaml`** is the only bundle config—same as downstream. Run **`docgen yaml-generate`** (this repo: **`docs/demos/_regenerate-docgen-config.sh`**) to merge defaults, disk **`visual_map`** discovery, **hint-declared segments**, and **`docgen.wiring`** from **`hints/*.md`**; do not keep segment wiring only in the IDE. Manim diagram segments: use **`docgen scene-spec-generate`** / **`scene-compile`** and committed **`animations/specs/*.scene.yaml`**, not hand-edited **`scenes.py`** for those blocks.
 
 **If the right command does not exist:** implement it in **docgen** (or a thin wrapper script committed to the repo), then use it—do not bypass with manual file edits.
+
+**Manim scenes:** Pacing, layout, prompts, and post-processors for generated scene classes live in **`documentation-generator` `src/docgen/`**. After changing them, consumers must **`docgen scene-spec-generate`** / **`scene-compile`**—not hand-edits inside `BEGIN/END GENERATED SCENE` blocks in `scenes.py`.

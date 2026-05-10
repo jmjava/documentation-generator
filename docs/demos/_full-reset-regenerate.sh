@@ -22,8 +22,9 @@
 #      scaffold for those segments.
 #   4. ``docgen yaml-generate`` discovers visual_map entries from disk.
 #   5. ``docgen narration-generate --all --force`` fills narration/*.md.
-#   6. ``docgen scene-generate --all`` fills animations/scenes.py for every
-#      segment that has no VHS tape or capture script.
+#   6. ``docgen scene-spec-generate --all --compile`` fills ``animations/specs/*.scene.yaml``
+#      and injects compiled classes into animations/scenes.py for every segment
+#      that has no VHS tape or capture script.
 #   7. ``docgen yaml-generate`` re-syncs visual_map after scenes.py is filled.
 #   8. ``docgen generate-all`` produces audio + recordings.
 #   9. ``docgen per-function-generate --force`` writes manifests for every
@@ -120,8 +121,8 @@ docgen --config docgen.yaml yaml-generate
 echo "=== [$(date +%H:%M:%S)] narration-generate --all --force ==="
 docgen --config docgen.yaml narration-generate --all --force
 
-echo "=== [$(date +%H:%M:%S)] scene-generate --all (skip segments with existing tape/script) ==="
-docgen --config docgen.yaml scene-generate --all
+echo "=== [$(date +%H:%M:%S)] scene-spec-generate --all --compile (skip segments with existing tape/script) ==="
+docgen --config docgen.yaml scene-spec-generate --all --compile
 
 echo "=== [$(date +%H:%M:%S)] yaml-generate (re-sync visual_map + manim from scenes.py) ==="
 docgen --config docgen.yaml yaml-generate

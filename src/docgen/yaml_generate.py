@@ -511,7 +511,7 @@ def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
 def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
     """Keep ``manim_scene_generation.segments`` aligned with ``visual_map`` Manim entries.
 
-    ``scene-generate`` keys off this block; when maintainers add or retarget a Manim
+    ``scene-spec-generate`` / ``scene-compile`` keys off this block; when maintainers add or retarget a Manim
     segment in ``visual_map``, ``yaml-generate --merge-defaults`` refreshes the map
     (same as consumers editing ``docgen.yaml`` and re-running the tool).
     """

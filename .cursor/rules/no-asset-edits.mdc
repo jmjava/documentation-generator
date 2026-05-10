@@ -25,7 +25,7 @@ B. **Hand-authored INPUTS / fixtures** (Cursor edits OK; **never** deleted by `c
 C. **LLM/tool OUTPUTS — Cursor MUST NOT edit; only `docgen` (CLI/library) + OpenAI may produce:**
 - `docs/demos/docgen.yaml` (owner: `docgen yaml-generate`)
 - `docs/demos/narration/*.md` excluding `README.md` (owner: `docgen narration-generate`)
-- `docs/demos/animations/scenes.py`, `docs/demos/animations/timing.json` (owner: `docgen scene-generate`, **`docgen scene-compile`**, **`docgen scene-spec-generate`**, pipeline)
+- `docs/demos/animations/scenes.py`, `docs/demos/animations/timing.json` (owner: **`docgen scene-compile`**, **`docgen scene-spec-generate`**, pipeline)
 - `docs/demos/animations/specs/*.scene.yaml` — declarative Manim scene specs (owner: **`docgen scene-spec-generate`** with optional hand curation; compiled into `scenes.py` via **`docgen scene-compile`**)
 - `docs/demos/audio/*.mp3` (owner: `docgen tts`)
 - `docs/demos/per-function/*.docgen.yaml` and sibling `*.html` (owner: `docgen per-function-generate` — generated from raw Playwright specs in `fixtures/**`; wiped + regenerated each reset)

@@ -804,158 +804,6 @@ def per_function_render(
         raise click.ClickException(f"per-function-render failures: {msg}")
 
 
-@main.command("scene-generate")
-@click.option(
-    "--segment",
-    default=None,
-    help="Segment id (e.g. 08). Mutually exclusive with --all.",
-)
-@click.option(
-    "--all",
-    "all_segments",
-    is_flag=True,
-    help="Generate a scene class for every segment in segments.all that has no "
-    "VHS tape under <terminal_dir>/<name>.tape and no capture script under "
-    "scripts/*<id>*.py (Manim is the fallback visual source).",
-)
-@click.option(
-    "--class-name",
-    "class_name_override",
-    default=None,
-    help="Override the generated class name (defaults to manim_scene_generation.segments.<id>.class_name "
-    "or CamelCase(segment_name)+Scene). Ignored with --all.",
-)
-@click.option(
-    "--extra-path",
-    "extra_paths",
-    multiple=True,
-    type=str,
-    help="Repo-root-relative source file to include (repeatable). Adds to manim_scene_generation.context.paths.",
-)
-@click.option(
-    "--hint",
-    "extra_hints",
-    multiple=True,
-    type=str,
-    help="Project-owner hint for the model (repeatable). Adds to YAML hints.",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Print the assembled prompt to stdout; do not call OpenAI or write scenes.py.",
-)
-@click.option(
-    "--print-only",
-    is_flag=True,
-    help="Call OpenAI and validate the response, but print the class to stdout instead of writing it.",
-)
-@click.pass_context
-def scene_generate(
-    ctx: click.Context,
-    segment: str | None,
-    all_segments: bool,
-    class_name_override: str | None,
-    extra_paths: tuple[str, ...],
-    extra_hints: tuple[str, ...],
-    dry_run: bool,
-    print_only: bool,
-) -> None:
-    """Generate (or regenerate) a Manim scene class for a segment via OpenAI.
-
-    Reads narration/<seg>.md + animations/timing.json + manim_scene_generation
-    settings from docgen.yaml, then writes a single class block into
-    animations/scenes.py between idempotent marker comments. Re-running the
-    command replaces the block in place.
-
-    Use ``--segment <id>`` for one segment, or ``--all`` to iterate every id in
-    ``segments.all`` whose visual source is not already a VHS tape or a
-    capture script (used by full-reset orchestration so an init-from-empty
-    bundle gets a Manim scene per segment by default).
-    """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
-    if all_segments and segment:
-        raise click.ClickException("--all and --segment are mutually exclusive")
-    if not all_segments and not segment:
-        raise click.ClickException("provide --segment <id> or --all")
-    if all_segments and class_name_override:
-        raise click.ClickException("--class-name cannot be combined with --all")
-
-    from docgen.scene_generate import SceneGenerationError, generate_scene
-
-    cfg = ctx.obj["config"]
-
-    if all_segments:
-        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
-        if not ids:
-            raise click.ClickException("segments.all is empty in docgen.yaml")
-        names = (cfg.raw.get("segment_names") or {})
-        terminal_dir = cfg.terminal_dir
-        scripts_dir = cfg.base_dir / "scripts"
-        for seg_id in ids:
-            sid = str(seg_id)
-            name = names.get(sid) or names.get(seg_id) or sid
-            tape = terminal_dir / f"{name}.tape"
-            script_match = (
-                list(scripts_dir.glob(f"*{sid}*.py")) if scripts_dir.is_dir() else []
-            )
-            if tape.is_file() or script_match:
-                click.echo(
-                    f"[scene-generate --all] skip {sid} ({name}): existing visual "
-                    f"{'tape' if tape.is_file() else 'capture script'}"
-                )
-                continue
-            click.echo(f"=== scene-generate --segment {sid} ===")
-            try:
-                result = generate_scene(
-                    cfg,
-                    sid,
-                    extra_paths=list(extra_paths),
-                    extra_hints=list(extra_hints),
-                    class_name_override=None,
-                    dry_run=dry_run,
-                    print_only=print_only,
-                )
-            except SceneGenerationError as exc:
-                raise click.ClickException(f"segment {sid}: {exc}") from exc
-            if dry_run:
-                click.echo(result.prompt)
-                continue
-            if print_only:
-                click.echo(result.cleaned_code)
-                continue
-            click.echo(
-                f"  -> {result.class_name} in {result.scenes_path} "
-                f"(segment {result.seg_id} → {result.seg_name})"
-            )
-        return
-
-    assert segment is not None  # type-checker
-    try:
-        result = generate_scene(
-            cfg,
-            segment,
-            extra_paths=list(extra_paths),
-            extra_hints=list(extra_hints),
-            class_name_override=class_name_override,
-            dry_run=dry_run,
-            print_only=print_only,
-        )
-    except SceneGenerationError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    if dry_run:
-        click.echo(result.prompt)
-        return
-    if print_only:
-        click.echo(result.cleaned_code)
-        return
-    click.echo(
-        f"[scene-generate] wrote {result.class_name} to {result.scenes_path} "
-        f"(segment {result.seg_id} → {result.seg_name})"
-    )
-
-
 @main.command("scene-compile")
 @click.argument(
     "spec_path",
@@ -1006,14 +854,22 @@ def scene_compile(ctx: click.Context, spec_path: Path, dry_run: bool) -> None:
 @click.option(
     "--segment",
     "segment",
-    required=True,
-    help="Segment id (e.g. 01) matching narration and segment_names.",
+    default=None,
+    help="Segment id (e.g. 01). Mutually exclusive with --all.",
+)
+@click.option(
+    "--all",
+    "all_segments",
+    is_flag=True,
+    help="Generate a scene spec for every segment in segments.all whose visual_map "
+    "type is manim (or unset) and that has no terminal/<name>.tape or scripts/*<id>*.py. "
+    "--class-name is ignored with --all.",
 )
 @click.option(
     "--class-name",
     "class_name_override",
     default=None,
-    help="Override class name (default: manim_scene_generation.segments.<id>.class_name or CamelCase+Scene).",
+    help="Override class name (default: manim_scene_generation.segments.<id>.class_name or CamelCase+Scene). Ignored with --all.",
 )
 @click.option(
     "--extra-path",
@@ -1060,7 +916,8 @@ def scene_compile(ctx: click.Context, spec_path: Path, dry_run: bool) -> None:
 @click.pass_context
 def scene_spec_generate_cmd(
     ctx: click.Context,
-    segment: str,
+    segment: str | None,
+    all_segments: bool,
     class_name_override: str | None,
     extra_paths: tuple[str, ...],
     extra_hints: tuple[str, ...],
@@ -1079,6 +936,14 @@ def scene_spec_generate_cmd(
         raise click.ClickException("No docgen.yaml found (use --config PATH).")
     if dry_run and print_only:
         raise click.ClickException("--dry-run and --print-only are mutually exclusive")
+    if all_segments and segment:
+        raise click.ClickException("--all and --segment are mutually exclusive")
+    if not all_segments and not segment:
+        raise click.ClickException("provide --segment <id> or --all")
+    if all_segments and class_name_override:
+        raise click.ClickException("--class-name cannot be combined with --all")
+    if all_segments and output_path:
+        raise click.ClickException("--output cannot be combined with --all (per-segment paths are used)")
 
     from docgen.scene_generate import SceneGenerationError
     from docgen.scene_spec_generate import (
@@ -1088,6 +953,83 @@ def scene_spec_generate_cmd(
     )
 
     cfg = ctx.obj["config"]
+
+    def _one_sid(sid: str) -> None:
+        try:
+            res = generate_scene_spec(
+                cfg,
+                sid,
+                extra_paths=list(extra_paths),
+                extra_hints=list(extra_hints),
+                class_name_override=class_name_override,
+                dry_run=dry_run,
+                model_override=model,
+            )
+        except SceneGenerationError as exc:
+            raise click.ClickException(f"segment {sid}: {exc}") from exc
+        if dry_run:
+            click.echo(res.prompt)
+            return
+        if print_only:
+            click.echo(res.yaml_text, nl=False)
+        else:
+            specs_dir = cfg.animations_dir / "specs"
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            wpath = specs_dir / f"{res.seg_name}.scene.yaml"
+            wpath.write_text(res.yaml_text, encoding="utf-8")
+            click.echo(f"[scene-spec-generate] wrote {wpath}")
+        if do_compile:
+            try:
+                class_block, merged = linted_class_block_from_spec(
+                    cfg, res.spec, timing_key=res.seg_name
+                )
+                inject_class_block_into_scenes_py(
+                    cfg,
+                    seg_id=merged["segment_id"],
+                    class_name=merged["class_name"],
+                    class_block=class_block,
+                )
+            except SceneGenerationError as exc:
+                raise click.ClickException(str(exc)) from exc
+            click.echo(
+                f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
+                f"({res.class_name}, timing_key {res.seg_name!r})"
+            )
+
+    if all_segments:
+        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
+        if not ids:
+            raise click.ClickException("segments.all is empty in docgen.yaml")
+        names = (cfg.raw.get("segment_names") or {})
+        terminal_dir = cfg.terminal_dir
+        scripts_dir = cfg.base_dir / "scripts"
+        for seg_id in ids:
+            sid = str(seg_id)
+            name = names.get(sid) or names.get(seg_id) or sid
+            tape = terminal_dir / f"{name}.tape"
+            script_match = (
+                list(scripts_dir.glob(f"*{sid}*.py")) if scripts_dir.is_dir() else []
+            )
+            if tape.is_file() or script_match:
+                click.echo(
+                    f"[scene-spec-generate --all] skip {sid} ({name}): existing visual "
+                    f"{'tape' if tape.is_file() else 'capture script'}"
+                )
+                continue
+            vm_row = cfg.visual_map.get(sid)
+            if isinstance(vm_row, dict):
+                vtype = str(vm_row.get("type", "")).strip().lower()
+                if vtype and vtype != "manim":
+                    click.echo(
+                        f"[scene-spec-generate --all] skip {sid} ({name}): "
+                        f"visual_map type is {vtype!r} (not manim)"
+                    )
+                    continue
+            click.echo(f"=== scene-spec-generate --segment {sid} ===")
+            _one_sid(sid)
+        return
+
+    assert segment is not None  # type-checker
     try:
         result = generate_scene_spec(
             cfg,

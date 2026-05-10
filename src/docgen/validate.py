@@ -166,7 +166,8 @@ def lint_manim_timing_stub_antipattern(tree: ast.AST, path_label: str) -> list[s
     """Reject a known-bad LLM pattern that assigns ``seg_*`` from ``self._clock`` then calls them.
 
     That code raises at runtime (calling a float). Fix: regenerate with
-    ``docgen scene-generate`` or replace with explicit ``timed_play`` ``run_time``.
+    ``docgen scene-spec-generate`` / ``scene-compile`` or replace with explicit
+    ``timed_play`` ``run_time``.
     """
     issues: list[str] = []
     for node in ast.walk(tree):
@@ -174,8 +175,9 @@ def lint_manim_timing_stub_antipattern(tree: ast.AST, path_label: str) -> list[s
             if node.func.id in ("seg_start", "seg_end"):
                 issues.append(
                     f"{path_label}:{node.lineno} invalid call {node.func.id}(...) — "
-                    "broken timing placeholder; run `docgen scene-generate --segment …` "
-                    "to regenerate this scene, or use only `timed_play(..., run_time=...)`."
+                    "broken timing placeholder; run `docgen scene-spec-generate --segment …` "
+                    "(or `scene-compile` from a saved spec) to regenerate this scene, "
+                    "or use only `timed_play(..., run_time=...)`."
                 )
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             tgt = node.targets[0]
@@ -191,7 +193,8 @@ def lint_manim_timing_stub_antipattern(tree: ast.AST, path_label: str) -> list[s
                     issues.append(
                         f"{path_label}:{node.lineno} invalid "
                         "`seg_start, seg_end = self._clock, self._clock` — "
-                        "breaks Manim at runtime; regenerate with `docgen scene-generate`."
+                        "breaks Manim at runtime; regenerate with `docgen scene-spec-generate` / "
+                        "`scene-compile`."
                     )
     return issues
 

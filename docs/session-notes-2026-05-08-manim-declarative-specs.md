@@ -4,8 +4,8 @@ Canonical docs for day-to-day use: **`README.md`** (CLI table), **`AGENTS.md`** 
 
 ## Problem
 
-- **LLM-authored Manim** (`docgen scene-generate`) often produced **bad 2D layout**: mobjects left at the origin, overlapping rows, fragile `next_to` chains, and occasional **validate** failures (unicode, `Text` font rules).
-- **Narration length vs. visuals**: short on-screen motion while audio kept going (addressed partly by prompts and audio-tail behavior in `scene-generate`; declarative specs keep structure predictable).
+- **LLM-authored raw Manim** (`docgen scene-generate`, removed) often produced **bad 2D layout**: mobjects left at the origin, overlapping rows, fragile `next_to` chains, and occasional **validate** failures (unicode, `Text` font rules).
+- **Narration length vs. visuals**: short on-screen motion while audio kept going (addressed by audio-tail injection and declarative specs + Whisper alignment).
 
 ## Solution (shipped)
 
@@ -15,7 +15,7 @@ Canonical docs for day-to-day use: **`README.md`** (CLI table), **`AGENTS.md`** 
 4. **Shared compile path** — **`linted_class_block_from_spec`** + **`inject_class_block_into_scenes_py`** used by both **`scene-compile`** and **`scene-spec-generate`**.
 5. **Resilience** — **`docgen.openai_retry`**: rate-limit retries for TTS and chat-style calls where wired.
 
-**`scene-generate`** stays for scenes that need **rich** Manim (not just rows of boxes).
+**`scene-generate`** (raw LLM Python) was **removed**; use **`scene-spec-generate`** + **`scene-compile`** for diagram rows, or hand-maintained classes for exceptional motion.
 
 ## Dogfood (`docs/demos`)
 

@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from docgen.config import Config
-from docgen.scene_generate import BOOTSTRAP_HEADER
+from docgen.scene_generate import BOOTSTRAP_HEADER, SceneGenerationError
 from docgen.scene_spec_generate import (
     generate_scene_spec,
     inject_class_block_into_scenes_py,
@@ -111,6 +111,34 @@ def test_generate_scene_spec_dry_run_no_llm(tmp_path: Path) -> None:
     assert "Hello world" in result.prompt
     assert "--- system ---" in result.prompt
     assert result.yaml_text == ""
+
+
+def test_generate_scene_spec_fails_loud_when_narration_missing(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump(
+            {
+                "dirs": {
+                    "narration": "narration",
+                    "animations": "animations",
+                    "audio": "audio",
+                    "terminal": "terminal",
+                    "recordings": "recordings",
+                },
+                "segments": {"default": ["08"], "all": ["08"]},
+                "segment_names": {"08": "08-demo-function"},
+                "visual_map": {
+                    "08": {"type": "manim", "scene": "DemoFunctionScene", "source": "x.mp4"}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "narration").mkdir()
+    (tmp_path / "animations").mkdir()
+    cfg = Config.from_yaml(p)
+    with pytest.raises(SceneGenerationError, match="narration file not found"):
+        generate_scene_spec(cfg, "08", extra_paths=[], extra_hints=[])
 
 
 def test_inject_updates_scenes_py(tmp_path: Path) -> None:

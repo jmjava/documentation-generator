@@ -1,30 +1,14 @@
-"""LLM-driven Manim scene authoring for ``docgen scene-generate``.
+"""Shared helpers for Manim scene generation via ``docgen scene-spec-generate`` / ``scene-compile``.
 
-The **project owner** supplies hints + context paths in ``docgen.yaml`` under
-``manim_scene_generation`` (see :func:`merged_scene_generation_settings`).
-This module builds a structured prompt, calls OpenAI, validates the response is
-valid Python with the expected single ``class <Name>(_TimedScene):`` definition,
-and injects the class into ``animations/scenes.py`` between idempotent marker
-comments so subsequent runs replace the block in place rather than appending.
+`manim_scene_generation` in ``docgen.yaml`` (see :func:`merged_scene_generation_settings`)
+supplies model settings, hints, and context paths for **YAML** scene specs.
+This module provides timing enrichment, bootstrap + marker injection for
+``animations/scenes.py``, LLM transport (:func:`call_llm`), and
+:class:`lint_generated_block` used after deterministic compilation.
 
-Design constraints:
-
-* Output is **code only** (no narration, no explanation, no fences).
-* The generated class must extend ``_TimedScene`` (or, as a fallback, ``Scene``)
-  and may only reference helpers/palette constants defined at the top of
-  ``scenes.py`` (``_box``, ``_arrow``, ``_load_timing``, ``C_BG`` …).
-* AST validation is mandatory; render-validation is out of scope (too slow).
-* If ``scenes.py`` does not exist or is missing the helpers, we bootstrap it
-  from a baked template before injecting — so this command also works on
-  fresh-init projects (e.g. ``course-builder`` after ``docgen init``).
-
-Failure modes:
-
-* OpenAI auth/permission/connection errors propagate as ``RuntimeError`` with
-  remediation hints (mirroring ``demo_function``'s fail-loud TTS contract).
-* AST validation failures save the raw response under
-  ``animations/.scene-generate-drafts/<seg>.draft.py`` and raise
-  :class:`SceneGenerationError` so the user can inspect the broken output.
+Raw LLM-to-Python ``docgen scene-generate`` was removed; maintain diagram scenes
+as ``animations/specs/*.scene.yaml`` plus compile, or hand-edit Python **outside**
+generated marker blocks only when necessary.
 """
 
 from __future__ import annotations
@@ -51,8 +35,8 @@ def lint_manim_title_down_row_collision_risk(code: str) -> list[str]:
 
     When two mobjects are placed with ``.shift(LEFT * n)`` / ``.shift(RIGHT * n)``
     and another uses ``.next_to(title, DOWN, ...)`` only, their bounding boxes
-    often collide on the same horizontal band. Scene-generate should use
-    ``VGroup(...).arrange(RIGHT)`` rows chained with ``.next_to(row, DOWN)`` instead.
+    often collide on the same horizontal band. Prefer ``VGroup(...).arrange(RIGHT)``
+    rows chained with ``.next_to(row, DOWN)`` instead.
     """
     if (
         _SHIFT_LEFT_RE.search(code)
@@ -76,37 +60,6 @@ DEFAULT_MODEL = "gpt-4o"
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_CONTEXT_BYTES = 80_000
 
-DEFAULT_SYSTEM_PROMPT = """You author Manim Community Edition scene classes for docgen demo videos.
-
-Output discipline:
-- Output ONLY a single Python class definition. No imports, no module-level code, no markdown fences, no explanations.
-- The class must extend `_TimedScene`. Do NOT redefine `_TimedScene`, `_box`, `_arrow`, `_load_timing`, or any palette constant - they are already in scope from scenes.py.
-- Inside `construct(self)`, use ONLY these helpers and constants:
-    helpers: `_box(label, color, w, h, fs)`, `_arrow(start, end, color)`, `_load_timing(segment_key)`
-    palette: C_BG, C_ACCENT, C_GREEN, C_ORANGE, C_BLUE, C_RED, C_TEAL, C_PURPLE, C_WHITE
-    timing helpers: `self.timed_play(*anims, run_time=...)`, `self.wait_until(t)`, `self.timed_wait(d)`, `self._clock`
-    manim primitives: Text, RoundedRectangle, Rectangle, Line, Dot, Arrow, VGroup, FadeIn, FadeOut, Write, Create, Indicate, Transform, ReplacementTransform, GrowFromEdge, ORIGIN, UP, DOWN, LEFT, RIGHT, NORMAL, GREY_B, GREY_D
-- Frame is 1280x720; coordinates x in [-7.11, 7.11], y in [-4, 4]. Keep all mobjects inside this box.
-- Layout / overlap (diagram readability — `docgen validate` is strict on fonts, but overlaps ruin demos):
-    - **No accidental collisions:** every `_box` must keep clear margin from every other `_box`. Prefer **explicit rows**: build a row with `VGroup(left, right).arrange(RIGHT, buff=0.8)` (tune `buff` 0.6–1.2), then place the next row with `.next_to(row, DOWN, buff=0.6)`.
-    - **Forbidden pattern:** side-by-side boxes positioned with `.shift(LEFT * n)` / `.shift(RIGHT * n)` while a **wide** box is anchored with `.next_to(title, DOWN, ...)` only — the centered-under-title box will sit at the **same depth** as the row and **cover** the flanking boxes. Fix: first complete the top row as a `VGroup`, then chain downward with `DOWN` from that row (or move the flanking row `UP` and the centered stack strictly `DOWN` with enough `buff`).
-    - Use `.next_to(..., buff=...)` on every placement; default Manim gaps are often too tight for rounded `_box` labels. When in doubt, **increase `buff`** or **narrow** `_box` width `w`.
-    - Titles use `.to_edge(UP)`; the **first** row of content should be `.next_to(title, DOWN, buff=0.5)` (single anchor), then **only** chain `DOWN` from the previous row — do not mix free `shift(LEFT/RIGHT)` on the same Y band as a full-width centered element.
-- Sync beats with `_load_timing("<narration_audio_stem>")` when you need audio-aligned waits: each item has `start` / `end` / `text` (seconds). If the list is non-empty, you may call `self.wait_until(float(segs[i]["start"]))` before a beat that should land on spoken word `i`. If the list is empty (`timing.json` not yet generated), the scene MUST still render using only explicit `run_time` arguments to `timed_play` and optional `timed_wait` — never invent placeholder functions named `seg_start` / `seg_end`, and never call `self._clock` like a function.
-- Narration is usually much longer than a few bullet labels: **spread meaningfully distinct visuals across the entire Whisper timeline**, not just the first 10–20 seconds. When `_load_timing(...)` returns segments, aim for **at least one clear on-screen change (new label, Transform, arrow, or layout shift) near the start of most segments**, pacing with `wait_until` on segment `start` times. Avoid front-loading every `FadeIn` then sitting on a static frame while implied audio would still be describing new ideas — that is exactly what makes demos feel "incomplete" after compose.
-- On-screen text should be **short phrases** cueing each idea; the voice may use full sentences — visuals reinforce, they need not mirror every word.
-- The first action in `construct` MUST be `self.camera.background_color = C_BG`.
-- The last action in `construct` MUST be a fade-out of all mobjects: `self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)` followed by `self.timed_wait(0.5)`.
-- Do not call `self.play(...)` directly; always use `self.timed_play` so the elapsed-clock contract holds.
-- Do not import anything; do not reference `numpy as np` directly (use `np.array(...)` only - `np` is already imported via `from manim import *`).
-
-Manim scene lint rules (`docgen validate` will fail the build if violated):
-- `Text(...)` font_size MUST be >= 14. There is no exception. Use color/position/spacing for hierarchy instead of small fonts.
-- Do NOT pass `weight=BOLD` to `Text(...)`. The bundled font has no bold variant; Manim silently substitutes a different font and the visual breaks. Use a brighter color or larger font_size for emphasis instead.
-- Do NOT use any of these unicode characters anywhere in the source file (string literals, comments, or otherwise): right-arrow U+2192, left-arrow U+2190, left-right arrow U+2194, single guillemets U+203A U+2039, not-equal U+2260, less-equal U+2264, greater-equal U+2265, em-dash U+2014, en-dash U+2013, smart quotes U+2018 U+2019 U+201C U+201D, bullet U+2022, ellipsis U+2026. Replace with ASCII: `->`, `<-`, `<->`, `>`, `<`, `!=`, `<=`, `>=`, `-`, `--`, `'`, `'`, `"`, `"`, `*`, `...`. This applies to the string passed to Text(...) AND to any inline comments in the generated code.
-- Visual arrows on screen are drawn with `_arrow(start, end, color)` — never spelled out as text glyphs.
-"""
-
 
 # Stable marker contract used by `_inject_or_replace`. Must remain stable:
 # changing these strings breaks idempotent regeneration in existing repos.
@@ -121,11 +74,14 @@ BOOTSTRAP_HEADER = '''"""
 Manim scenes for docgen demo videos.
 
 Pacing is driven by timing.json (generated by ``docgen timestamps``).
-Scene classes below this header are authored or maintained by
-``docgen scene-generate`` between marker blocks; helpers and palette are
+Scene classes below this header are injected by ``docgen scene-spec-generate``
+/ ``docgen scene-compile`` between marker blocks; helpers and palette are
 hand-maintained.
 
 Frame: 14.22 wide x 8 tall.  Coordinates x in [-7.11, 7.11], y in [-4, 4].
+Keep **all** mobjects inside this rectangle: wide `arrange(RIGHT)` rows and long
+`next_to(..., DOWN)` chains both clip in 720p unless bounded (see `_row_fit`,
+`_column_fit_below_title`).
 """
 
 from __future__ import annotations
@@ -146,6 +102,42 @@ C_TEAL = "#26c6da"
 C_PURPLE = "#ce93d8"
 C_WHITE = "#cdd6f4"
 
+# Layout: default Manim 16:9 frame ~14.22 x 8. Leave margin so nothing touches edges.
+SAFE_CONTENT_WIDTH = 12.85
+SAFE_BOTTOM_Y = -3.55
+
+
+def _row_fit(*parts, buff=0.38):
+    """Single horizontal row scaled to fit ``SAFE_CONTENT_WIDTH`` (prevents off-screen RIGHT)."""
+    row = VGroup(*parts).arrange(RIGHT, buff=buff)
+    if row.width > SAFE_CONTENT_WIDTH:
+        row.scale(SAFE_CONTENT_WIDTH / row.width)
+    return row
+
+
+def _column_fit_below_title(title: Mobject, column: Mobject, buff=0.55):
+    """Stack / column placed under ``title``; uniform scale if bottom would fall below ``SAFE_BOTTOM_Y``.
+
+    Also enforces a hard non-overlap with the title's bounding box: after
+    ``next_to``, if the column's top would still be above ``title.bottom - buff``
+    (e.g. because the caller scaled the title via an ``.animate`` chain that
+    Manim resolves with a different bbox than expected), the column is shifted
+    DOWN by the missing clearance. This makes title-overlap impossible regardless
+    of how the title was last transformed.
+    """
+    column.next_to(title, DOWN, buff=buff)
+    required_top = title.get_bottom()[1] - buff
+    actual_top = column.get_top()[1]
+    if actual_top > required_top:
+        column.shift(DOWN * (actual_top - required_top))
+    bottom_y = column.get_bottom()[1]
+    if bottom_y < SAFE_BOTTOM_Y:
+        top_y = column.get_top()[1]
+        available = max(top_y - SAFE_BOTTOM_Y, 0.25)
+        if column.height > 1e-6 and available < column.height:
+            column.scale(available / column.height, about_point=column.get_top())
+    return column
+
 
 def _load_timing(segment_key: str) -> list[dict]:
     """Return Whisper segments from timing.json for a given segment key."""
@@ -161,7 +153,13 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
         corner_radius=0.15, width=w, height=h,
         stroke_color=color, fill_color=color, fill_opacity=0.2,
     )
-    t = Text(label, font_size=fs, color=color)
+    t = Text(str(label), font_size=fs, color=color)
+    inner_w = max(w - 0.25, 0.35)
+    inner_h = max(h - 0.2, 0.35)
+    if t.width > inner_w:
+        t.scale(inner_w / t.width)
+    if t.height > inner_h:
+        t.scale(inner_h / t.height)
     t.move_to(r.get_center())
     return VGroup(r, t)
 
@@ -190,6 +188,59 @@ class _TimedScene(Scene):
         if duration > 0.05:
             self.wait(duration)
             self._clock += duration
+
+    def pace_to_beat(self, segments, beat_index, num_beats, segment_indices=None):
+        """Wait until the Whisper segment start for this story beat.
+
+        If ``segment_indices`` is a sequence (from docgen prompt ``_DOCGEN_PACE_SEG``),
+        use ``segment_indices[beat_index]`` as the Whisper row index. Otherwise spread
+        beats evenly across segment indices (legacy behaviour).
+        """
+        if not segments or num_beats <= 0:
+            return
+        n = len(segments)
+        if segment_indices is not None:
+            if beat_index < 0 or beat_index >= num_beats:
+                return
+            if beat_index >= len(segment_indices):
+                return
+            j = int(segment_indices[beat_index])
+            j = max(0, min(n - 1, j))
+            self.wait_until(float(segments[j].get("start", 0.0)))
+            return
+        if n == 1:
+            self.wait_until(float(segments[0].get("start", 0.0)))
+            return
+        si = min(int(round(beat_index * (n - 1) / max(num_beats - 1, 1))), n - 1)
+        self.wait_until(float(segments[si].get("start", 0.0)))
+
+    def paced_reveal(self, segments, mobjects, segment_indices, run_time=0.55):
+        """Reveal each mobject at its paired Whisper segment start.
+
+        For each ``mobjects[k]`` paired with ``segment_indices[k]``: wait until that
+        Whisper segment's ``start`` (via ``pace_to_beat``) and play ``FadeIn(mobject)``
+        with the mobject already laid out at its final position. Caller MUST NOT
+        pre-set opacity to 0 on the mobjects -- ``FadeIn`` animates 0 -> the
+        mobject's current opacity, so an invisible target stays invisible.
+
+        If there are more ``mobjects`` than ``segment_indices`` the extras are spread
+        evenly across the remaining Whisper segments. If ``segments`` is empty the
+        mobjects fade in immediately, in order, with no pacing.
+        """
+        if not mobjects:
+            return
+        n_m = len(mobjects)
+        indices = list(segment_indices) if segment_indices is not None else []
+        if not segments:
+            for m in mobjects:
+                self.timed_play(FadeIn(m), run_time=run_time)
+            return
+        for k, m in enumerate(mobjects):
+            if k < len(indices):
+                self.pace_to_beat(segments, k, len(indices), indices)
+            else:
+                self.pace_to_beat(segments, k, n_m)
+            self.timed_play(FadeIn(m), run_time=run_time)
 '''
 
 
@@ -205,7 +256,7 @@ class SceneGenerationSettings:
     model: str
     temperature: float
     max_context_bytes: int
-    system_prompt: str
+    system_prompt: str  # optional ``manim_scene_generation.system_prompt`` (unused by scene-spec path)
     hints: list[str]
     context_paths: list[str]
     context_globs: list[str]
@@ -231,6 +282,9 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
           model: gpt-4o
           temperature: 0.4
           max_context_bytes: 80000
+          max_whisper_segments_in_prompt: 0
+          max_whisper_segment_text_chars: 200
+          default_visual_beats: null
           system_prompt: <override>
           hints: [...]
           context:
@@ -239,13 +293,22 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
           segments:
             "<id>":
               class_name: <ClassName>Scene
+              visual_beats: 10
+              pace_segment_indices: [0, 2, 5, 9]
               hints: [...]
               context:
                 paths: [...]
                 globs: [...]
 
-    All hints are project-owner authored; nothing here is round-tripped from a
-    prior LLM response.
+    ``max_whisper_segments_in_prompt: 0`` sends every Whisper row to the LLM; set a
+    positive cap to trim prompt size. ``pace_segment_indices`` (optional) plugs each
+    visual beat to a segment index; otherwise ``visual_beats`` or ``default_visual_beats``
+    selects an evenly spread schedule.
+
+    All hints are project-owner authored (visual copy and layout only); they must not
+    carry Whisper indices or clock times. Pacing plugs (`pace_segment_indices`,
+    `visual_beats`) are not merged from hint files; set them in committed bundle
+    ``docgen.yaml`` when needed, or rely on TIMING JSON / auto tables in the spec prompt.
     """
     root = cfg.raw.get("manim_scene_generation")
     if not isinstance(root, dict):
@@ -275,7 +338,7 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
     elif sys_override:
         system_prompt = sys_override
     else:
-        system_prompt = DEFAULT_SYSTEM_PROMPT
+        system_prompt = ""
 
     cls_name = str(seg.get("class_name", "")).strip() or None
 
@@ -289,6 +352,195 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
         context_globs=globs,
         class_name=cls_name,
     )
+
+
+def manim_scene_generation_root(cfg: "Config") -> dict[str, Any]:
+    r = cfg.raw.get("manim_scene_generation")
+    return r if isinstance(r, dict) else {}
+
+
+def manim_scene_generation_segment_block(cfg: "Config", seg_id: str) -> dict[str, Any]:
+    root = manim_scene_generation_root(cfg)
+    segs = root.get("segments")
+    if not isinstance(segs, dict):
+        return {}
+    sid = str(seg_id).strip()
+    for key in (sid, int(sid) if sid.isdigit() else None):
+        if key is None:
+            continue
+        raw = segs.get(key)
+        if isinstance(raw, dict):
+            return raw
+    return {}
+
+
+def _parse_int_sequence(x: Any) -> list[int] | None:
+    if x is None:
+        return None
+    if isinstance(x, (list, tuple)):
+        out: list[int] = []
+        for v in x:
+            try:
+                out.append(int(v))
+            except (TypeError, ValueError):
+                return None
+        return out
+    return None
+
+
+def even_spread_segment_indices(num_beats: int, num_segments: int) -> list[int]:
+    """Map each beat 0..num_beats-1 to a Whisper segment index (inclusive ends)."""
+    if num_beats <= 0 or num_segments <= 0:
+        return []
+    if num_segments == 1:
+        return [0] * num_beats
+    return [
+        min(int(round(i * (num_segments - 1) / max(num_beats - 1, 1))), num_segments - 1)
+        for i in range(num_beats)
+    ]
+
+
+def resolve_pace_segment_indices(
+    *,
+    num_segments: int,
+    seg_block: dict[str, Any],
+    root: dict[str, Any],
+) -> tuple[list[int], str]:
+    """Return (one Whisper segment index per visual beat, provenance string)."""
+    if num_segments <= 0:
+        return [], "no Whisper segments"
+    explicit = _parse_int_sequence(seg_block.get("pace_segment_indices"))
+    if explicit:
+        clamped = [max(0, min(num_segments - 1, int(i))) for i in explicit]
+        return clamped, "manim_scene_generation.segments.<id>.pace_segment_indices"
+
+    raw_beats = seg_block.get("visual_beats", root.get("default_visual_beats"))
+    if raw_beats is not None:
+        try:
+            nb = max(1, int(raw_beats))
+        except (TypeError, ValueError):
+            nb = min(12, max(4, max(1, (num_segments + 1) // 2)))
+    else:
+        nb = min(12, max(4, max(1, (num_segments + 1) // 2)))
+    nb = min(nb, 48)
+    return even_spread_segment_indices(nb, num_segments), "auto (set visual_beats or pace_segment_indices to override)"
+
+
+def prepare_whisper_segments_for_prompt(
+    segments: list[dict],
+    *,
+    max_segments: int,
+    max_text_chars: int,
+) -> list[dict]:
+    """JSON-safe rows for the LLM; preserves global whisper_index for alignment with pacing."""
+    out: list[dict] = []
+    cap = len(segments) if max_segments <= 0 else min(len(segments), max_segments)
+    for global_i in range(cap):
+        s = segments[global_i]
+        text = str(s.get("text", "")).strip().replace("\n", " ")
+        if max_text_chars > 0 and len(text) > max_text_chars:
+            text = text[: max_text_chars - 3] + "..."
+        out.append(
+            {
+                "whisper_index": global_i,
+                "start": float(s.get("start", 0.0)),
+                "end": float(s.get("end", 0.0)),
+                "text": text,
+            }
+        )
+    return out
+
+
+def format_pacing_schedule_markdown(segments: list[dict], pace_indices: list[int]) -> str:
+    lines = [
+        "| beat_i | whisper_index | start_sec | text_preview |",
+        "| --- | --- | --- | --- |",
+    ]
+    for i, seg_i in enumerate(pace_indices):
+        seg_i = max(0, min(len(segments) - 1, int(seg_i)))
+        s = segments[seg_i]
+        text = str(s.get("text", "")).strip().replace("|", "/").replace("\n", " ")[:72]
+        lines.append(
+            f"| {i} | {seg_i} | {float(s.get('start', 0.0)):.3f} | {text} |"
+        )
+    return "\n".join(lines)
+
+
+def build_timing_enrichment_for_prompt(
+    cfg: "Config",
+    seg_id: str,
+    seg_name: str,
+    whisper_segments: list[dict],
+) -> str:
+    """Whisper JSON + plugged pacing constants for the scene-spec LLM prompt."""
+    root = manim_scene_generation_root(cfg)
+    seg_block = manim_scene_generation_segment_block(cfg, seg_id)
+    max_seg = int(root.get("max_whisper_segments_in_prompt", 0) or 0)
+    try:
+        max_chars = int(root.get("max_whisper_segment_text_chars", 200) or 200)
+    except (TypeError, ValueError):
+        max_chars = 200
+    max_chars = max(0, max_chars)
+
+    parts: list[str] = []
+    parts.append(
+        f"--- TIMING (`_load_timing({seg_name!r})` must use this exact stem; same as `audio/{seg_name}.mp3`) ---"
+    )
+    n_total = len(whisper_segments)
+    if not whisper_segments:
+        parts.append(
+            "[]\n# timing.json has no segments for this stem yet. Render with explicit "
+            "`timed_play` run_times only; omit `_DOCGEN_PACE_SEG` pacing."
+        )
+        return "\n".join(parts)
+
+    compact = prepare_whisper_segments_for_prompt(
+        whisper_segments,
+        max_segments=max_seg,
+        max_text_chars=max_chars,
+    )
+    parts.append(json.dumps(compact, indent=2, ensure_ascii=False))
+    if max_seg > 0 and n_total > max_seg:
+        parts.append(
+            f"# Note: listed {len(compact)} of {n_total} Whisper segments "
+            f"(manim_scene_generation.max_whisper_segments_in_prompt={max_seg}; 0 = all). "
+            "`whisper_index` is the index into the full list returned by `_load_timing`."
+        )
+    else:
+        parts.append(f"# Full Whisper segment list for this stem ({n_total} segments).")
+
+    pace_indices, pace_src = resolve_pace_segment_indices(
+        num_segments=n_total,
+        seg_block=seg_block,
+        root=root,
+    )
+    parts.append("")
+    parts.append("--- PACING (plugged; indices refer to `whisper_index` / `_load_timing` list order) ---")
+    parts.append(f"# Source: {pace_src}")
+    parts.append(format_pacing_schedule_markdown(whisper_segments, pace_indices))
+    tup = "(" + ", ".join(str(i) for i in pace_indices) + ")"
+    parts.append("")
+    parts.append(
+        "Copy these literals into your `construct` after `_segs = _load_timing(...)` "
+        "(only if `len(_segs) > 0`), then call `self.pace_to_beat(_segs, i, N, _DOCGEN_PACE_SEG)` "
+        "before each of the N story beats:"
+    )
+    parts.append(f"_DOCGEN_PACE_SEG = {tup}")
+    parts.append(f"_DOCGEN_NUM_BEATS = {len(pace_indices)}")
+    parts.append(
+        "# N must equal the number of story timed_play beats you emit; match `_DOCGEN_NUM_BEATS` "
+        "or change `manim_scene_generation.segments.<id>.visual_beats` / `pace_segment_indices` in docgen.yaml "
+        "(bundle config only, not owner hint files)."
+    )
+    parts.append(
+        "# Label-to-timing: for each `_box` / chip label, find the **first** Whisper row (lowest "
+        "`whisper_index`) whose `text` contains the distinctive words from that label; use that row's "
+        "index in `segment_indices` so the box appears at **first spoken mention**. One `pace_to_beat` "
+        "+ reveal per widget; never one `FadeIn` for the whole grid. Owner hints do not carry indices; "
+        "derive from this JSON. If `_DOCGEN_PACE_SEG` matches your beats, copy it; else build `PACE` "
+        "from first-match indices."
+    )
+    return "\n".join(parts)
 
 
 def derive_class_name(seg_id: str, seg_name: str, override: str | None) -> str:
@@ -408,82 +660,7 @@ def extract_reference_classes(scenes_py_text: str, *, max_bytes: int = 30_000) -
     return out
 
 
-# ── Prompt assembly ────────────────────────────────────────────────────────
-
-
-def build_user_message(
-    *,
-    seg_id: str,
-    seg_name: str,
-    class_name: str,
-    narration_text: str,
-    whisper_segments: list[dict],
-    hints: list[str],
-    extra_hints: list[str],
-    reference_scenes: str,
-    source_snippets: list[tuple[str, str]],
-) -> str:
-    """Assemble the user-role message sent to the LLM (deterministic given inputs)."""
-    parts: list[str] = []
-    parts.append(
-        f"Generate a Manim scene class named `{class_name}` for segment `{seg_id}` "
-        f"(narration file: `{seg_name}.md`)."
-    )
-    parts.append("")
-    parts.append("--- NARRATION (spoken text; visuals must reinforce it) ---")
-    parts.append(narration_text.strip() or "(narration file is empty)")
-
-    parts.append("")
-    parts.append(
-        f"--- TIMING (Whisper segments accessible as `_load_timing({seg_name!r})`) ---"
-    )
-    if whisper_segments:
-        compact = [
-            {"i": i, "start": float(s.get("start", 0.0)), "end": float(s.get("end", 0.0)),
-             "text": str(s.get("text", "")).strip()}
-            for i, s in enumerate(whisper_segments[:25])
-        ]
-        parts.append(json.dumps(compact, indent=2))
-        parts.append(
-            "# Staging: use the segment start times above with `self.wait_until(start)` "
-            "and match each segment's `text` gist to a visual beat so the picture evolves "
-            "through the whole clip, not only at the beginning."
-        )
-    else:
-        parts.append(
-            "[]\n# timing.json is not yet populated for this segment. The scene must "
-            "still render correctly when `_load_timing(...)` returns []: use explicit "
-            "`timed_play` / `timed_wait` run_times only. Never emit `seg_start` / `seg_end` "
-            "placeholders and never call `self._clock` as if it were a function."
-        )
-
-    all_hints = list(hints) + list(extra_hints)
-    if all_hints:
-        parts.append("")
-        parts.append("--- PROJECT-OWNER HINTS ---")
-        for h in all_hints:
-            if h.strip():
-                parts.append(f"- {h.strip()}")
-
-    if reference_scenes:
-        parts.append("")
-        parts.append("--- REFERENCE SCENES (style + timing pattern; do NOT redefine helpers) ---")
-        parts.append(reference_scenes)
-
-    if source_snippets:
-        parts.append("")
-        parts.append("--- CONTEXT FILES ---")
-        for label, body in source_snippets:
-            parts.append(f"FILE: {label}\n```\n{body}\n```")
-
-    parts.append("")
-    parts.append(
-        f"Output the `{class_name}` class definition only. No imports. No prose. No fences."
-    )
-    return "\n".join(parts)
-
-
-# ── LLM call ───────────────────────────────────────────────────────────────
+# ── LLM call (OpenAI chat completions) ─────────────────────────────────────
 
 
 def call_llm(*, system_prompt: str, user_message: str, model: str, temperature: float) -> str:
@@ -518,19 +695,110 @@ def call_llm(*, system_prompt: str, user_message: str, model: str, temperature: 
     return response.choices[0].message.content or ""
 
 
-# ── Output validation ──────────────────────────────────────────────────────
+# ── Lint (compiled / hand-authored scene bodies) ───────────────────────────
 
 
-_FENCE_RE = re.compile(r"^```(?:python)?\s*\n(?P<body>[\s\S]*?)\n```\s*$", re.MULTILINE)
+_SET_OPACITY_ZERO_RE = re.compile(
+    r"\.set_opacity\s*\(\s*(?:0|0\.0|0\.)\s*\)"
+)
+
+_NEXT_TO_TITLE_DOWN_LOW_BUFF_RE = re.compile(
+    r"\.next_to\s*\(\s*title\b[^)]*?\bDOWN\b[^)]*?\bbuff\s*=\s*(?P<buff>0?\.\d+|0)\b",
+    re.DOTALL,
+)
+
+_ANIMATE_SHIFT_UP_RE = re.compile(
+    r"\.animate\.shift\s*\(\s*UP\s*\*\s*(?P<n>[0-9]*\.?[0-9]+)\s*\)"
+)
 
 
-def strip_response_fences(text: str) -> str:
-    """Strip a single ``\u200b```python ... \u200b``` `` wrapper if the model added one despite instructions."""
-    text = text.strip()
-    m = _FENCE_RE.match(text)
-    if m:
-        return m.group("body").strip()
-    return text
+def lint_animate_shift_up_collides_title(code: str) -> list[str]:
+    """Reject ``<group>.animate.shift(UP * N)`` on already-placed content.
+
+    Once a row/column has been positioned below the title (typically via
+    ``_column_fit_below_title`` or ``next_to(title, DOWN, ...)``), shifting it
+    UP by any meaningful amount collides with the title band. To add a new
+    bottom region, anchor the **new** mobjects with ``.to_edge(DOWN, buff=0.5)``
+    instead of moving existing content.
+    """
+    issues: list[str] = []
+    for m in _ANIMATE_SHIFT_UP_RE.finditer(code):
+        try:
+            n = float(m.group("n"))
+        except ValueError:
+            continue
+        if n >= 0.2:
+            issues.append(
+                f"layout: `.animate.shift(UP * {n})` on placed content pushes it "
+                "into the title band. Anchor any NEW bottom-region content with "
+                "`.to_edge(DOWN, buff=0.5)` directly; do not move existing content "
+                "upward to make room."
+            )
+    return issues
+
+
+def lint_title_down_buff_too_small(code: str) -> list[str]:
+    """Catch ``.next_to(title, DOWN, buff=<0.45)`` which often collides with the title.
+
+    Manim's ``.animate.to_edge(UP).scale(...)`` chains can leave the resolved title
+    bbox larger than expected; small buffs mean the next row visibly overlaps the
+    title text. ``_column_fit_below_title`` defaults to a safe buff and enforces
+    a non-overlap shift; use it for grids, and ``buff >= 0.45`` for single anchors.
+    """
+    issues: list[str] = []
+    for m in _NEXT_TO_TITLE_DOWN_LOW_BUFF_RE.finditer(code):
+        try:
+            value = float(m.group("buff"))
+        except ValueError:
+            continue
+        if value < 0.45:
+            issues.append(
+                f"layout: `.next_to(title, DOWN, buff={value})` is too small "
+                "(< 0.45); content will overlap the title band. Use "
+                "`_column_fit_below_title(title, content, buff=0.55)` for grids "
+                "or raise `buff >= 0.45` for single anchors."
+            )
+    return issues
+
+
+def lint_set_opacity_then_fadein(code: str) -> list[str]:
+    """Catch ``mobject.set_opacity(0)`` followed by ``FadeIn(mobject)``.
+
+    Manim ``FadeIn`` interpolates from 0 to the mobject's *current* opacity.
+    Pre-zeroing the target makes the fade end at 0 and the mobject never appears.
+    Use ``self.paced_reveal(...)`` (lays out + ``FadeIn`` per Whisper start) or
+    plain ``FadeIn(mobject)`` without ever calling ``set_opacity(0)`` on it.
+    """
+    if not _SET_OPACITY_ZERO_RE.search(code):
+        return []
+    if "FadeIn(" not in code:
+        return []
+    return [
+        "anti-pattern: `.set_opacity(0)` plus later `FadeIn(...)` keeps the mobject "
+        "invisible (FadeIn ends at the mobject's current opacity, which is 0). "
+        "Use `self.paced_reveal(_segs, mobjects, PACE)` or call `FadeIn(mobject)` "
+        "directly without `set_opacity(0)`."
+    ]
+
+
+def lint_pace_to_beat_coverage(code: str) -> list[str]:
+    """Require Whisper-driven pacing for busy compiled scenes.
+
+    ``pace_to_beat`` maps each visual beat to ``timing.json`` segment starts; without
+    enough calls, ``timed_play`` stacks in the first seconds while TTS runs for minutes.
+    """
+    issues: list[str] = []
+    n_play = code.count("self.timed_play(")
+    n_pace = code.count("self.pace_to_beat(")
+    if n_play >= 6 and n_pace < n_play - 3:
+        issues.append(
+            f"scene has {n_play} self.timed_play( calls but only {n_pace} self.pace_to_beat( "
+            "— add audio sync: after the title, _segs = _load_timing(<stem>), then before story beats "
+            "call `self.pace_to_beat(_segs, i, N, PACE)` where `PACE` is `_DOCGEN_PACE_SEG` from the "
+            "prompt when it fits, or a tuple of `whisper_index` values you choose from the TIMING JSON. "
+            "Whisper runs only in docgen timestamps; Manim reads timing.json via _load_timing."
+        )
+    return issues
 
 
 def lint_generated_block(
@@ -560,7 +828,7 @@ def lint_generated_block(
     try:
         tree = ast.parse(code)
     except SyntaxError:
-        return issues  # validate_class_definition will surface the parse error
+        return issues  # caller may treat parse failures separately
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -587,50 +855,11 @@ def lint_generated_block(
                     )
     issues.extend(lint_manim_timing_stub_antipattern(tree, "generated"))
     issues.extend(lint_manim_title_down_row_collision_risk(code))
+    issues.extend(lint_pace_to_beat_coverage(code))
+    issues.extend(lint_set_opacity_then_fadein(code))
+    issues.extend(lint_title_down_buff_too_small(code))
+    issues.extend(lint_animate_shift_up_collides_title(code))
     return issues
-
-
-def validate_class_definition(code: str, expected_class: str) -> ast.ClassDef:
-    """Parse ``code`` and assert it contains exactly one matching ``class`` definition.
-
-    Returns the ``ast.ClassDef`` node so callers can introspect further.
-    Raises :class:`SceneGenerationError` with an actionable message otherwise.
-    """
-    if not code.strip():
-        raise SceneGenerationError("LLM returned empty output")
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as exc:
-        raise SceneGenerationError(
-            f"LLM output failed to parse as Python: {exc.msg} at line {exc.lineno}"
-        ) from exc
-
-    classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
-    other = [n for n in tree.body if not isinstance(n, ast.ClassDef)]
-    if not classes:
-        raise SceneGenerationError("LLM output contained no class definition")
-    if len(classes) > 1:
-        names = ", ".join(c.name for c in classes)
-        raise SceneGenerationError(
-            f"LLM output contained multiple class definitions ({names}); only one expected"
-        )
-    if other:
-        forbidden = ", ".join(type(n).__name__ for n in other)
-        raise SceneGenerationError(
-            f"LLM output contained module-level non-class statements: {forbidden}"
-        )
-    cls = classes[0]
-    if cls.name != expected_class:
-        raise SceneGenerationError(
-            f"LLM output class name mismatch: expected {expected_class!r}, got {cls.name!r}"
-        )
-    base_names = {b.id for b in cls.bases if isinstance(b, ast.Name)}
-    if not base_names & {"_TimedScene", "Scene"}:
-        raise SceneGenerationError(
-            f"class {cls.name} must extend `_TimedScene` or `Scene` "
-            f"(got bases: {sorted(base_names)})"
-        )
-    return cls
 
 
 # ── Marker injection ───────────────────────────────────────────────────────
@@ -668,6 +897,11 @@ def inject_or_replace(scenes_py_text: str, seg_id: str, class_name: str, class_b
 
 
 _AUDIO_TAIL_COMMENT = "# docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)"
+# ``construct`` already waits through the last Whisper ``end`` before mass FadeOut.
+_AUDIO_END_WAIT_BEFORE_FADEOUT_RE = re.compile(
+    r"wait_until\s*\([\s\S]{0,1600}?max\s*\([\s\S]{0,800}?\.get\s*\(\s*[\"']end[\"']",
+    re.DOTALL,
+)
 
 
 def append_audio_tail_to_class_body(class_body: str, timing_json_key: str) -> str:
@@ -680,7 +914,9 @@ def append_audio_tail_to_class_body(class_body: str, timing_json_key: str) -> st
     ``animations/timing.json`` (e.g. ``01-overview``).
 
     Idempotent: if :data:`_AUDIO_TAIL_COMMENT` is already present, returns
-    ``class_body`` unchanged.
+    ``class_body`` unchanged. If the model already inserted a ``wait_until`` on the
+    last Whisper segment ``end`` before the mass ``FadeOut``, only the marker
+    comment is inserted so ``_docgen_segs`` is not duplicated.
     """
     if _AUDIO_TAIL_COMMENT in class_body:
         return class_body
@@ -697,6 +933,10 @@ def append_audio_tail_to_class_body(class_body: str, timing_json_key: str) -> st
     indent = m.group(1) if m else ""
     inner = f"{indent}    "
     deeper = f"{indent}        "
+    prefix_before_fade = "".join(lines[:fade_idx])
+    if _AUDIO_END_WAIT_BEFORE_FADEOUT_RE.search(prefix_before_fade):
+        tail = f"{indent}{_AUDIO_TAIL_COMMENT}\n"
+        return "".join(lines[:fade_idx] + [tail, lines[fade_idx]])
     tail = (
         f"{indent}{_AUDIO_TAIL_COMMENT}\n"
         f"{indent}_docgen_segs = _load_timing({timing_json_key!r})\n"
@@ -783,7 +1023,7 @@ def ensure_scenes_bootstrap(scenes_path: Path) -> None:
     except SyntaxError as exc:
         raise SceneGenerationError(
             f"{scenes_path} did not parse as Python ({exc.msg} at line {exc.lineno}). "
-            "Fix the file before re-running scene-generate."
+            "Fix the file before re-running scene-spec-generate / scene-compile."
         ) from exc
 
     defined: set[str] = set()
@@ -797,13 +1037,11 @@ def ensure_scenes_bootstrap(scenes_path: Path) -> None:
         raise SceneGenerationError(
             f"{scenes_path} is missing required helpers: {missing}. "
             "Either restore the helpers (palette + _box + _arrow + _load_timing + _TimedScene) "
-            f"or delete {scenes_path.name} so scene-generate can write a fresh bootstrap."
+            f"or delete {scenes_path.name} so scene-spec-generate / scene-compile can write a fresh bootstrap."
         )
 
 
-# ── End-to-end driver ──────────────────────────────────────────────────────
-
-
+# ── Narration / timing loaders (scene-spec-generate) ───────────────────────
 def _load_narration(cfg: "Config", seg_id: str, seg_name: str) -> str:
     """Read ``narration/<seg_name>.md``; raise if missing (per fail-loud contract)."""
     nar_path = cfg.narration_dir / f"{seg_name}.md"
@@ -824,152 +1062,3 @@ def _load_timing_segments(cfg: "Config", seg_name: str) -> list[dict]:
     except (OSError, ValueError):
         return []
     return list(data.get(seg_name, {}).get("segments", []))
-
-
-@dataclass
-class SceneGenerationResult:
-    seg_id: str
-    seg_name: str
-    class_name: str
-    scenes_path: Path
-    raw_response: str
-    cleaned_code: str
-    prompt: str
-    written: bool
-
-
-def generate_scene(
-    cfg: "Config",
-    seg_id: str,
-    *,
-    extra_paths: list[str],
-    extra_hints: list[str],
-    class_name_override: str | None = None,
-    dry_run: bool = False,
-    print_only: bool = False,
-) -> SceneGenerationResult:
-    """Drive the full prompt → call → validate → inject loop.
-
-    ``dry_run`` returns the assembled prompt without calling OpenAI; the result's
-    ``raw_response`` and ``cleaned_code`` will be empty. ``print_only`` calls the
-    model and validates the response but does not write to disk.
-    """
-    settings = merged_scene_generation_settings(cfg, seg_id)
-    seg_name = cfg.resolve_segment_name(seg_id)
-    class_name = derive_class_name(
-        seg_id, seg_name, class_name_override or settings.class_name
-    )
-    narration_text = _load_narration(cfg, seg_id, seg_name)
-    whisper_segments = _load_timing_segments(cfg, seg_name)
-
-    scenes_path = cfg.animations_dir / "scenes.py"
-    if scenes_path.exists():
-        existing = scenes_path.read_text(encoding="utf-8")
-    else:
-        existing = ""
-    reference_scenes = extract_reference_classes(existing)
-
-    snippets = collect_source_snippets(cfg, settings, extra_paths=extra_paths)
-
-    user_message = build_user_message(
-        seg_id=seg_id,
-        seg_name=seg_name,
-        class_name=class_name,
-        narration_text=narration_text,
-        whisper_segments=whisper_segments,
-        hints=settings.hints,
-        extra_hints=extra_hints,
-        reference_scenes=reference_scenes,
-        source_snippets=snippets,
-    )
-
-    if dry_run:
-        return SceneGenerationResult(
-            seg_id=seg_id,
-            seg_name=seg_name,
-            class_name=class_name,
-            scenes_path=scenes_path,
-            raw_response="",
-            cleaned_code="",
-            prompt=user_message,
-            written=False,
-        )
-
-    raw = call_llm(
-        system_prompt=settings.system_prompt,
-        user_message=user_message,
-        model=settings.model,
-        temperature=settings.temperature,
-    )
-    cleaned = strip_response_fences(raw)
-
-    try:
-        validate_class_definition(cleaned, class_name)
-    except SceneGenerationError:
-        drafts_dir = cfg.animations_dir / ".scene-generate-drafts"
-        drafts_dir.mkdir(parents=True, exist_ok=True)
-        draft = drafts_dir / f"{seg_id}.draft.py"
-        draft.write_text(raw, encoding="utf-8")
-        raise
-
-    lint_issues = lint_generated_block(
-        cleaned,
-        min_font_size=cfg.manim_min_font_size,
-        unsafe_unicode=cfg.manim_unsafe_unicode,
-    )
-    if lint_issues:
-        drafts_dir = cfg.animations_dir / ".scene-generate-drafts"
-        drafts_dir.mkdir(parents=True, exist_ok=True)
-        draft = drafts_dir / f"{seg_id}.draft.py"
-        draft.write_text(cleaned, encoding="utf-8")
-        joined = "\n  ".join(lint_issues[:15])
-        raise SceneGenerationError(
-            f"Generated class for segment {seg_id} would fail `docgen validate` "
-            f"manim_scene_lint:\n  {joined}\n"
-            f"Draft saved to {draft}. Tighten YAML hints or `--hint`, then re-run."
-        )
-
-    cleaned = append_audio_tail_to_class_body(cleaned, seg_name)
-    lint2 = lint_generated_block(
-        cleaned,
-        min_font_size=cfg.manim_min_font_size,
-        unsafe_unicode=cfg.manim_unsafe_unicode,
-    )
-    if lint2:
-        drafts_dir = cfg.animations_dir / ".scene-generate-drafts"
-        drafts_dir.mkdir(parents=True, exist_ok=True)
-        draft = drafts_dir / f"{seg_id}.draft.py"
-        draft.write_text(cleaned, encoding="utf-8")
-        joined = "\n  ".join(lint2[:15])
-        raise SceneGenerationError(
-            f"After audio-tail injection, segment {seg_id} failed manim_scene_lint:\n  {joined}\n"
-            f"Draft saved to {draft}."
-        )
-
-    if print_only:
-        return SceneGenerationResult(
-            seg_id=seg_id,
-            seg_name=seg_name,
-            class_name=class_name,
-            scenes_path=scenes_path,
-            raw_response=raw,
-            cleaned_code=cleaned,
-            prompt=user_message,
-            written=False,
-        )
-
-    ensure_scenes_bootstrap(scenes_path)
-    text = scenes_path.read_text(encoding="utf-8")
-    new_text = inject_or_replace(text, seg_id, class_name, cleaned)
-    scenes_path.write_text(new_text, encoding="utf-8")
-
-    return SceneGenerationResult(
-        seg_id=seg_id,
-        seg_name=seg_name,
-        class_name=class_name,
-        scenes_path=scenes_path,
-        raw_response=raw,
-        cleaned_code=cleaned,
-        prompt=user_message,
-        written=True,
-    )

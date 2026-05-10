@@ -33,7 +33,7 @@ Cover in spoken order:
 
 1. **Two demo styles** — long-form **Manim** segments vs short **Playwright** tutorials from real tests.
 2. **Hint files** — Markdown under `docs/demos/hints/` is committed input; it steers OpenAI for `scene-spec-generate` and `narration-generate`, and **segment wiring** is merged by **`docgen yaml-generate`** from front matter (`docgen.segment` and `docgen.wiring`) — not by hand-editing `docgen.yaml` in an editor.
-3. **Declarative Manim** — YAML specs compile to layout-safe scenes; raw `scene-generate` stays for richer motion when you need it.
+3. **Declarative Manim** — YAML specs compile to layout-safe scenes; custom motion belongs in hand-maintained Python outside generated marker blocks.
 4. Close with: run **`docgen yaml-generate`** after changing hints, then run `docgen` TTS and visual steps from the bundle directory.
 
 Keep sentences short; bullets here are for the author or LLM — the final `narration/*.md` must stay plain prose (see `narration-tts.md`).

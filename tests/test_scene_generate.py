@@ -1,15 +1,15 @@
 """Unit tests for ``docgen.scene_generate``.
 
-Covers settings merge, class-name derivation, response parsing/validation,
-marker-block injection (idempotent regeneration), and the bootstrap path for
-fresh ``scenes.py`` files. The OpenAI call is mocked end-to-end; no network or
-``OPENAI_API_KEY`` is required.
+Covers settings merge, class-name derivation, marker-block injection (idempotent
+regeneration), bootstrap path for fresh ``scenes.py`` files, and
+:class:`lint_generated_block`. The OpenAI path lives in ``scene_spec_generate``;
+no ``OPENAI_API_KEY`` is required here.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import yaml
@@ -21,16 +21,14 @@ from docgen.scene_generate import (
     REQUIRED_HELPERS,
     SceneGenerationError,
     append_audio_tail_to_class_body,
+    build_timing_enrichment_for_prompt,
     derive_class_name,
     ensure_scenes_bootstrap,
     extract_reference_classes,
-    generate_scene,
     inject_or_replace,
     lint_generated_block,
     merged_scene_generation_settings,
-    strip_response_fences,
     sync_audio_tail_waits_in_scenes,
-    validate_class_definition,
 )
 
 
@@ -67,6 +65,31 @@ def test_settings_default_when_yaml_block_missing(tmp_path: Path) -> None:
     assert s.hints == []
     assert s.context_paths == []
     assert s.class_name is None
+
+
+def test_build_timing_enrichment_includes_whisper_rows_and_docgen_pace_tuple(
+    tmp_path: Path,
+) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {
+            "manim_scene_generation": {
+                "segments": {
+                    "08": {"visual_beats": 3, "class_name": "DemoFunctionScene"},
+                },
+            },
+        },
+    )
+    segs = [
+        {"start": 0.0, "end": 1.0, "text": "alpha"},
+        {"start": 1.0, "end": 2.0, "text": "bravo"},
+        {"start": 2.0, "end": 3.0, "text": "charlie"},
+        {"start": 3.0, "end": 4.0, "text": "delta"},
+    ]
+    out = build_timing_enrichment_for_prompt(cfg, "08", "08-demo-function", segs)
+    assert "whisper_index" in out
+    assert "_DOCGEN_PACE_SEG = (0, 2, 3)" in out
+    assert "_DOCGEN_NUM_BEATS = 3" in out
 
 
 def test_settings_root_and_segment_overrides_merge(tmp_path: Path) -> None:
@@ -143,6 +166,24 @@ def test_append_audio_tail_idempotent() -> None:
     assert once == twice
 
 
+def test_append_audio_tail_comment_only_when_llm_already_waited_for_end() -> None:
+    src = (
+        "class X(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        _segs = _load_timing('01-intro')\n"
+        "        if _segs:\n"
+        "            self.wait_until(\n"
+        "                max(float(s.get(\"end\", 0.0)) for s in _segs)\n"
+        "            )\n"
+        "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
+    )
+    out = append_audio_tail_to_class_body(src, "01-intro")
+    assert out.count("self.wait_until(") == 1
+    assert "_docgen_segs" not in out
+    assert "audio-length tail" in out
+    assert out.index("audio-length tail") < out.index("FadeOut")
+
+
 def test_sync_audio_tail_waits_patches_marked_block(tmp_path: Path) -> None:
     import json
 
@@ -180,9 +221,6 @@ class OverviewScene(_TimedScene):
     assert sync_audio_tail_waits_in_scenes(cfg) == []
 
 
-# ── Validation ─────────────────────────────────────────────────────────────
-
-
 _GOOD_CLASS = (
     "class DemoFunctionScene(_TimedScene):\n"
     "    def construct(self):\n"
@@ -192,69 +230,6 @@ _GOOD_CLASS = (
     "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
     "        self.timed_wait(0.5)\n"
 )
-
-
-def test_validate_accepts_timed_scene_subclass() -> None:
-    cls = validate_class_definition(_GOOD_CLASS, "DemoFunctionScene")
-    assert cls.name == "DemoFunctionScene"
-
-
-def test_validate_rejects_empty_output() -> None:
-    with pytest.raises(SceneGenerationError, match="empty"):
-        validate_class_definition("", "Anything")
-
-
-def test_validate_rejects_syntax_error() -> None:
-    with pytest.raises(SceneGenerationError, match="parse"):
-        validate_class_definition("class Foo(_TimedScene)\n  pass", "Foo")
-
-
-def test_validate_rejects_no_class() -> None:
-    with pytest.raises(SceneGenerationError, match="no class"):
-        validate_class_definition("x = 1\n", "Foo")
-
-
-def test_validate_rejects_multiple_classes() -> None:
-    code = (
-        "class A(_TimedScene):\n    pass\n"
-        "class B(_TimedScene):\n    pass\n"
-    )
-    with pytest.raises(SceneGenerationError, match="multiple"):
-        validate_class_definition(code, "A")
-
-
-def test_validate_rejects_module_level_statements() -> None:
-    code = "import os\nclass A(_TimedScene):\n    pass\n"
-    with pytest.raises(SceneGenerationError, match="non-class"):
-        validate_class_definition(code, "A")
-
-
-def test_validate_rejects_class_name_mismatch() -> None:
-    with pytest.raises(SceneGenerationError, match="mismatch"):
-        validate_class_definition(_GOOD_CLASS, "OtherScene")
-
-
-def test_validate_rejects_wrong_base_class() -> None:
-    code = "class Foo(int):\n    pass\n"
-    with pytest.raises(SceneGenerationError, match="must extend"):
-        validate_class_definition(code, "Foo")
-
-
-# ── Fence stripping ────────────────────────────────────────────────────────
-
-
-def test_strip_fences_removes_python_fence() -> None:
-    fenced = "```python\nclass A(_TimedScene):\n    pass\n```"
-    assert strip_response_fences(fenced) == "class A(_TimedScene):\n    pass"
-
-
-def test_strip_fences_removes_bare_fence() -> None:
-    fenced = "```\nclass A(_TimedScene):\n    pass\n```"
-    assert strip_response_fences(fenced) == "class A(_TimedScene):\n    pass"
-
-
-def test_strip_fences_passthrough_when_no_fence() -> None:
-    assert strip_response_fences("class A(_TimedScene): pass") == "class A(_TimedScene): pass"
 
 
 # ── Marker injection (idempotent regeneration) ─────────────────────────────
@@ -354,104 +329,6 @@ def test_extract_reference_classes_handles_empty_text() -> None:
     assert extract_reference_classes("") == ""
 
 
-# ── End-to-end driver (mocked OpenAI) ──────────────────────────────────────
-
-
-def _setup_project(tmp_path: Path) -> Config:
-    """Materialize a minimal docgen project with narration + animations dirs."""
-    cfg = _write_cfg(
-        tmp_path,
-        {
-            "manim_scene_generation": {
-                "model": "gpt-4o",
-                "segments": {"08": {"class_name": "DemoFunctionScene"}},
-            }
-        },
-    )
-    (tmp_path / "narration").mkdir()
-    (tmp_path / "narration" / "08-demo-function.md").write_text(
-        "Spoken narration for segment 08.\n", encoding="utf-8"
-    )
-    (tmp_path / "animations").mkdir()
-    return cfg
-
-
-def test_generate_scene_dry_run_does_not_call_openai_or_write(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    with patch("docgen.scene_generate.call_llm") as mocked:
-        result = generate_scene(
-            cfg, "08", extra_paths=[], extra_hints=["audience: engineers"], dry_run=True
-        )
-    mocked.assert_not_called()
-    assert result.written is False
-    assert result.cleaned_code == ""
-    assert "DemoFunctionScene" in result.prompt
-    assert "audience: engineers" in result.prompt
-    assert "Spoken narration for segment 08." in result.prompt
-    assert not (tmp_path / "animations" / "scenes.py").exists()
-
-
-def test_generate_scene_writes_to_scenes_py(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    with patch("docgen.scene_generate.call_llm", return_value=_GOOD_CLASS):
-        result = generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    assert result.written is True
-    assert result.class_name == "DemoFunctionScene"
-    out = (tmp_path / "animations" / "scenes.py").read_text(encoding="utf-8")
-    assert "class DemoFunctionScene(_TimedScene)" in out
-    assert "BEGIN GENERATED SCENE: 08 (DemoFunctionScene)" in out
-    # Bootstrap was written first because scenes.py didn't exist:
-    for helper in REQUIRED_HELPERS:
-        assert helper in out
-
-
-def test_generate_scene_print_only_validates_but_does_not_write(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    with patch("docgen.scene_generate.call_llm", return_value=_GOOD_CLASS):
-        result = generate_scene(cfg, "08", extra_paths=[], extra_hints=[], print_only=True)
-    assert result.written is False
-    assert "DemoFunctionScene" in result.cleaned_code
-    assert not (tmp_path / "animations" / "scenes.py").exists()
-
-
-def test_generate_scene_strips_fenced_response(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    fenced = f"```python\n{_GOOD_CLASS}```"
-    with patch("docgen.scene_generate.call_llm", return_value=fenced):
-        result = generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    assert result.written is True
-    assert result.cleaned_code.startswith("class DemoFunctionScene")
-
-
-def test_generate_scene_saves_draft_on_validation_failure(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    bad = "not a class definition at all"
-    with patch("docgen.scene_generate.call_llm", return_value=bad):
-        with pytest.raises(SceneGenerationError):
-            generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    draft = tmp_path / "animations" / ".scene-generate-drafts" / "08.draft.py"
-    assert draft.exists()
-    assert draft.read_text(encoding="utf-8") == bad
-    # scenes.py was NOT touched:
-    assert not (tmp_path / "animations" / "scenes.py").exists()
-
-
-def test_generate_scene_idempotent_second_call_replaces_block(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    v1 = _GOOD_CLASS
-    v2 = _GOOD_CLASS.replace("'demo'", "'demo v2'")
-    with patch("docgen.scene_generate.call_llm", return_value=v1):
-        generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    with patch("docgen.scene_generate.call_llm", return_value=v2):
-        generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    out = (tmp_path / "animations" / "scenes.py").read_text(encoding="utf-8")
-    assert out.count("BEGIN GENERATED SCENE: 08 (DemoFunctionScene)") == 1
-    assert "'demo v2'" in out
-    assert "'demo'" not in out.replace("'demo v2'", "")
-    import ast
-    ast.parse(out)
-
-
 # ── Pre-write lint (font_size, weight=BOLD, unsafe unicode) ────────────────
 
 
@@ -517,38 +394,80 @@ def test_lint_flags_unsafe_unicode_in_comment() -> None:
     assert any("U+2014" in i for i in issues)
 
 
+def test_lint_flags_set_opacity_zero_then_fadein_anti_pattern() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        chip = _box('x', C_GREEN, 1, 1)\n"
+        "        chip.set_opacity(0)\n"
+        "        self.timed_play(FadeIn(chip), run_time=0.5)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert any("set_opacity(0)" in i and "FadeIn" in i for i in issues)
+
+
+def test_lint_flags_low_buff_next_to_title_down() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        title = Text('t', font_size=42, color=C_WHITE)\n"
+        "        row = VGroup().arrange(RIGHT, buff=0.4)\n"
+        "        row.next_to(title, DOWN, buff=0.2)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert any("buff=0.2" in i and "title" in i for i in issues)
+
+
+def test_lint_passes_safe_buff_next_to_title_down() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        title = Text('t', font_size=42, color=C_WHITE)\n"
+        "        row = VGroup().arrange(RIGHT, buff=0.4)\n"
+        "        row.next_to(title, DOWN, buff=0.5)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert not any("title" in i and "overlap" in i.lower() for i in issues)
+
+
+def test_lint_flags_animate_shift_up_on_placed_content() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        statuses = VGroup()\n"
+        "        self.timed_play(statuses.animate.shift(UP * 0.75), run_time=1.0)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert any("UP * 0.75" in i and "title band" in i for i in issues)
+
+
+def test_lint_passes_to_edge_down_for_new_bottom_content() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        tracks = VGroup().arrange(RIGHT).to_edge(DOWN, buff=0.5)\n"
+        "        self.timed_play(FadeIn(tracks), run_time=1.0)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert not any("title band" in i for i in issues)
+
+
+def test_lint_passes_paced_reveal_helper_pattern() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        chips = [_box('x', C_GREEN, 1, 1)]\n"
+        "        _segs = _load_timing('01-x')\n"
+        "        self.paced_reveal(_segs, chips, (0,))\n"
+        "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert not any("set_opacity(0)" in i for i in issues)
+
+
 def test_lint_returns_partial_issues_when_unparsable() -> None:
     """Syntax-broken code still surfaces unicode line-scan issues; AST checks bail."""
     arrow = chr(0x2192)
     code = f"Text('x {arrow} y', font_size=12,\n# unbalanced"
     issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=["\u2192"])
     assert any("U+2192" in i for i in issues)
-
-
-def test_generate_scene_rejects_lint_violation_and_saves_draft(tmp_path: Path) -> None:
-    cfg = _setup_project(tmp_path)
-    bad = (
-        "class DemoFunctionScene(_TimedScene):\n"
-        "    def construct(self):\n"
-        "        self.camera.background_color = C_BG\n"
-        "        Text('OPENAI_API_KEY', font_size=10, color=C_RED)\n"
-        "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
-        "        self.timed_wait(0.5)\n"
-    )
-    with patch("docgen.scene_generate.call_llm", return_value=bad):
-        with pytest.raises(SceneGenerationError, match="manim_scene_lint"):
-            generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    draft = tmp_path / "animations" / ".scene-generate-drafts" / "08.draft.py"
-    assert draft.exists()
-    assert "font_size=10" in draft.read_text(encoding="utf-8")
-    assert not (tmp_path / "animations" / "scenes.py").exists()
-
-
-def test_generate_scene_fails_loud_when_narration_missing(tmp_path: Path) -> None:
-    cfg = _write_cfg(tmp_path)
-    (tmp_path / "narration").mkdir()
-    (tmp_path / "animations").mkdir()
-    with patch("docgen.scene_generate.call_llm") as mocked:
-        with pytest.raises(SceneGenerationError, match="narration file not found"):
-            generate_scene(cfg, "08", extra_paths=[], extra_hints=[])
-    mocked.assert_not_called()

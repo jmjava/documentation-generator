@@ -146,13 +146,13 @@ def build_scene_spec_user_message(
     seg_name: str,
     class_name: str,
     narration_text: str,
-    whisper_segments: list[dict],
+    timing_enrichment: str,
     hints: list[str],
     extra_hints: list[str],
     reference_scenes: str,
     source_snippets: list[tuple[str, str]],
 ) -> str:
-    """User message: echo ids + same context as scene-generate, demand YAML spec."""
+    """User message: narration + timing + hints; demand YAML spec."""
     parts: list[str] = []
     parts.append(
         f"Produce a **scene spec YAML** (not Python) for segment `{seg_id}` / class `{class_name}` "
@@ -166,20 +166,7 @@ def build_scene_spec_user_message(
     parts.append("--- NARRATION ---")
     parts.append(narration_text.strip() or "(empty)")
     parts.append("")
-    parts.append(f"--- TIMING (`timing.json` key {seg_name!r}; wait_segment indices refer to this list) ---")
-    if whisper_segments:
-        compact = [
-            {
-                "i": i,
-                "start": float(s.get("start", 0.0)),
-                "end": float(s.get("end", 0.0)),
-                "text": str(s.get("text", "")).strip(),
-            }
-            for i, s in enumerate(whisper_segments[:40])
-        ]
-        parts.append(json.dumps(compact, indent=2))
-    else:
-        parts.append("[]  # omit wait_segment on rows, or the compiler still works")
+    parts.append(timing_enrichment.strip())
 
     all_hints = list(hints) + list(extra_hints)
     if all_hints:
@@ -349,6 +336,9 @@ def generate_scene_spec(
     )
     narration_text = load_narration_for_scene(cfg, seg_id, seg_name)
     whisper_segments = load_timing_for_scene(cfg, seg_name)
+    from docgen.scene_generate import build_timing_enrichment_for_prompt
+
+    timing_block = build_timing_enrichment_for_prompt(cfg, seg_id, seg_name, whisper_segments)
 
     scenes_path = cfg.animations_dir / "scenes.py"
     existing = scenes_path.read_text(encoding="utf-8") if scenes_path.exists() else ""
@@ -361,7 +351,7 @@ def generate_scene_spec(
         seg_name=seg_name,
         class_name=class_name,
         narration_text=narration_text,
-        whisper_segments=whisper_segments,
+        timing_enrichment=timing_block,
         hints=settings.hints,
         extra_hints=extra_hints,
         reference_scenes=reference_scenes,
