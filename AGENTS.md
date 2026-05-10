@@ -2,78 +2,69 @@
 
 ## North star
 
-Stable goals for this repo and how it plugs into the wider suite:
+Stable goals for this repository:
 
-1. **Embeddable generator** — **`pip install docgen`**, a `docgen.yaml`, and shell/CI are enough to build and maintain demos. **No IDE assistant (Cursor, Copilot, …) is required**; optional **`docgen wizard`** is a local web app only.
-2. **Hybrid config and prose** — **`docgen.yaml`** should stay maintainable: **deterministic merges / discovery** (e.g. `yaml-generate` defaults, gap checks) plus **optional OpenAI** where it adds value (narration hints, scene/yaml prose). Prefer **Git-reviewed** changes over opaque single-shot generation.
-3. **Two video surfaces** — **Long-form “how the system works”:** Markdown + TTS + **Manim** (+ **Playwright** in `visual_map` when the story needs a real browser). **Short tutorials from tests:** **Playwright** (`demo-function`, `discover-tests`, catalog). **VHS / `kind: cli`** is **legacy** and **may be deprecated**; do not start new work on tapes.
-4. **Stable contracts** — CLI, exit codes, **`docgen.catalog.yaml`** at repo root, and reusable workflows should stay predictable so **other repos’ CI and Tekton** can depend on them without forking behavior.
-5. **In-repo dogfood first** — Before treating **integrated apps** (`courseforge/course-builder`, etc.) as the primary focus, keep **`docs/demos`** honest: **`docgen --config docgen.yaml validate --pre-push`** from **`docs/demos`** must pass on **main** (same commands as any consumer). Full **`generate-all`** when changing pipeline or visuals. Tracker: **`milestones/next-session-dogfood.md`**.
-6. **Tool-only generation** — Narration, merged **`docgen.yaml`**, scenes, TTS audio, composed media, catalog updates, and other **generated** artifacts must come from **docgen** (CLI/library) and **committed wrapper scripts** that call it—not from IDE-authored rewrites of outputs. If something cannot be done yet, **change docgen** (or add a small script) and then run the tool. For **`docs/demos`**, **`docgen.yaml`** is the **only** bundle config (same as any consumer): update it in Git, then **`docgen yaml-generate`** for defaults and **`manim_scene_generation` ↔ `visual_map` sync**—not a parallel maintainer-only YAML. Cursor rules: **`.cursor/rules/docgen-tools-only.mdc`**, **`.cursor/rules/no-asset-edits.mdc`**.
+1. **Embeddable generator** — **`pip install docgen`** (or editable install from source), a `docgen.yaml`, and shell/CI are enough to build and maintain narrated demos. **No IDE assistant is required**; optional **`docgen wizard`** is a local web app only.
+2. **Hybrid config and prose** — **`docgen.yaml`** should stay maintainable: deterministic merges (**`yaml-generate`**, gap checks) plus **optional OpenAI** where it adds value (narration hints, declarative scene YAML). Prefer **Git-reviewed** changes over opaque single-shot generation.
+3. **Video stack** — Long-form demos pair **Markdown narration**, **OpenAI TTS**, **Whisper-style timestamps**, **Manim** visuals, **`compose`** (ffmpeg), **`concat`**, and **`validate`** (sync and narration lint). The CLI also supports **`pages`** for static preview sites.
+4. **Stable contracts** — CLI, exit codes, and reusable workflows should stay predictable for downstream repos and automation.
+5. **Library, not app** — There is **no in-repo dogfood bundle**. Consumer projects (e.g. `course-builder`) are the integration test of record. The library must not import or special-case any consumer.
+6. **Tool-only generation** — Narration, merged **`docgen.yaml`**, compiled **`scenes.py`**, TTS audio, composed media, and other **generated** artifacts must come from **docgen** (CLI/library) and **committed wrapper scripts** that call it — not from hand-edited outputs passed off as sources. In a consumer bundle, prefer **`hints/*.md`** + **`yaml-generate`** over ad-hoc YAML surgery. Cursor rules: **`.cursor/rules/docgen-tools-only.mdc`**, **`.cursor/rules/no-asset-edits.mdc`**.
 
-## Protected assets (Cursor must not edit)
+## Protected assets in a consumer bundle (Cursor must not edit)
 
-`docgen` + OpenAI are the **only** path that produces these — Cursor edits live in `src/docgen/**`, `tests/**`, wrapper scripts, and rules/AGENTS. Full classification in **`.cursor/rules/no-asset-edits.mdc`**:
+`docgen` + OpenAI are the **only** path that produces category **C** outputs — see **`.cursor/rules/no-asset-edits.mdc`**. Summary (paths relative to a consumer bundle, typically `docs/demos/`):
 
-- **Outputs (Cursor MUST NOT edit):** `docs/demos/docgen.yaml`; `docs/demos/narration/*.md` (excluding `README.md`); `docs/demos/animations/scenes.py`, `docs/demos/animations/timing.json`, `docs/demos/animations/specs/*.scene.yaml` (declarative scene specs from **`docgen scene-spec-generate`** or hand-curated after generation; compiled into `scenes.py` via **`docgen scene-compile`**); `docs/demos/audio/*.mp3`; `docs/demos/recordings/**`.
-- **Inputs / fixtures (Cursor edits OK; never deleted by reset):** `docs/demos/hints/**` — maintainer hint Markdown (YAML front matter: `docgen.segment`, `docgen.wiring`) merged by **`docgen yaml-generate`** into `docgen.yaml`; also steer **`narration-generate` / `scene-spec-generate`** via merged `context.paths`. Prefer editing hints and re-running **`yaml-generate`** over hand-editing per-segment keys in `docgen.yaml`. `docs/demos/terminal/*.tape`; `docs/demos/scripts/*.py`; `fixtures/**` (raw Playwright specs there are inputs to `docgen per-function-generate`); `docs/demos/narration/README.md`.
-- **Outputs (Cursor must NOT edit; emitted by docgen + OpenAI):** ...; `docs/demos/per-function/*.docgen.yaml` and sibling `*.html` (owner: `docgen per-function-generate`).
+- **Outputs (do not hand-edit):** `<bundle>/docgen.yaml` (as emitted by **`yaml-generate`**); `<bundle>/narration/*.md` (except `README.md`); `<bundle>/animations/scenes.py`, `timing.json`, `animations/specs/*.scene.yaml` (scene pipeline); `<bundle>/audio/*.mp3`; `<bundle>/recordings/**` where applicable.
+- **Inputs (maintainer-owned):** `<bundle>/hints/**` with YAML front matter (`docgen.segment`, `docgen.wiring`); maintainer scripts under the bundle; `tests/**` fixtures inside this library; `<bundle>/narration/README.md`.
 
-`docgen` itself contains **no hardcoded segment numbers, scene class names, tape filenames, or fixture paths**. Wiring is discovered: segments from `narration/`, tapes from `terminal/`, Playwright capture from `scripts/*.py` matched by segment id, Manim classes from `animations/scenes.py`, and Playwright project dirs (for `discover_tests.roots`) from `package.json` Playwright deps or `playwright.config.{js,ts,mjs,cjs}`. Tests may keep concrete ids and class names as test data.
+`docgen` avoids hardcoding consumer segment ids in library code; tests may use concrete fixtures.
 
-**How this repo fits others:** **`courseforge/course-builder`** owns application code, manifests, and workflows that **invoke** docgen. **`courseforge/infrastructure`** owns **when** jobs run, secrets, Tekton/`jmjava/tekton-dag` wiring, and **org docs publishing** toward **`courseforge.github.io`**. **`jmjava/documentation-generator`** (here) owns **the implementation** of segment and per-function video pipelines. End-to-end publishing may span those repos; the **generator code** stays centralized here. Deeper suite narrative: **`courseforge/infrastructure`** → `docs/suite-integration.md`. In-repo dogfood vs upstream consumer: **`milestones/next-session-dogfood.md`**, **`milestones/upstream-dogfood.md`**.
+### Consumer resets (generic)
 
-### One-time: migration cleanup (related repos)
+Downstream repos that pin this library should:
 
-After a **large refactor** (north star, new Playwright/Manim focus, workflow layout, catalog contract), maintainers may do a **single coordinated pass** in **sibling repos**—for example **`courseforge/course-builder`** (workflow paths, per-function layout, pin comments) and **`courseforge/infrastructure`** (canonical pin in `docs/tekton-dag-reuse.md`, Tekton task defaults). That **structural** cleanup is **not** repeated on every docgen refresh; it pays down the cost of the refactor **once** (or when contracts change again in a big way).
+1. Run **`docgen yaml-generate`** (and review the diff).
+2. Regenerate narration, scenes, audio, and video with the documented CLI sequence for their bundle.
+3. Run **`validate`** / **`validate --pre-push`** before pushing.
 
-### Consumer “full docgen reset” (repeatable)
-
-There is **no** `docgen nuke-consumer` command. When a consumer is already on the **current layout** and you only need to **realign outputs and metadata** after bumping docgen or editing sources, use this **repeatable** playbook:
-
-1. **Config** — From the bundle dir: `docgen --config … yaml-generate [--dry-run]` → review diff (defaults merge; optional `--llm`; comments not preserved). Optionally `yaml-generate --list-gaps` for narration vs `segments.all`.
-2. **Catalog** — **`docgen catalog reset -y`** (empty all entries, keep file/schema) when discovery ids changed; or **`DOCGEN_CATALOG_FORCE_ALL=1`** for one run to treat every entry as stale without wiping the list.
-3. **Outputs** — Full **`generate-all`** / per-function rebuilds + CI or local regen; delete or overwrite **`recordings/`**, **`audio/`**, **`per-function`**, caches per repo policy. For **this repository’s** `docs/demos` bundle, use **`docs/demos/_full-reset-regenerate.sh`** (automates catalog reset, deletion of regenerable paths, `generate-all`, `_rebuild-per-function.sh`, `validate --pre-push`; see **`docs/demos/README.md`**).
-4. **CI / Pages** — **`workflow_dispatch`** or push; restore any curated files docgen overwrites (e.g. **`pages.yml`**).
-
-**Pin bumps** (`pip install …@<sha>`) are **routine** when you adopt a new docgen commit; they are **not** the same as the one-time sibling-repo cleanup above.
-
-Concrete **course-builder** notes: **`milestones/upstream-dogfood.md`**. Consumer **`docgen`** bootstrap: **`courseforge/course-builder`** → **`docs/demos/README.md`** and **`scripts/docgen-engine.path.example`**. Friction → **issues/PRs here**.
+**Pin bumps** (`pip install …@<sha>`) are routine when adopting a new docgen commit.
 
 ## What this repo is
 
-`docgen` is the **documentation / narrated demo video engine**: CLI + library focused on **Manim** (long-form explanation) and **Playwright** (short tutorials from real UI tests). **VHS** (terminal `.tape`) is **legacy** and **may be deprecated**; it remains only for existing bundles and CI until migration. It is **not** the product app and **not** the CI orchestrator.
+`docgen` is a **documentation and narrated demo video** toolkit: CLI + library focused on **Manim** (diagram-heavy segments), **TTS**, **timestamps**, **composition**, **validation**, **`pages`**, and **wizard**-assisted authoring. It is **not** the product application and **not** the CI orchestrator for downstream apps.
 
-### Two pillars (keep product framing aligned)
+The Playwright/VHS/demo-function/per-function/discover-tests/catalog surface area was removed; see the README for what is supported today.
 
-- **Story mode** — **Manim**-forward long segments; optional **Playwright** in `visual_map`; **no new VHS**.
-- **Truth-from-tests mode** — **Playwright** (`demo-function`, discovery). **`kind: cli`** (VHS) is legacy; same deprecation outlook as long-form tapes.
+## CLI surface (today)
 
-## CLI-first (no IDE assistant required)
+Commands registered on the **`docgen`** CLI include:
 
-Consuming repos should be able to bootstrap and maintain demos using **only** the published toolchain: `pip install docgen`, a `docgen.yaml`, shell/CI, and (where needed) `OPENAI_API_KEY`. **Cursor, Copilot, and other editor-integrated assistants are optional** and must not be assumed.
-
-Typical commands (see repo `README.md` for flags): `docgen init`, `docgen yaml-generate`, `docgen narration-generate`, **`docgen scene-spec-generate`** (LLM emits YAML), **`docgen scene-compile`** (YAML → `scenes.py`), `docgen demo-function`, `docgen discover-tests`, `docgen catalog`, `docgen generate-all`, plus `tts`, `manim`, `compose`, **`concat`**, `validate`, … (**`vhs` / `sync-vhs`** = legacy). **`docgen wizard`** is an optional **local Flask web UI** in your browser, not an IDE plugin.
-
-## Ecosystem (keep in focus)
-
-| Piece | Role |
-|-------|------|
-| **`courseforge/course-builder`** | Product: pluggable **tool/library** being built. Owns app code and, typically, doc manifests / tests that docgen consumes. |
-| **`courseforge/infrastructure`** | **Orchestration**: local Kind + Tekton, reuse of **`jmjava/tekton-dag`** for builds, pins to this repo, optional Tekton Tasks that invoke `docgen`, and **docs publishing** flow toward **`courseforge/github.io`**. |
-| **`jmjava/documentation-generator`** (here) | **Generator**: features should remain **embeddable** (`pip install docgen`, `docgen.yaml`, clear CLI) so infrastructure and course-builder can call them without forking. |
-
-Suite-level integration narrative (Phase 1 vs 2, GHA vs Tekton): see **`courseforge/infrastructure`** → `docs/suite-integration.md`.
+- **`init`** — scaffold bundle layout and `docgen.yaml`.
+- **`wizard`** — local web UI for narration/bootstrap workflows.
+- **`tts`** — text-to-speech for segment files.
+- **`timestamps`** — align narration audio to Whisper-style word/segment timing (`timing.json`).
+- **`manim`** — render Manim scenes declared in config.
+- **`compose`** — mux narration audio with visual sources via ffmpeg.
+- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, and related checks.
+- **`lint`** — narration lint helper.
+- **`narration-generate`** — LLM-assisted narration from hints and repo context.
+- **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**.
+- **`scene-compile`** — compile specs into **`scenes.py`** (generated regions only).
+- **`yaml-generate`** — merge defaults and hint wiring into **`docgen.yaml`**.
+- **`clean-bundle`** — remove regenerable outputs per policy.
+- **`concat`** — stitch segment videos.
+- **`pages`** — emit static HTML for demo assets.
+- **`generate-all`** — orchestrated pipeline for a bundle.
+- **`rebuild-after-audio`** — rerun steps that depend on fresh audio/timing.
 
 ## Implications for changes here
 
-- **Manim / `scenes.py` (marker blocks):** When pacing, layout, timing enrichment, audio-tail, or **compiled scene** output is wrong, **fix it in this repo** (`src/docgen/**`, especially `scene_generate.py`, `scene_spec.py`, `scene_spec_generate.py`, `timestamps`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside `animations/scenes.py` between the `BEGIN/END GENERATED SCENE` markers in a consumer bundle. After changing docgen, **bump the pin** (if needed) and re-run **`docgen scene-spec-generate`** (+ **`--compile`**) or **`docgen scene-compile`** on the saved YAML for the affected segment(s), then **`docgen manim`**. That is the only supported way to refresh category-C scene code. **Declarative contract:** box labels in the spec are aligned to Whisper words in `timing.json` by the compiler (`align_wait_at_to_words`); the LLM prompt also receives segment `text` for first-mention scheduling when it chooses `wait_segment` / `wait_at`.
-- Prefer **stable CLI / library contracts** and **documented exit codes** (e.g. neutral skip) so CI and Tekton steps can depend on them.
-- **Playwright test discovery**, **LLM-authored narration**, and **`playwright_test`** pipeline behavior belong **in this repo**; wiring secrets, cache volumes, and “when to run” belong in **infrastructure** / **course-builder** workflows.
-- **Discovery catalog:** default path is **`<repo_root>/docgen.catalog.yaml`** (`Config.catalog_file_path`) so every consuming repo has one stable, commit-friendly file for incremental regeneration; override with `catalog.file` in `docgen.yaml` if needed. Bundled issue template: **`docgen self catalog-issue-template`** (pip installs get it via `package-data`, not the git-only `docs/` tree).
-- **Narration from source:** **`docgen narration-generate`** + YAML `narration_from_source` — project-owner **hints** (not model-generated) plus repo file context; OpenAI writes narration `.md` for **`docgen tts`** (`docgen.narrate_from_source`).
-- Avoid duplicating long orchestration docs here; **link** to infrastructure or course-builder when describing publish pipelines.
+- **Manim / `scenes.py` (marker blocks):** Fix generators under `src/docgen/**` (`manim_scene_support.py`, `scene_spec.py`, `scene_spec_generate.py`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside a consumer's **`animations/scenes.py`** between **`BEGIN/END GENERATED SCENE`** markers; re-run **`scene-spec-generate`** / **`scene-compile`** and **`manim`** instead.
+- Prefer **stable CLI / library contracts** and **documented exit codes** so CI can depend on them.
+- **`narration_from_source`:** hints in config + **`docgen narration-generate`** — owner-supplied context paths, not opaque bulk edits to outputs.
+- Avoid duplicating long orchestration docs here; **link** to downstream repos when describing their publish pipelines.
 
 ## Testing (downstream relevance)
 
-**Downstream** here means **any project that uses docgen to generate documentation and demo assets** (narration, videos, pages, catalogs—not arbitrary unrelated apps). Tests in this repo should **cover what those consumers depend on**, not only internal refactors. Prioritize **stable contracts** and **CLI-visible behavior** that match **`docs/demos` dogfood** importer parity (**`docgen.yaml`** + **`yaml-generate`**, then same CLI as consumers): **`yaml-generate`**, **`scene-spec-generate`**, **`scene-compile`**, **`validate`** (streams, drift, manim lint, playwright_test), **`discover-tests`** / **catalog**, **`demo-function`**, **compose**, **`concat`**, **pages**, **`init`** scaffolding, **config** (`repo_root`, `discover_tests` roots), and **package exports**. Use **small fixtures** that hit the **same code paths** as real bundles; **`docs/demos`** is the full dogfood tree, not a pytest prerequisite. **Legacy VHS** tests may remain until migration but should not absorb most new coverage. When adding a feature adopters are expected to use, add or extend tests that would fail if that contract regresses in a downstream CI job.
+Tests should cover **CLI-visible behavior** and contracts that adopters rely on: **`yaml-generate`**, **`scene-spec-generate`**, **`scene-compile`**, **`validate`**, **`compose`**, **`generate-all`**, **`pages`**, **`init`**, **config** loading (`repo_root`, `env_file`), and package exports. Use small in-tree fixtures; this library does not ship a dogfood bundle.

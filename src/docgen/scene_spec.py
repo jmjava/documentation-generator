@@ -2,10 +2,12 @@
 
 LLMs are poor at reliable 2D layout in raw Manim code.  Instead they (or
 humans) author a small **scene spec** — rows of labeled boxes, colors, and
-optional ``wait_segment`` indices into ``timing.json`` (wait until that segment's
-**start**, which is often too early if the keyword appears mid-segment), or
-``wait_at`` absolute seconds for precise sync.  This module compiles
-that spec into a ``class ...(_TimedScene)`` body that:
+optional ``wait_word`` indices on each **box** into the Whisper **words** list in ``timing.json``
+(wait until that token's ``start``). Rows may still carry legacy ``wait_segment`` or a single
+``wait_word`` (applied only to the **first** box in that row after compile). On-disk YAML may
+still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to the first box's
+``wait_word`` when ``words`` exist.
+``class ...(_TimedScene)`` body that:
 
 * Lays out each **page** as a vertical stack of rows (``VGroup`` per row,
   then ``arrange(DOWN)``), positioned under the title — **no scaling** to cram
@@ -247,29 +249,80 @@ def _tokens_match(label_token: str, word_token: str) -> bool:
     return _stem(label_token) == _stem(word_token)
 
 
-def align_wait_at_to_words(
+def segment_index_for_whisper_time(
+    segments: list[dict[str, Any]], wall_time: float
+) -> int:
+    """Index of the Whisper segment whose ``start`` is last among those <= ``wall_time``.
+
+    ``segments`` is the ``segments`` list from ``timing.json`` for one narration stem.
+    """
+    if not segments:
+        return 0
+    best_i = 0
+    best_start = float("-inf")
+    for i, seg in enumerate(segments):
+        if not isinstance(seg, dict):
+            continue
+        try:
+            s0 = float(seg.get("start", 0.0))
+        except (TypeError, ValueError):
+            continue
+        if s0 <= wall_time and s0 >= best_start:
+            best_start = s0
+            best_i = i
+    return best_i
+
+
+def wait_word_index_for_time(words: list[dict[str, Any]], wall_time: float) -> int:
+    """Index of the Whisper **word** whose ``start`` is last among those ``<= wall_time``."""
+    if not words:
+        return 0
+    best_i = 0
+    best_start = float("-inf")
+    for i, w in enumerate(words):
+        if not isinstance(w, dict):
+            continue
+        try:
+            s0 = float(w.get("start", 0.0))
+        except (TypeError, ValueError):
+            continue
+        if s0 <= wall_time and s0 >= best_start:
+            best_start = s0
+            best_i = i
+    return best_i
+
+
+def wait_word_index_at_segment_start(
+    segments: list[dict[str, Any]], words: list[dict[str, Any]], segment_index: int
+) -> int:
+    """Map legacy ``wait_segment`` index → ``wait_word`` index at that segment's start."""
+    if segment_index < 0 or segment_index >= len(segments):
+        return 0
+    try:
+        t = float(segments[segment_index].get("start", 0.0))
+    except (TypeError, ValueError):
+        return 0
+    return wait_word_index_for_time(words, t)
+
+
+def sync_row_labels_to_whisper_words(
     spec: dict[str, Any],
     words: list[dict[str, Any]],
     *,
     overwrite: bool = False,
 ) -> dict[str, Any]:
-    """Set ``wait_at`` on each row to the first occurrence of its first box label in ``words``.
+    """Set ``wait_word`` on each **box** from its ``label`` → first spoken match (in order).
 
-    ``words`` is the ``words`` list from ``timing.json`` (each entry has ``word`` and ``start``).
-    Each label is matched as a sequence of normalized tokens (e.g. label ``"Demo Function"`` matches
-    consecutive words ``demo`` then ``function``). Multi-word labels advance the cursor past the
-    last matched word so the next row can claim a later occurrence — preventing two rows from
-    snapping to the same time.
-
-    Rows with an existing ``wait_at`` or ``wait_segment`` are left alone unless ``overwrite=True``.
-    Falls back silently when no match is found.
+    Uses the same label/word token rules as before. Each matched box waits at **word**
+    ``start``, not segment boundary. Row-level ``wait_word`` / ``wait_segment`` are cleared
+    when ``overwrite=True`` (compile path); legacy row ``wait_word`` is seeded onto the first
+    box only if that box has no label match.
     """
     if not isinstance(words, list) or not words:
         return spec
 
-    # Pre-normalize the word stream once.
-    norm_words: list[tuple[str, float]] = []
-    for w in words:
+    word_stream: list[tuple[str, float, int]] = []
+    for wi, w in enumerate(words):
         if not isinstance(w, dict):
             continue
         nw = _normalize_word(w.get("word", ""))
@@ -279,26 +332,29 @@ def align_wait_at_to_words(
             start = float(w.get("start", 0.0))
         except (TypeError, ValueError):
             continue
-        norm_words.append((nw, start))
+        word_stream.append((nw, start, wi))
+
+    if not word_stream:
+        return spec
 
     cursor = 0
 
-    def _find_label(label: str, from_idx: int) -> tuple[int, float] | None:
-        """Find the first occurrence of ``label`` starting at ``from_idx``; return (last_idx, start)."""
+    def _find_label(label: str, from_idx: int) -> tuple[int, int] | None:
+        """Return (last matched stream index, original ``words`` index of phrase start)."""
         tokens = [_normalize_word(t) for t in str(label).split() if _normalize_word(t)]
         if not tokens:
             return None
-        n = len(norm_words)
+        n = len(word_stream)
         m = len(tokens)
         i = from_idx
         while i <= n - m:
             ok = True
             for k in range(m):
-                if not _tokens_match(tokens[k], norm_words[i + k][0]):
+                if not _tokens_match(tokens[k], word_stream[i + k][0]):
                     ok = False
                     break
             if ok:
-                return (i + m - 1, norm_words[i][1])
+                return (i + m - 1, word_stream[i][2])
             i += 1
         return None
 
@@ -307,26 +363,47 @@ def align_wait_at_to_words(
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            if not overwrite and (row.get("wait_at") is not None or row.get("wait_segment") is not None):
-                # Still advance cursor so subsequent rows search past this row's label.
-                boxes = row.get("boxes")
-                if isinstance(boxes, list) and boxes and isinstance(boxes[0], dict):
-                    label = boxes[0].get("label", "")
-                    found = _find_label(label, cursor)
+            row.pop("wait_at", None)
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list) or not boxes:
+                continue
+
+            if not overwrite and (
+                row.get("wait_word") is not None or row.get("wait_segment") is not None
+            ):
+                first = boxes[0]
+                if isinstance(first, dict):
+                    found = _find_label(str(first.get("label", "")), cursor)
                     if found is not None:
                         cursor = found[0] + 1
                 continue
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list) or not boxes or not isinstance(boxes[0], dict):
-                continue
-            label = boxes[0].get("label", "")
-            found = _find_label(label, cursor)
-            if found is None:
-                continue
-            last_idx, start = found
-            row["wait_at"] = round(float(start), 2)
-            row.pop("wait_segment", None)
-            cursor = last_idx + 1
+
+            legacy_rw = row.pop("wait_word", None) if overwrite else None
+            if overwrite:
+                row.pop("wait_segment", None)
+
+            for bi, box in enumerate(boxes):
+                if not isinstance(box, dict):
+                    continue
+                box.pop("wait_at", None)
+                if not overwrite and box.get("wait_word") is not None:
+                    found = _find_label(str(box.get("label", "")), cursor)
+                    if found is not None:
+                        cursor = found[0] + 1
+                    continue
+
+                label = str(box.get("label", ""))
+                found = _find_label(label, cursor)
+                if found is not None:
+                    last_stream_i, first_word_i = found
+                    box["wait_word"] = int(first_word_i)
+                    box.pop("wait_segment", None)
+                    cursor = last_stream_i + 1
+                elif overwrite and bi == 0 and legacy_rw is not None:
+                    box["wait_word"] = int(legacy_rw)
+                elif overwrite:
+                    box.pop("wait_word", None)
+                    box.pop("wait_segment", None)
 
     new_spec = dict(spec)
     if new_spec.get("pages") is not None:
@@ -342,6 +419,101 @@ def align_wait_at_to_words(
         new_spec["rows"] = [dict(r) if isinstance(r, dict) else r for r in new_spec["rows"]]
         _process_rows(new_spec["rows"])
     return new_spec
+
+
+def upgrade_wait_segments_to_wait_words(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+    segments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Turn legacy ``wait_segment`` on a row into the **first box**'s ``wait_word`` (when possible)."""
+    if not words or not segments:
+        return spec
+
+    def _rows(rs: list[Any]) -> None:
+        for row in rs:
+            if not isinstance(row, dict):
+                continue
+            ws = row.get("wait_segment")
+            if ws is None:
+                continue
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list) or not boxes or not isinstance(boxes[0], dict):
+                row.pop("wait_segment", None)
+                continue
+            if boxes[0].get("wait_word") is None:
+                boxes[0]["wait_word"] = wait_word_index_at_segment_start(
+                    segments, words, int(ws)
+                )
+            row.pop("wait_segment", None)
+
+    out = dict(spec)
+    if out.get("pages") is not None:
+        new_pages: list[Any] = []
+        for page in out["pages"]:
+            p = dict(page) if isinstance(page, dict) else page
+            if isinstance(p, dict) and isinstance(p.get("rows"), list):
+                p["rows"] = [dict(r) if isinstance(r, dict) else r for r in p["rows"]]
+                _rows(p["rows"])
+            new_pages.append(p)
+        out["pages"] = new_pages
+    elif isinstance(out.get("rows"), list):
+        out["rows"] = [dict(r) if isinstance(r, dict) else r for r in out["rows"]]
+        _rows(out["rows"])
+    return out
+
+
+def spec_rows_reference_whisper_waits(spec: dict[str, Any]) -> bool:
+    """True if any row or box references Whisper pacing (needs timing enrichment)."""
+    for rows in _spec_pages_rows(spec):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("wait_word") is not None or row.get("wait_segment") is not None:
+                return True
+            for box in row.get("boxes") or []:
+                if isinstance(box, dict) and (
+                    box.get("wait_word") is not None or box.get("wait_segment") is not None
+                ):
+                    return True
+    return False
+
+
+def coerce_legacy_wait_at_to_whisper_rows(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+    segments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Replace legacy ``wait_at`` with ``wait_word`` when ``words`` exist; otherwise drop ``wait_at``."""
+    _ = segments
+
+    def _apply_rows(rs: list[Any]) -> None:
+        for row in rs:
+            if not isinstance(row, dict):
+                continue
+            if row.get("wait_at") is None:
+                continue
+            t = float(row["wait_at"])
+            if isinstance(words, list) and words:
+                boxes = row.get("boxes")
+                if isinstance(boxes, list) and boxes and isinstance(boxes[0], dict):
+                    boxes[0]["wait_word"] = wait_word_index_for_time(words, t)
+            row.pop("wait_at", None)
+
+    out = dict(spec)
+    if out.get("pages") is not None:
+        new_pages: list[Any] = []
+        for page in out["pages"]:
+            p = dict(page) if isinstance(page, dict) else page
+            if isinstance(p, dict) and isinstance(p.get("rows"), list):
+                p["rows"] = [dict(r) if isinstance(r, dict) else r for r in p["rows"]]
+                _apply_rows(p["rows"])
+            new_pages.append(p)
+        out["pages"] = new_pages
+    elif isinstance(out.get("rows"), list):
+        out["rows"] = [dict(r) if isinstance(r, dict) else r for r in out["rows"]]
+        _apply_rows(out["rows"])
+    return out
 
 
 def layout_budget_violations(spec: dict[str, Any]) -> list[str]:
@@ -437,18 +609,34 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
         ws = row.get("wait_segment")
         if ws is not None and (not isinstance(ws, int) or ws < 0):
             raise SceneSpecError(f"{rp}: wait_segment must be a non-negative int or null")
-        wa = row.get("wait_at")
-        if wa is not None:
-            if not isinstance(wa, (int, float)) or float(wa) < 0:
-                raise SceneSpecError(f"{rp}: wait_at must be a non-negative number if set")
-        if ws is not None and wa is not None:
+        ww = row.get("wait_word")
+        if ww is not None and (not isinstance(ww, int) or ww < 0):
+            raise SceneSpecError(f"{rp}: wait_word must be a non-negative int or null")
+        if ws is not None and ww is not None:
             raise SceneSpecError(
-                f"{rp}: set at most one of wait_segment and wait_at, not both"
+                f"{rp}: set at most one of wait_segment and wait_word (prefer wait_word for word timestamps)"
             )
+        if row.get("wait_at") is not None:
+            raise SceneSpecError(
+                f"{rp}: wait_at is not allowed — use wait_word (``timing.json`` ``words`` index); "
+                f"re-run `docgen scene-compile` after `docgen timestamps`."
+            )
+
+        box_pacing = False
         for j, box in enumerate(boxes):
             bp = f"{rp}: boxes[{j}]"
             if not isinstance(box, dict):
                 raise SceneSpecError(f"{bp}: box must be a mapping")
+            if box.get("wait_segment") is not None:
+                raise SceneSpecError(
+                    f"{bp}: wait_segment on a box is not supported — use ``wait_word`` on the box, "
+                    f"or ``wait_segment`` on the row for legacy upgrade."
+                )
+            bww = box.get("wait_word")
+            if bww is not None and (not isinstance(bww, int) or bww < 0):
+                raise SceneSpecError(f"{bp}: wait_word must be a non-negative int or null")
+            if bww is not None:
+                box_pacing = True
             for fld in ("label", "color", "width", "height", "font_size"):
                 if fld not in box:
                     raise SceneSpecError(f"{bp}: missing {fld}")
@@ -460,6 +648,13 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                 v = box[num_f]
                 if not isinstance(v, (int, float)) or v <= 0:
                     raise SceneSpecError(f"{bp}: {num_f} must be a positive number")
+
+        has_row_pacing = row.get("wait_word") is not None or row.get("wait_segment") is not None
+        if has_row_pacing and box_pacing:
+            raise SceneSpecError(
+                f"{rp}: set pacing on the row (``wait_word`` / ``wait_segment``) "
+                f"**or** on boxes (``wait_word`` per box), not both"
+            )
 
 
 def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
@@ -553,6 +748,14 @@ def _normalized_pages(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"rows": spec["rows"], "transition": None}]
 
 
+def _any_wait_segment_in_pages(pages: list[dict[str, Any]]) -> bool:
+    for page in pages:
+        for row in page["rows"]:
+            if row.get("wait_segment") is not None:
+                return True
+    return False
+
+
 def compile_scene_class(spec: dict[str, Any]) -> str:
     """Return a full ``class Name(_TimedScene): ...`` definition (no imports).
 
@@ -582,12 +785,18 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
     page_tr_run = float(layout.get("page_transition_run_time", 0.45))
 
     pages = _normalized_pages(spec)
+    if _any_wait_segment_in_pages(pages):
+        raise SceneSpecError(
+            "wait_segment is not supported in compiled scenes — use wait_word (timing.json "
+            "`words` index) only. Run `docgen scene-compile` so rows are upgraded from Whisper "
+            "words, or edit the YAML to use wait_word."
+        )
 
     lines: list[str] = [
         f"class {class_name}(_TimedScene):",
         "    def construct(self):",
         "        self.camera.background_color = C_BG",
-        f"        timing = _load_timing({timing_key!r})",
+        f"        timing_words = _load_timing_words({timing_key!r})",
         "",
         f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}).to_edge(UP)",
         "        self.timed_play(Write(title), run_time=2.0)",
@@ -633,42 +842,51 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
     lines.append("")
 
     for p, page in enumerate(pages):
-        stack_var = f"_p{p}_stack"
         for r, row in enumerate(page["rows"]):
-            wa = row.get("wait_at")
-            ws = row.get("wait_segment")
-            if wa is not None:
-                lines.append(f"        self.wait_until({float(wa)})")
-            elif ws is not None:
-                lines.append(f"        if len(timing) > {int(ws)}:")
-                lines.append(
-                    f"            self.wait_until(timing[{int(ws)}][\"start\"])"
-                )
-            if p > 0 and r == 0:
-                trans = page.get("transition")
-                if trans == "fade":
-                    prev_stack = f"_p{p - 1}_stack"
-                    lines.append(
-                        f"        self.timed_play(FadeOut({prev_stack}), run_time={page_tr_run})"
-                    )
-                elif trans == "none":
-                    prev_stack = f"_p{p - 1}_stack"
-                    lines.append(f"        self.remove({prev_stack})")
-                    lines.append("        self.timed_wait(0.05)")
+            boxes_raw = row["boxes"]
+            if not isinstance(boxes_raw, list):
+                continue
             run_time = float(row["run_time"])
-            lines.append(
-                f"        self.timed_play(FadeIn({stack_var}[{r}]), run_time={run_time})"
-            )
+            row_ww = row.get("wait_word")
+            for b_idx, box in enumerate(boxes_raw):
+                if not isinstance(box, dict):
+                    continue
+                ww = box.get("wait_word")
+                if ww is None and b_idx == 0 and row_ww is not None:
+                    ww = row_ww
+                if ww is not None:
+                    lines.append(
+                        f"        self.wait_until_word(timing_words, {int(ww)})"
+                    )
+                if p > 0 and r == 0 and b_idx == 0:
+                    trans = page.get("transition")
+                    if trans == "fade":
+                        prev_stack = f"_p{p - 1}_stack"
+                        lines.append(
+                            f"        self.timed_play(FadeOut({prev_stack}), run_time={page_tr_run})"
+                        )
+                    elif trans == "none":
+                        prev_stack = f"_p{p - 1}_stack"
+                        lines.append(f"        self.remove({prev_stack})")
+                        lines.append("        self.timed_wait(0.05)")
+                lines.append(
+                    f"        self.timed_play(FadeIn(_bx_{p}_{r}_{b_idx}), run_time={run_time})"
+                )
 
     lines.extend(
         [
             "",
             "        # docgen: audio-length tail (waits through full TTS; run after `docgen timestamps`)",
-            f"        _docgen_segs = _load_timing({timing_key!r})",
-            "        if _docgen_segs:",
+            "        if timing_words:",
             "            self.wait_until(",
-            '                max(float(s.get("end", 0.0)) for s in _docgen_segs)',
+            '                max(float(w.get("end", 0.0)) for w in timing_words)',
             "            )",
+            "        else:",
+            f"            _docgen_segs = _load_timing({timing_key!r})",
+            "            if _docgen_segs:",
+            "                self.wait_until(",
+            '                    max(float(s.get("end", 0.0)) for s in _docgen_segs)',
+            "                )",
             "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)",
             "        self.timed_wait(0.5)",
         ]

@@ -38,11 +38,10 @@ def _minimal_cfg(tmp_path: Path) -> Config:
                 "narration": "narration",
                 "audio": "audio",
                 "animations": "animations",
-                "terminal": "terminal",
                 "recordings": "recordings",
             },
             "segments": {"all": ["01"], "default": ["01"]},
-            "visual_map": {"01": {"type": "vhs", "source": "x.mp4"}},
+            "visual_map": {"01": {"type": "manim", "source": "x.mp4"}},
             "discovery": {"auto_visual_map": False},
         },
     )
@@ -89,14 +88,13 @@ def test_merge_defaults_syncs_manim_segments_from_visual_map(tmp_path: Path) -> 
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01", "02"], "default": ["01"]},
         "discovery": {"auto_visual_map": False},
         "visual_map": {
             "01": {"type": "manim", "scene": "FooScene"},
-            "02": {"type": "vhs", "tape": "x.tape", "source": "x.mp4"},
+            "02": {"type": "still", "source": "x.png"},
         },
         "manim_scene_generation": {
             "model": "gpt-4o",
@@ -116,7 +114,6 @@ def test_merge_defaults_manim_segment_sync_idempotent(tmp_path: Path) -> None:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01"], "default": ["01"]},
@@ -148,58 +145,6 @@ def test_manim_scene_class_names_in_order(tmp_path: Path) -> None:
     assert manim_scene_class_names_in_order(ad / "scenes.py") == ["ASpeedScene", "BDemoScene"]
 
 
-def test_discover_visual_map_vhs_tape(tmp_path: Path) -> None:
-    (tmp_path / "terminal").mkdir()
-    (tmp_path / "terminal" / "01-intro.tape").write_text("Output demo.mp4\n", encoding="utf-8")
-    raw = {
-        "repo_root": ".",
-        "dirs": {
-            "narration": "narration",
-            "audio": "audio",
-            "animations": "animations",
-            "terminal": "terminal",
-            "recordings": "recordings",
-        },
-        "segments": {"all": ["01"], "default": ["01"]},
-        "segment_names": {"01": "01-intro"},
-        "visual_map": {},
-    }
-    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
-    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
-    ch = discover_visual_map(raw, cfg)
-    assert ch
-    assert raw["visual_map"]["01"] == {
-        "type": "vhs",
-        "tape": "01-intro.tape",
-        "source": "01-intro.mp4",
-    }
-
-
-def test_discover_visual_map_playwright_script(tmp_path: Path) -> None:
-    (tmp_path / "scripts").mkdir()
-    (tmp_path / "scripts" / "segment_07_capture.py").write_text("# pw\n", encoding="utf-8")
-    raw = {
-        "repo_root": ".",
-        "dirs": {
-            "narration": "narration",
-            "audio": "audio",
-            "animations": "animations",
-            "terminal": "terminal",
-            "recordings": "recordings",
-        },
-        "segments": {"all": ["07"], "default": ["07"]},
-        "segment_names": {"07": "07-browser"},
-        "visual_map": {},
-    }
-    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
-    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
-    discover_visual_map(raw, cfg)
-    vm07 = raw["visual_map"]["07"]
-    assert vm07["type"] == "playwright"
-    assert vm07["script"] == "scripts/segment_07_capture.py"
-    assert vm07["source"] == "07-browser.mp4"
-
-
 def test_discover_visual_map_omits_manim_when_no_scene_classes(tmp_path: Path) -> None:
     (tmp_path / "animations").mkdir()
     (tmp_path / "animations" / "scenes.py").write_text("# no Scene classes yet\n", encoding="utf-8")
@@ -209,7 +154,6 @@ def test_discover_visual_map_omits_manim_when_no_scene_classes(tmp_path: Path) -
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01"], "default": ["01"]},
@@ -234,7 +178,6 @@ def test_discover_visual_map_manim_classes_in_order(tmp_path: Path) -> None:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01", "02"], "default": ["01", "02"]},
@@ -261,7 +204,6 @@ def test_discover_visual_map_manim_assigns_only_when_classes_available(tmp_path:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01", "02"], "default": ["01", "02"]},
@@ -282,7 +224,6 @@ def test_discover_visual_map_skipped_when_disabled(tmp_path: Path) -> None:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["01"], "default": ["01"]},
@@ -327,7 +268,6 @@ def test_merge_hint_declared_segments_inserts_sorted_id(tmp_path: Path) -> None:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
             "hints": "hints",
         },
@@ -377,7 +317,6 @@ def test_merge_defaults_merge_hint_segments_false(tmp_path: Path) -> None:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
             "hints": "hints",
         },
@@ -439,7 +378,6 @@ def test_merge_hint_wiring_merges_visual_narration_manim(tmp_path: Path) -> None
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
             "hints": "hints",
         },
@@ -496,7 +434,6 @@ def test_merge_defaults_syncs_manim_scenes_list_in_segment_order(tmp_path: Path)
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"all": ["02", "01"], "default": ["02", "01"]},

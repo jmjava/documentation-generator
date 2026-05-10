@@ -17,11 +17,10 @@ def _minimal_cfg(tmp_path: Path, **extra: object) -> Config:
             "narration": "narration",
             "audio": "audio",
             "animations": "animations",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"default": ["01"], "all": ["01"]},
-        "visual_map": {"01": {"type": "vhs", "source": "01.mp4"}},
+        "visual_map": {"01": {"type": "still", "source": "01.mp4"}},
         **extra,
     }
     p = tmp_path / "docgen.yaml"

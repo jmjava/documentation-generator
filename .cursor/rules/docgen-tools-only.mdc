@@ -5,17 +5,26 @@ alwaysApply: true
 
 # Documentation and demo generation: tools only
 
-**Rule:** Anything that **generates** documentation assets, dogfood config, narration, scenes, audio, composed video, catalogs, or other pipeline outputs must be produced by **docgen** (CLI and library) plus **repo-documented scripts** that invoke it (e.g. `docs/demos/_regenerate-docgen-config.sh`, `_full-reset-regenerate.sh`). **Do not** use the editor to paste or rewrite generated files to “fix” the pipeline.
+**Rule:** Anything that **generates** documentation assets, bundle config,
+narration, scenes, audio, composed video, or other pipeline outputs must be
+produced by **docgen** (CLI and library) plus **repo-documented scripts** that
+invoke it. **Do not** use the editor to paste or rewrite generated files to
+"fix" the pipeline.
+
+This library no longer ships an in-repo demo bundle; the rules below describe
+how a *consumer* bundle (typically `docs/demos/`) is expected to be operated.
 
 **Allowed for Cursor / humans**
 
-- Edit **inputs** Git is meant to carry: **`docgen.yaml`** only as the **output** of **`docgen yaml-generate`** (review the YAML diff); for **`docs/demos`**, prefer editing **`hints/*.md`** front matter (`docgen.segment`, `docgen.wiring`) and re-running **`yaml-generate`** instead of hand-editing per-segment `visual_map` or `narration_from_source.segments` in the editor. Other bundles may still commit a hand-maintained `docgen.yaml` if they do not use hint wiring. Also: per-function **raw** Playwright inputs (not LLM-generated per-function outputs), tests, fixtures, static `docs/*.md` that are not tool outputs.
-- **Create or edit hint files** under **`docs/demos/hints/**`** (or `<bundle>/hints/**`) — maintainer prose referenced from `context.paths` / owner hint lists so **`docgen narration-generate`**, **`scene-spec-generate`**, etc. have stable, reviewable steering. Prefer committed hint files over ad-hoc pastes into category-C outputs.
-- Edit **docgen implementation** under `src/` (or equivalent package root): new flags, commands, merge logic, validators—so the **tool** can do what you need.
-- Run commands: `docgen …`, bundle shell scripts, tests.
+- Edit **inputs** Git is meant to carry: for a consumer bundle, prefer **`hints/*.md`** front matter (`docgen.segment`, `docgen.wiring`) and run **`docgen yaml-generate`** instead of hand-editing merged `visual_map` / `narration_from_source` blocks in `docgen.yaml`. Bundles that don't use hints may commit a carefully maintained `docgen.yaml`.
+- **Create or edit hint files** under **`<bundle>/hints/**`** — maintainer prose referenced from `context.paths` so **`docgen narration-generate`**, **`scene-spec-generate`**, etc. have stable steering.
+- Edit **docgen implementation** under `src/` so the **tool** gains the behavior you need.
+- Run **`docgen …`**, committed bundle shell scripts, and tests.
 
-**Dogfood (`docs/demos`):** **`docgen.yaml`** is the only bundle config—same as downstream. Run **`docgen yaml-generate`** (this repo: **`docs/demos/_regenerate-docgen-config.sh`**) to merge defaults, disk **`visual_map`** discovery, **hint-declared segments**, and **`docgen.wiring`** from **`hints/*.md`**; do not keep segment wiring only in the IDE. Manim diagram segments: use **`docgen scene-spec-generate`** / **`scene-compile`** and committed **`animations/specs/*.scene.yaml`**, not hand-edited **`scenes.py`** for those blocks.
+**Manim diagram segments:** use **`docgen scene-spec-generate`** / **`scene-compile`** with committed **`animations/specs/*.scene.yaml`** instead of hand-editing **`scenes.py`** inside generated regions.
 
-**If the right command does not exist:** implement it in **docgen** (or a thin wrapper script committed to the repo), then use it—do not bypass with manual file edits.
+**Surviving CLI commands (indicative):** `init`, `wizard`, `tts`, `timestamps`, `manim`, `compose`, `validate`, `lint`, `narration-generate`, `scene-spec-generate`, `scene-compile`, `yaml-generate`, `clean-bundle`, `concat`, `pages`, `generate-all`, `rebuild-after-audio`.
 
-**Manim scenes:** Pacing, layout, prompts, and post-processors for generated scene classes live in **`documentation-generator` `src/docgen/`**. After changing them, consumers must **`docgen scene-spec-generate`** / **`scene-compile`**—not hand-edits inside `BEGIN/END GENERATED SCENE` blocks in `scenes.py`.
+**If the right command does not exist:** implement it in **docgen** (or a thin wrapper script committed to the consumer repo), then use it — do not bypass with manual file edits.
+
+**Manim scenes:** After changing generators in **`src/docgen/`**, consumers re-run **`scene-spec-generate`** / **`scene-compile`** — not hand-edits inside `BEGIN/END GENERATED SCENE` blocks.

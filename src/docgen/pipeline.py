@@ -1,9 +1,8 @@
-"""Pipeline orchestrator: tts -> manim -> vhs -> compose -> validate -> concat -> pages.
+"""Pipeline orchestrator: tts -> manim -> compose -> validate -> concat -> pages.
 
-Manim and VHS stages render only scenes/tapes referenced by ``visual_map`` for active
-``segments.all`` entries (see :meth:`docgen.config.Config.pipeline_manim_scene_names` and
-:meth:`~docgen.config.Config.pipeline_vhs_tape_filenames`). Segments whose visuals are
-``playwright_test`` use pre-recorded files and do not run through Manim or VHS capture here.
+The Manim stage renders only scenes referenced by ``visual_map`` for active ``segments.all``
+entries (see :meth:`docgen.config.Config.pipeline_manim_scene_names`). Segments whose visuals
+are pre-recorded (``recordings/*.mp4``) do not run through Manim capture here.
 """
 
 from __future__ import annotations
@@ -23,8 +22,6 @@ class Pipeline:
         self,
         skip_tts: bool = False,
         skip_manim: bool = False,
-        skip_vhs: bool = False,
-        skip_tape_sync: bool = False,
         retry_manim_on_freeze: bool = False,
     ) -> None:
         if not skip_tts:
@@ -36,11 +33,6 @@ class Pipeline:
         from docgen.timestamps import TimestampExtractor
         TimestampExtractor(self.config).extract_all()
 
-        if self.config.sync_vhs_after_timestamps and not skip_tape_sync:
-            print("\n=== Stage: Sync VHS tape sleep timings ===")
-            from docgen.tape_sync import TapeSynchronizer
-            TapeSynchronizer(self.config).sync()
-
         if not skip_manim:
             scene_list = self.config.pipeline_manim_scene_names()
             if scene_list:
@@ -49,18 +41,6 @@ class Pipeline:
                 ManimRunner(self.config).render(scenes=scene_list)
             else:
                 print("\n=== Stage: Manim (skipped — no manim segments in visual_map) ===")
-
-        if not skip_vhs:
-            tape_list = self.config.pipeline_vhs_tape_filenames()
-            if tape_list:
-                print("\n=== Stage: VHS ===")
-                from docgen.vhs import VHSRunner
-                results = VHSRunner(self.config).render(tapes=tape_list)
-                for r in results:
-                    if not r.success:
-                        print(f"  WARNING: {r.tape} had errors: {r.errors}")
-            else:
-                print("\n=== Stage: VHS (skipped — no vhs segments in visual_map) ===")
 
         print("\n=== Stage: Compose ===")
         from docgen.compose import ComposeError, Composer

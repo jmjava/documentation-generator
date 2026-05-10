@@ -4,11 +4,10 @@ This does **not** replace an entire ``docgen.yaml`` in one shot. It:
 
 1. **Merges safe defaults** into an in-memory dict (wizard archive excludes, optional
    skeleton blocks for ``narration_from_source`` / ``manim_scene_generation``).
-2. **Discovers** ``visual_map`` from the bundle tree (``terminal/*.tape``, capture
-   scripts under ``scripts/``, Manim ``*Scene`` classes from ``animations/scenes.py``
-   in file order—**only when those assets exist**). Segments stay **unmapped** until a
-   tape, script, or scene class is available (no invented ``SceneNN`` placeholders),
-   unless ``discovery.auto_visual_map: false``.
+2. **Discovers** ``visual_map`` from the bundle tree (Manim ``*Scene`` classes from
+   ``animations/scenes.py`` in file order—**only when those assets exist**). Segments
+   stay **unmapped** until a scene class is available (no invented ``SceneNN``
+   placeholders), unless ``discovery.auto_visual_map: false``.
 3. **Syncs** ``manim.scenes`` and ``manim_scene_generation.segments`` from ``visual_map``.
 4. **Reports gaps** between ``narration/*.md`` and ``segments.all`` (opt-in list).
 5. **Declares segments** from maintainer ``hints/*.md`` files that include YAML front matter
@@ -387,37 +386,11 @@ def manim_scene_class_names_in_order(scenes_py: Path) -> list[str]:
     return [n for n in _MANIM_CLASS_RE.findall(text) if not n.startswith("_")]
 
 
-def _pick_playwright_script(scripts_dir: Path, seg_id: str) -> Path | None:
-    """Pick a capture/driver script under ``scripts/`` whose filename hints at ``seg_id``."""
-    if not scripts_dir.is_dir():
-        return None
-    sid = str(seg_id)
-    best: tuple[int, Path] | None = None
-    for p in sorted(scripts_dir.glob("*.py")):
-        if sid not in p.name:
-            continue
-        low = p.name.lower()
-        score = 0
-        if "capture" in low:
-            score += 4
-        if "playwright" in low or "browser" in low:
-            score += 2
-        if "segment" in low:
-            score += 1
-        cand = (score, p)
-        if best is None or cand[0] > best[0]:
-            best = cand
-    return best[1] if best else None
-
-
 def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
-    """Rebuild ``visual_map`` from bundle layout (VHS tape → playwright script → Manim).
+    """Rebuild ``visual_map`` from ``animations/scenes.py`` Manim classes (file order).
 
-    **VHS** if ``terminal/<segment_stem>.tape`` exists.
-    **Playwright** if a ``scripts/*.py`` matches the segment id (prefers names with
-    ``capture`` / ``playwright``).
-    **Manim** only when a ``class …Scene`` remains in ``animations/scenes.py`` (file order);
-    otherwise the segment is **left out** so greenfield repos are not given fake wiring.
+    A segment is only wired when a ``class …Scene`` remains for it; otherwise it is
+    **left out** so greenfield repos are not given fake wiring.
 
     Set ``discovery: { auto_visual_map: false }`` to skip and keep existing ``visual_map``.
     """
@@ -429,40 +402,16 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     all_ids = seg_block.get("all") or seg_block.get("default") or []
     if not isinstance(all_ids, list) or not all_ids:
         return []
-    names = raw.get("segment_names") or {}
-    if not isinstance(names, dict):
-        names = {}
 
-    terminal = cfg.terminal_dir
-    scripts_dir = cfg.base_dir / "scripts"
     scenes_py = cfg.animations_dir / "scenes.py"
     manim_classes = manim_scene_class_names_in_order(scenes_py)
-    manim_idx = 0
 
     new_vm: dict[str, Any] = {}
-    for seg_id in all_ids:
-        sid = str(seg_id)
-        stem = str(names.get(sid) or names.get(seg_id) or sid)
-        tape = terminal / f"{stem}.tape"
-        if tape.is_file():
-            new_vm[sid] = {"type": "vhs", "tape": f"{stem}.tape", "source": f"{stem}.mp4"}
-            continue
-
-        pw = _pick_playwright_script(scripts_dir, sid)
-        if pw is not None:
-            rel = pw.resolve().relative_to(cfg.base_dir.resolve())
-            new_vm[sid] = {
-                "type": "playwright",
-                "script": str(rel).replace("\\", "/"),
-                "source": f"{stem}.mp4",
-                "viewport": {"width": 1280, "height": 720},
-            }
-            continue
-
-        if manim_idx < len(manim_classes):
-            scene = manim_classes[manim_idx]
-            manim_idx += 1
-            new_vm[sid] = {"type": "manim", "scene": scene, "source": f"{scene}.mp4"}
+    for idx, seg_id in enumerate(all_ids):
+        if idx >= len(manim_classes):
+            break
+        scene = manim_classes[idx]
+        new_vm[str(seg_id)] = {"type": "manim", "scene": scene, "source": f"{scene}.mp4"}
 
     vm = raw.get("visual_map")
     if not isinstance(vm, dict):
@@ -471,7 +420,7 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     if vm != new_vm:
         vm.clear()
         vm.update(new_vm)
-        return ["visual_map: discovered from terminal/, scripts/, animations/scenes.py"]
+        return ["visual_map: discovered from animations/scenes.py"]
     return []
 
 

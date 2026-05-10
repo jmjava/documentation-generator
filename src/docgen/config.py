@@ -24,7 +24,6 @@ class Config:
     narration_dir: Path = field(init=False)
     audio_dir: Path = field(init=False)
     animations_dir: Path = field(init=False)
-    terminal_dir: Path = field(init=False)
     recordings_dir: Path = field(init=False)
     hints_dir: Path = field(init=False)
 
@@ -33,7 +32,6 @@ class Config:
         self.narration_dir = self.base_dir / dirs.get("narration", "narration")
         self.audio_dir = self.base_dir / dirs.get("audio", "audio")
         self.animations_dir = self.base_dir / dirs.get("animations", "animations")
-        self.terminal_dir = self.base_dir / dirs.get("terminal", "terminal")
         self.recordings_dir = self.base_dir / dirs.get("recordings", "recordings")
         self.hints_dir = self.base_dir / dirs.get("hints", "hints")
 
@@ -108,24 +106,6 @@ class Config:
                 ordered.append(scene)
         return ordered
 
-    def pipeline_vhs_tape_filenames(self) -> list[str]:
-        """Tape filenames for ``segments.all`` entries whose ``visual_map`` type is ``vhs``."""
-        ordered: list[str] = []
-        for seg_id in self.segments_all:
-            vm = self.visual_map.get(seg_id)
-            if not isinstance(vm, dict):
-                continue
-            if str(vm.get("type", "")).lower() != "vhs":
-                continue
-            tape = str(vm.get("tape", "")).strip()
-            if not tape:
-                src = str(vm.get("source", "")).strip()
-                if src:
-                    tape = f"{Path(src).stem}.tape"
-            if tape:
-                ordered.append(tape)
-        return ordered
-
     @property
     def concat_map(self) -> dict[str, list[str]]:
         return self.raw.get("concat", {})
@@ -187,115 +167,12 @@ class Config:
                    "\u2026"]
         return self.raw.get("manim", {}).get("unsafe_unicode", default)
 
-    @property
-    def vhs_config(self) -> dict[str, Any]:
-        defaults: dict[str, Any] = {
-            "vhs_path": "",
-            "sync_from_timing": False,
-            "typing_ms_per_char": 35,
-            "max_typing_sec": 3.0,
-            "min_sleep_sec": 0.2,
-            "render_timeout_sec": 120,
-        }
-        defaults.update(self.raw.get("vhs", {}))
-        return defaults
-
-    @property
-    def vhs_path(self) -> str | None:
-        """Optional absolute/relative path to the VHS executable."""
-        value = self.vhs_config.get("vhs_path")
-        return str(value) if value else None
-
-    @property
-    def sync_from_timing(self) -> bool:
-        return bool(self.vhs_config.get("sync_from_timing", False))
-
-    @property
-    def typing_ms_per_char(self) -> int:
-        return int(self.vhs_config.get("typing_ms_per_char", 35))
-
-    @property
-    def max_typing_sec(self) -> float:
-        return float(self.vhs_config.get("max_typing_sec", 3.0))
-
-    @property
-    def min_sleep_sec(self) -> float:
-        return float(self.vhs_config.get("min_sleep_sec", 0.2))
-
-    @property
-    def vhs_render_timeout_sec(self) -> int:
-        return int(self.vhs_config.get("render_timeout_sec", 120))
-
-    @property
-    def sync_vhs_after_timestamps(self) -> bool:
-        pipeline_cfg = self.raw.get("pipeline", {})
-        if "sync_vhs_after_timestamps" in pipeline_cfg:
-            return bool(pipeline_cfg.get("sync_vhs_after_timestamps"))
-        return self.sync_from_timing
-
-    # -- Playwright ------------------------------------------------------------
-
-    @property
-    def playwright_config(self) -> dict[str, Any]:
-        defaults: dict[str, Any] = {
-            "python_path": "",
-            "timeout_sec": 120,
-            "default_url": "",
-            "default_viewport": {"width": 1920, "height": 1080},
-        }
-        defaults.update(self.raw.get("playwright", {}))
-        return defaults
-
-    @property
-    def playwright_python_path(self) -> str | None:
-        value = self.playwright_config.get("python_path")
-        return str(value) if value else None
-
-    @property
-    def playwright_timeout_sec(self) -> int:
-        return int(self.playwright_config.get("timeout_sec", 120))
-
-    @property
-    def playwright_default_url(self) -> str | None:
-        value = str(self.playwright_config.get("default_url", "")).strip()
-        return value or None
-
-    @property
-    def playwright_default_viewport(self) -> tuple[int, int]:
-        raw = self.playwright_config.get("default_viewport", {}) or {}
-        width = int(raw.get("width", 1920))
-        height = int(raw.get("height", 1080))
-        return width, height
-
-    # -- Playwright test video (visual_map type: playwright_test) ---------------
-
-    @property
-    def playwright_test_config(self) -> dict[str, Any]:
-        """YAML `playwright_test:` block — test runner dirs, speed limits, etc."""
-        defaults: dict[str, Any] = {
-            "min_speed_factor": 0.25,
-            "max_speed_factor": 4.0,
-        }
-        raw = self.raw.get("playwright_test")
-        if isinstance(raw, dict):
-            defaults.update(raw)
-        return defaults
-
-    @property
-    def playwright_test_min_speed_factor(self) -> float:
-        return float(self.playwright_test_config.get("min_speed_factor", 0.25))
-
-    @property
-    def playwright_test_max_speed_factor(self) -> float:
-        return float(self.playwright_test_config.get("max_speed_factor", 4.0))
-
     # -- Compose ----------------------------------------------------------------
 
     @property
     def compose_config(self) -> dict[str, Any]:
         defaults: dict[str, Any] = {
             "ffmpeg_timeout_sec": 300,
-            "warn_stale_vhs": True,
         }
         defaults.update(self.raw.get("compose", {}))
         return defaults
@@ -304,10 +181,6 @@ class Config:
     def ffmpeg_timeout_sec(self) -> int:
         value = self.compose_config.get("ffmpeg_timeout_sec", 300)
         return int(value)
-
-    @property
-    def warn_stale_vhs(self) -> bool:
-        return bool(self.compose_config.get("warn_stale_vhs", True))
 
     # -- Validation ------------------------------------------------------------
 
@@ -321,21 +194,8 @@ class Config:
         return float(self.raw.get("validation", {}).get("max_freeze_ratio", 0.25))
 
     def effective_max_freeze_ratio(self, visual_type: str | None) -> float:
-        """Ceiling for compose-time audio-vs-video freeze guard (trailing pad).
-
-        For ``playwright`` / ``playwright_test``, the default global
-        ``max_freeze_ratio`` (0.25) is raised to at least **0.45** so short UI
-        capture + longer TTS is less likely to fail on first run. Set
-        ``validation.max_freeze_ratio_playwright`` to override that family only.
-        """
-        base = self.max_freeze_ratio
-        rawv = self.raw.get("validation", {})
-        vt = (visual_type or "").strip().lower()
-        if vt in ("playwright", "playwright_test"):
-            if "max_freeze_ratio_playwright" in rawv:
-                return float(rawv["max_freeze_ratio_playwright"])
-            return max(base, 0.45)
-        return base
+        """Ceiling for compose-time audio-vs-video freeze guard (trailing pad)."""
+        return self.max_freeze_ratio
 
     @property
     def ocr_config(self) -> dict[str, Any]:
@@ -448,51 +308,6 @@ class Config:
             cur = cur.parent
         return self.base_dir.resolve()
 
-    @property
-    def discover_tests_scan_roots(self) -> list[Path]:
-        """Directories to scan for Node Playwright projects (each may have its own ``package.json``).
-
-        YAML (``discover_tests.roots``) lists paths **relative to** :meth:`repo_root`. Default is a
-        single entry ``["."]`` (repo root). Monorepos can set e.g. ``[".", "apps/web"]``.
-        """
-        rr = self.repo_root.resolve()
-        block = self.raw.get("discover_tests")
-        if not isinstance(block, dict):
-            return [rr]
-        roots = block.get("roots")
-        if not roots:
-            return [rr]
-        out: list[Path] = []
-        for r in roots:
-            p = (rr / str(r).strip()).resolve()
-            out.append(p)
-        return out
-
-    @property
-    def catalog_file_path(self) -> Path:
-        """YAML catalog of discovered sources (``docgen catalog`` / future discover-tests).
-
-        **Default (stable across projects):** ``<repo_root>/docgen.catalog.yaml`` where
-        ``repo_root`` is the same path as :meth:`repo_root` (nearest ``.git`` directory,
-        or the ``repo_root:`` key in ``docgen.yaml``). Keeping the catalog at the repo
-        root avoids moving it when ``docgen.yaml`` lives under ``docs/demos/`` etc., and
-        gives CI one canonical file to commit for incremental regeneration.
-
-        **Override:** set ``catalog.file`` to an absolute path, or a path **relative to
-        ``repo_root``** (not relative to ``docgen.yaml``'s directory).
-
-        .. code-block:: yaml
-
-            catalog:
-              file: docs/docgen.catalog.yaml   # under repo_root
-        """
-        root = self.repo_root
-        cat = self.raw.get("catalog")
-        if isinstance(cat, dict) and cat.get("file"):
-            p = Path(str(cat["file"]))
-            return p.resolve() if p.is_absolute() else (root / p).resolve()
-        return (root / "docgen.catalog.yaml").resolve()
-
     # -- Factory methods -------------------------------------------------------
 
     @classmethod
@@ -523,8 +338,8 @@ class Config:
     def minimal(cls, base_dir: str | Path | None = None) -> "Config":
         """Minimal config when no ``docgen.yaml`` exists (standalone tools).
 
-        Relative tape paths and Playwright discovery resolve under ``base_dir``
-        (defaults to the current working directory).
+        Relative paths resolve under ``base_dir`` (defaults to the current
+        working directory).
         """
         base = Path(base_dir or os.getcwd()).resolve()
         return cls(yaml_path=base / _YAML_FILENAME, base_dir=base, raw={})

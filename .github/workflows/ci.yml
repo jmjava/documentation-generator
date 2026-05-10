@@ -24,9 +24,7 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     env:
-      # Repository secret (Settings → Secrets → Actions). Empty for PRs from forks without secrets.
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      # Import ``docgen`` from the PR checkout, not only the copy under site-packages (avoids stale VHS fixes).
       PYTHONPATH: ${{ github.workspace }}/src
     strategy:
       matrix:
@@ -46,7 +44,7 @@ jobs:
           while [ "$attempt" -le "$max_attempts" ]; do
             echo "apt attempt $attempt/$max_attempts"
             if timeout 600s sudo apt-get -o Acquire::Retries=3 update \
-              && timeout 600s sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends ffmpeg tesseract-ocr xvfb ttyd; then
+              && timeout 600s sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends ffmpeg tesseract-ocr; then
               exit 0
             fi
 
@@ -61,74 +59,4 @@ jobs:
             attempt=$((attempt + 1))
           done
       - run: pip install --no-cache-dir ".[dev]"
-      # VHS terminal capture needs a DISPLAY (headless Ubuntu has none by default).
-      - run: xvfb-run -a pytest tests/ --ignore=tests/e2e -v --tb=short
-
-  playwright-vite-dogfood:
-    name: Playwright Vite dogfood fixture
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: fixtures/playwright-vite-dogfood/package-lock.json
-      - name: Install fixture deps + Playwright (Chromium)
-        working-directory: fixtures/playwright-vite-dogfood
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-      - name: Run Playwright tests against Vite dev server
-        working-directory: fixtures/playwright-vite-dogfood
-        env:
-          CI: "1"
-        run: npm run test:e2e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install docgen (CLI)
-        run: pip install --no-cache-dir .
-      - name: docgen discover-tests includes fixture spec
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
-        run: |
-          set -euo pipefail
-          cd docs/demos
-          docgen --config docgen.yaml discover-tests --format=json | python3 -c "import json,sys; r=sys.stdin.read().strip(); \
-            assert r, 'empty stdout from discover-tests'; \
-            d=json.loads(r); \
-            assert len(d)>=1, d; \
-            assert any('smoke.spec.ts' in (x.get('spec_path') or '') for x in d), d"
-
-  smoke:
-    name: smoke (config + lint + tts dry-run)
-    runs-on: ubuntu-latest
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install .
-      - name: Validate config loads
-        run: docgen --config docs/demos/docgen.yaml validate --help
-      - name: Narration lint
-        run: docgen --config docs/demos/docgen.yaml lint
-      - name: TTS dry-run
-        run: docgen --config docs/demos/docgen.yaml tts --dry-run
-
-  e2e:
-    runs-on: ubuntu-latest
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      PYTHONPATH: ${{ github.workspace }}/src
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install ".[dev]"
-      - run: playwright install --with-deps chromium
-      - run: pytest tests/e2e/ -v --tb=short
+      - run: pytest tests/ -v --tb=short

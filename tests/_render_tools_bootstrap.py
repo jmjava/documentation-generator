@@ -1,4 +1,4 @@
-"""Download ffmpeg, ffprobe, and VHS into ``tests/.bin-cache`` when demo_function render tests run.
+"""Download ffmpeg + ffprobe into ``tests/.bin-cache`` when validate/compose tests need them.
 
 Keeps the default ``pytest`` run self-contained (no ``skipif``) without sudo.
 """
@@ -14,8 +14,6 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VHS_RELEASE = "v0.11.0"
-VHS_DOWNLOAD_BASE = f"https://github.com/charmbracelet/vhs/releases/download/{VHS_RELEASE}/"
 WIN_FFMPEG_ZIP = (
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
     "ffmpeg-master-latest-win64-gpl.zip"
@@ -62,68 +60,6 @@ def _augment_common_path_prefixes() -> None:
 def _chmod_plus_x(path: Path) -> None:
     mode = path.stat().st_mode
     path.chmod(mode | stat.S_IXUSR)
-
-
-def _vhs_release_asset() -> tuple[str, bool]:
-    """Return (filename, is_zip)."""
-    if sys.platform == "win32":
-        return "vhs_0.11.0_Windows_x86_64.zip", True
-    if sys.platform == "darwin":
-        if platform.machine().lower() == "arm64":
-            return "vhs_0.11.0_Darwin_arm64.tar.gz", False
-        return "vhs_0.11.0_Darwin_x86_64.tar.gz", False
-    if sys.platform.startswith("linux"):
-        m = platform.machine().lower()
-        if m in ("x86_64", "amd64"):
-            return "vhs_0.11.0_Linux_x86_64.tar.gz", False
-        if m in ("aarch64", "arm64"):
-            return "vhs_0.11.0_Linux_arm64.tar.gz", False
-    raise OSError(f"Unsupported platform for bundled VHS: {sys.platform} {platform.machine()}")
-
-
-def ensure_vhs_on_path() -> None:
-    import shutil
-
-    if shutil.which("vhs"):
-        return
-    tdir = bin_cache_root() / "vhs-extract"
-    tdir.mkdir(parents=True, exist_ok=True)
-    marker = tdir / ".vhs-ready"
-    if marker.is_file():
-        bindir = Path(marker.read_text(encoding="utf-8").strip())
-        exe = bindir / ("vhs.exe" if sys.platform == "win32" else "vhs")
-        if exe.is_file():
-            _prepend_path(bindir)
-            return
-
-    asset, is_zip = _vhs_release_asset()
-    url = VHS_DOWNLOAD_BASE + asset
-    dl = tdir / asset
-    _download(url, dl)
-    if is_zip:
-        with zipfile.ZipFile(dl) as zf:
-            zf.extractall(tdir)
-    else:
-        with tarfile.open(dl, "r:gz") as tf:
-            _safe_tar_extractall(tf, tdir)
-    dl.unlink(missing_ok=True)
-
-    exe: Path | None = None
-    for name in ("vhs.exe", "vhs"):
-        for p in tdir.rglob(name):
-            if p.is_file() and "completions" not in str(p):
-                exe = p
-                break
-        if exe is not None:
-            break
-    if exe is None:
-        raise RuntimeError("Could not find vhs executable in release archive")
-
-    bindir = exe.parent
-    if sys.platform != "win32":
-        _chmod_plus_x(exe)
-    marker.write_text(str(bindir), encoding="utf-8")
-    _prepend_path(bindir)
 
 
 def ensure_ffmpeg_ffprobe_on_path() -> None:
@@ -218,7 +154,7 @@ def _ensure_windows_ffmpeg_zip() -> None:
 
 
 def bootstrap_ffmpeg_for_tests() -> None:
-    """Put ffmpeg + ffprobe on PATH (compose / validate tests; no VHS)."""
+    """Put ffmpeg + ffprobe on PATH (compose / validate tests)."""
     import shutil
 
     _augment_common_path_prefixes()
@@ -228,19 +164,3 @@ def bootstrap_ffmpeg_for_tests() -> None:
             "ffmpeg and ffprobe must be on PATH after bootstrap "
             "(see tests/_render_tools_bootstrap.py)."
         )
-
-
-def bootstrap_cli_render_toolchain() -> None:
-    """Populate PATH with ffmpeg, ffprobe, and vhs when missing."""
-    import shutil
-
-    _augment_common_path_prefixes()
-    ensure_ffmpeg_ffprobe_on_path()
-    ensure_vhs_on_path()
-    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
-        raise RuntimeError(
-            "ffmpeg and ffprobe must be on PATH after bootstrap "
-            "(see tests/_render_tools_bootstrap.py)."
-        )
-    if shutil.which("vhs") is None:
-        raise RuntimeError("vhs must be on PATH after bootstrap (see tests/_render_tools_bootstrap.py).")

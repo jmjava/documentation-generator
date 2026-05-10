@@ -34,33 +34,6 @@ def wipe_animations_directory(animations_dir: Path) -> None:
     animations_dir.mkdir(parents=True, exist_ok=True)
 
 
-def wipe_terminal_directory(terminal_dir: Path) -> None:
-    """Remove the terminal tree and recreate ``terminal/rendered`` (VHS / compose convention)."""
-    if terminal_dir.exists():
-        shutil.rmtree(terminal_dir)
-    (terminal_dir / "rendered").mkdir(parents=True, exist_ok=True)
-
-
-def wipe_per_function_outputs(per_function_dir: Path) -> int:
-    """Remove LLM-generated ``*.docgen.yaml`` + ``*.html`` under ``per_function_dir``.
-
-    These are Category C outputs of ``docgen per-function-generate``; the dir itself
-    is preserved so a fresh regeneration can write into it. Returns count removed.
-    Non-existent dir → 0.
-    """
-    if not per_function_dir.is_dir():
-        return 0
-    n = 0
-    for pattern in ("*.docgen.yaml", "*.html"):
-        for f in per_function_dir.glob(pattern):
-            try:
-                f.unlink()
-                n += 1
-            except OSError:
-                continue
-    return n
-
-
 def clean_bundle_regenerable_outputs(
     cfg: "Config",
     *,
@@ -70,8 +43,6 @@ def clean_bundle_regenerable_outputs(
 
     **Preserves** (unless ``keep_narration``): ``docgen.yaml`` (unless removed separately),
     ``narration/README.md``, and segment ``narration/*.md`` when ``keep_narration`` is True.
-    Clears ``recordings/per-function/*`` and ``per-function/*.{docgen.yaml,html}``
-    (now Category C — emitted by ``docgen per-function-generate``).
 
     **Does not** touch ``repo_root`` fixtures.
     """
@@ -92,21 +63,12 @@ def clean_bundle_regenerable_outputs(
             mp3_n += 1
     out["audio_mp3_removed"] = mp3_n
 
-    wipe_terminal_directory(cfg.terminal_dir)
-    out["terminal_dir_reset"] = True
-
     rec_mp4 = 0
     if cfg.recordings_dir.is_dir():
         for f in cfg.recordings_dir.glob("*.mp4"):
             f.unlink()
             rec_mp4 += 1
-        per_fn = cfg.recordings_dir / "per-function"
-        if per_fn.is_dir():
-            shutil.rmtree(per_fn)
-        per_fn.mkdir(parents=True, exist_ok=True)
     out["recordings_root_mp4_removed"] = rec_mp4
-
-    out["per_function_outputs_removed"] = wipe_per_function_outputs(base / "per-function")
 
     state = base / ".docgen-state.json"
     if state.is_file():

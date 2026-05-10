@@ -371,7 +371,6 @@
   }
 
   document.getElementById("btn-redo-tts").addEventListener("click", () => runStep("tts"));
-  document.getElementById("btn-redo-vhs").addEventListener("click", () => runStep("vhs"));
   document.getElementById("btn-redo-manim").addEventListener("click", () => runStep("manim"));
   document.getElementById("btn-redo-compose").addEventListener("click", () => runStep("compose"));
   document.getElementById("btn-run-validate").addEventListener("click", async () => {
@@ -384,7 +383,7 @@
 
   document.getElementById("btn-redo-all").addEventListener("click", async () => {
     if (!activeSegmentId) return;
-    for (const step of ["tts", "vhs", "manim", "compose", "validate"]) {
+    for (const step of ["tts", "manim", "compose", "validate"]) {
       await runStep(step);
     }
   });

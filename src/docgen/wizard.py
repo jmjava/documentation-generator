@@ -237,50 +237,6 @@ def create_app(config: Any | None = None) -> Flask:
         tree = build_file_tree(files)
         return jsonify({"tree": tree, "files": files, "repo_root": str(root)})
 
-    @app.route("/api/discover-tests")
-    def api_discover_tests():
-        """List Node Playwright tests and optional suggested ``visual_map`` YAML (same logic as CLI)."""
-        from dataclasses import asdict
-
-        cfg = _cfg()
-        if not cfg:
-            return jsonify({"error": "no_config", "tests": []}), 400
-        from docgen.test_discovery import (
-            discover_all_node_playwright_tests,
-            find_playwright_config,
-            format_suggested_visual_map_yaml,
-            node_playwright_project_ready,
-            parse_playwright_config_insights,
-        )
-
-        rr = cfg.repo_root.resolve()
-        roots = list(cfg.discover_tests_scan_roots)
-        ready = [r for r in roots if node_playwright_project_ready(r)]
-        tests = discover_all_node_playwright_tests(rr, roots) if ready else []
-        insights: dict[str, Any] = {}
-        cfg_path_note = ""
-        for root in roots:
-            pcfg = find_playwright_config(root)
-            if pcfg:
-                insights = dict(parse_playwright_config_insights(pcfg))
-                try:
-                    cfg_path_note = str(pcfg.resolve().relative_to(rr))
-                except ValueError:
-                    cfg_path_note = str(pcfg.resolve())
-                break
-        if cfg_path_note:
-            insights["_config_path"] = cfg_path_note
-        suggest = format_suggested_visual_map_yaml(tests) if tests else ""
-        return jsonify(
-            {
-                "tests": [asdict(t) for t in tests],
-                "suggested_visual_map_yaml": suggest,
-                "insights": insights,
-                "scan_roots": [str(r) for r in roots],
-                "ready_roots": [str(r) for r in ready],
-            }
-        )
-
     # -- API: read file content ------------------------------------------------
 
     @app.route("/api/file")
@@ -447,39 +403,11 @@ def create_app(config: Any | None = None) -> Flask:
                     runner.render(scene=scene)
                 return jsonify({"ok": True, "step": "manim", "segment": segment_id})
 
-            elif step == "vhs":
-                from docgen.vhs import VHSRunner
-                runner = VHSRunner(cfg)
-                vmap = cfg.visual_map.get(segment_id, {})
-                tape = vmap.get("tape")
-                if tape:
-                    runner.render(tape=tape, strict=False)
-                return jsonify({"ok": True, "step": "vhs", "segment": segment_id})
-
             elif step == "compose":
                 from docgen.compose import Composer
                 comp = Composer(cfg)
                 comp.compose_segments([segment_id])
                 return jsonify({"ok": True, "step": "compose", "segment": segment_id})
-
-            elif step == "playwright":
-                from docgen.playwright_runner import PlaywrightRunner
-
-                vmap = cfg.visual_map.get(segment_id, {})
-                source = str(vmap.get("source", "")).strip()
-                if not source:
-                    return jsonify({"error": "visual_map source is required for playwright"}), 400
-
-                runner = PlaywrightRunner(cfg)
-                video = runner.capture_segment(segment_id, vmap)
-                return jsonify(
-                    {
-                        "ok": True,
-                        "step": "playwright",
-                        "segment": segment_id,
-                        "video": str(video.relative_to(cfg.base_dir)),
-                    }
-                )
 
             elif step == "validate":
                 from docgen.validate import Validator

@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from docgen.config import Config
-from docgen.scene_generate import BOOTSTRAP_HEADER, SceneGenerationError
+from docgen.manim_scene_support import BOOTSTRAP_HEADER, SceneGenerationError
 from docgen.scene_spec_generate import (
     generate_scene_spec,
     inject_class_block_into_scenes_py,
@@ -23,13 +23,12 @@ def _bundle(tmp_path: Path) -> Config:
             "narration": "narration",
             "animations": "animations",
             "audio": "audio",
-            "terminal": "terminal",
             "recordings": "recordings",
         },
         "segments": {"default": ["08"], "all": ["08"]},
-        "segment_names": {"08": "08-demo-function"},
+        "segment_names": {"08": "08-extras"},
         "visual_map": {
-            "08": {"type": "manim", "scene": "DemoFunctionScene", "source": "x.mp4"}
+            "08": {"type": "manim", "scene": "ExtrasScene", "source": "x.mp4"}
         },
         "manim_scene_generation": {"model": "gpt-4o-mini", "temperature": 0.2},
     }
@@ -37,7 +36,7 @@ def _bundle(tmp_path: Path) -> Config:
     p.write_text(yaml.dump(cfg), encoding="utf-8")
     narr = tmp_path / "narration"
     narr.mkdir()
-    (narr / "08-demo-function.md").write_text("# Demo\n\nHello world.", encoding="utf-8")
+    (narr / "08-extras.md").write_text("# Demo\n\nHello world.", encoding="utf-8")
     return Config.from_yaml(p)
 
 
@@ -91,9 +90,9 @@ def test_generate_scene_spec_normalizes_ids_and_compiles(tmp_path: Path) -> None
         dry_run=False,
         llm=fake_llm,
     )
-    assert result.class_name == "DemoFunctionScene"
+    assert result.class_name == "ExtrasScene"
     assert result.spec["segment_id"] == "08"
-    assert result.spec["class_name"] == "DemoFunctionScene"
+    assert result.spec["class_name"] == "ExtrasScene"
     assert "Box A" in result.yaml_text
     assert "timing_key" not in result.spec
 
@@ -122,13 +121,12 @@ def test_generate_scene_spec_fails_loud_when_narration_missing(tmp_path: Path) -
                     "narration": "narration",
                     "animations": "animations",
                     "audio": "audio",
-                    "terminal": "terminal",
                     "recordings": "recordings",
                 },
                 "segments": {"default": ["08"], "all": ["08"]},
-                "segment_names": {"08": "08-demo-function"},
+                "segment_names": {"08": "08-extras"},
                 "visual_map": {
-                    "08": {"type": "manim", "scene": "DemoFunctionScene", "source": "x.mp4"}
+                    "08": {"type": "manim", "scene": "ExtrasScene", "source": "x.mp4"}
                 },
             }
         ),
@@ -149,7 +147,7 @@ def test_inject_updates_scenes_py(tmp_path: Path) -> None:
 
     spec = {
         "segment_id": "08",
-        "class_name": "DemoFunctionScene",
+        "class_name": "ExtrasScene",
         "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
         "rows": [
             {
@@ -166,38 +164,37 @@ def test_inject_updates_scenes_py(tmp_path: Path) -> None:
             }
         ],
     }
-    block, merged = linted_class_block_from_spec(cfg, spec, timing_key="08-demo-function")
-    assert "class DemoFunctionScene(_TimedScene):" in block
-    assert merged["timing_key"] == "08-demo-function"
+    block, merged = linted_class_block_from_spec(cfg, spec, timing_key="08-extras")
+    assert "class ExtrasScene(_TimedScene):" in block
+    assert merged["timing_key"] == "08-extras"
 
     inject_class_block_into_scenes_py(
         cfg,
         seg_id="08",
-        class_name="DemoFunctionScene",
+        class_name="ExtrasScene",
         class_block=block,
     )
     text = scenes.read_text(encoding="utf-8")
-    assert "class DemoFunctionScene(_TimedScene):" in text
+    assert "class ExtrasScene(_TimedScene):" in text
     assert "BEGIN GENERATED SCENE: 08" in text
 
 
-@pytest.mark.integration
-def test_scene_spec_generate_live_openai(tmp_path: Path) -> None:
-    import os
-
-    if os.environ.get("DOCGEN_RUN_LIVE_OPENAI") != "1":
-        pytest.skip("set DOCGEN_RUN_LIVE_OPENAI=1 and OPENAI_API_KEY for live LLM test")
-    if not os.environ.get("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set")
-
+def test_generate_scene_spec_extra_hints_run_full_pipeline_with_stub_llm(tmp_path: Path) -> None:
+    """Same integration intent as a live OpenAI call, but ``llm=`` is injected (no network, no skips)."""
     cfg = _bundle(tmp_path)
+
+    def fake_llm(**_kwargs: object) -> str:
+        return MOCK_LLM_YAML
+
     result = generate_scene_spec(
         cfg,
         "08",
         extra_paths=[],
         extra_hints=["Keep to two rows for a short test."],
         dry_run=False,
+        llm=fake_llm,
     )
     assert result.spec["segment_id"] == "08"
-    assert result.class_name == "DemoFunctionScene"
+    assert result.class_name == "ExtrasScene"
     assert result.spec["rows"]
+    assert len(result.spec["rows"]) == 2

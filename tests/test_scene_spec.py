@@ -8,12 +8,14 @@ import pytest
 
 from docgen.scene_spec import (
     SceneSpecError,
-    align_wait_at_to_words,
     auto_paginate,
+    coerce_legacy_wait_at_to_whisper_rows,
     compile_scene_class,
     layout_budget_violations,
     layout_stack_budget,
     load_scene_spec,
+    segment_index_for_whisper_time,
+    sync_row_labels_to_whisper_words,
     validate_scene_spec,
 )
 
@@ -28,7 +30,8 @@ def test_load_and_compile_fixture() -> None:
     out = compile_scene_class(merged)
     assert "class TestDeclarativeScene(_TimedScene):" in out
     assert "def construct(self):" in out
-    assert "timing = _load_timing('99-overview')" in out
+    assert "timing_words = _load_timing_words('99-overview')" in out
+    assert "_docgen_segs = _load_timing('99-overview')" in out
     assert "title = Text('Test declarative', font_size=40, color=C_WHITE).to_edge(UP)" in out
     assert "_bx_0_0_0 = _box('Alpha', C_ORANGE, 5.0, 1.2, 28)" in out
     assert "_bx_0_1_0 = _box('Beta', C_BLUE, 3.5, 1.2, 24)" in out
@@ -37,8 +40,9 @@ def test_load_and_compile_fixture() -> None:
     assert "_row_0_1 = VGroup(_bx_0_1_0, _bx_0_1_1).arrange(RIGHT, buff=0.35)" in out
     assert "_p0_stack = VGroup(_row_0_0, _row_0_1).arrange(DOWN, buff=0.35, center=True)" in out
     assert "_p0_stack.next_to(title, DOWN, buff=0.5)" in out
-    assert "self.timed_play(FadeIn(_p0_stack[0]), run_time=1.0)" in out
-    assert "self.timed_play(FadeIn(_p0_stack[1]), run_time=1.0)" in out
+    assert "self.timed_play(FadeIn(_bx_0_0_0), run_time=1.0)" in out
+    assert "self.timed_play(FadeIn(_bx_0_1_0), run_time=1.0)" in out
+    assert "self.timed_play(FadeIn(_bx_0_1_1), run_time=1.0)" in out
 
 
 def test_multi_page_emits_transition_and_second_stack() -> None:
@@ -84,10 +88,10 @@ def test_multi_page_emits_transition_and_second_stack() -> None:
         ],
     }
     out = compile_scene_class(spec)
-    assert "_p0_stack" in out
+    assert "timing_words = _load_timing_words('01-x')" in out
     assert "_p1_stack" in out
     assert "self.timed_play(FadeOut(_p0_stack), run_time=0.5)" in out
-    assert "FadeIn(_p1_stack[0])" in out
+    assert "FadeIn(_bx_1_0_0)" in out
 
 
 def test_validate_rejects_rows_and_pages_together() -> None:
@@ -154,7 +158,7 @@ def test_validate_rejects_empty_rows() -> None:
         )
 
 
-def test_compile_wait_at_emits_absolute_wait() -> None:
+def test_compile_rejects_wait_at() -> None:
     spec = {
         "segment_id": "05",
         "class_name": "AtScene",
@@ -176,11 +180,173 @@ def test_compile_wait_at_emits_absolute_wait() -> None:
             },
         ],
     }
+    with pytest.raises(SceneSpecError, match="wait_at"):
+        validate_scene_spec(spec)
+
+
+def test_coerce_legacy_wait_at_prefers_wait_word_when_words_present() -> None:
+    spec = {
+        "segment_id": "05",
+        "class_name": "AtScene",
+        "timing_key": "05-x",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_at": 12.5,
+                "boxes": [
+                    {
+                        "label": "Late",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                    }
+                ],
+            },
+        ],
+    }
+    words = [
+        {"word": "early", "start": 0.0, "end": 1.0},
+        {"word": "late", "start": 10.0, "end": 11.0},
+    ]
+    segments = [
+        {"start": 0.0, "end": 15.0},
+        {"start": 15.0, "end": 30.0},
+    ]
+    merged = coerce_legacy_wait_at_to_whisper_rows(spec, words, segments)
+    validate_scene_spec(merged)
+    assert merged["rows"][0]["boxes"][0]["wait_word"] == 1
+    assert merged["rows"][0].get("wait_word") is None
+    out = compile_scene_class(merged)
+    assert "self.wait_until_word(timing_words, 1)" in out
+    assert "timing_words = _load_timing_words('05-x')" in out
+    assert "        timing = _load_timing(" not in out
+
+
+def test_coerce_legacy_wait_at_drops_when_no_words_even_if_segments_exist() -> None:
+    spec = {
+        "segment_id": "05",
+        "class_name": "AtScene",
+        "timing_key": "05-x",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_at": 12.5,
+                "boxes": [
+                    {
+                        "label": "Late",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                    }
+                ],
+            },
+        ],
+    }
+    segments = [
+        {"start": 0.0, "end": 15.0},
+        {"start": 15.0, "end": 30.0},
+    ]
+    merged = coerce_legacy_wait_at_to_whisper_rows(spec, [], segments)
+    validate_scene_spec(merged)
+    assert "wait_segment" not in merged["rows"][0]
+    assert merged["rows"][0].get("wait_word") is None
+    assert "wait_word" not in merged["rows"][0]["boxes"][0]
+    assert "wait_at" not in merged["rows"][0]
+    out = compile_scene_class(merged)
+    assert "wait_until_word" not in out
+
+
+def test_compile_rejects_wait_segment() -> None:
+    spec = {
+        "segment_id": "03",
+        "class_name": "SegScene",
+        "timing_key": "03-x",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_segment": 0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                    }
+                ],
+            },
+        ],
+    }
+    with pytest.raises(SceneSpecError, match="wait_segment is not supported"):
+        compile_scene_class(spec)
+
+
+def test_segment_index_for_whisper_time_brackets() -> None:
+    segs = [{"start": 0.0, "end": 10.0}, {"start": 10.0, "end": 20.0}]
+    assert segment_index_for_whisper_time(segs, 0.0) == 0
+    assert segment_index_for_whisper_time(segs, 12.5) == 1
+
+
+def test_compile_wait_word_emits_wait_until_word() -> None:
+    spec = {
+        "segment_id": "03",
+        "class_name": "WordScene",
+        "timing_key": "03-x",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                        "wait_word": 7,
+                    }
+                ],
+            },
+        ],
+    }
     out = compile_scene_class(spec)
-    assert "self.wait_until(12.5)" in out
+    assert "self.wait_until_word(timing_words, 7)" in out
+    assert "FadeIn(_bx_0_0_0)" in out
+    assert "timing_words = _load_timing_words('03-x')" in out
 
 
-def test_validate_rejects_wait_segment_and_wait_at_together() -> None:
+def test_validate_rejects_wait_at_key() -> None:
+    with pytest.raises(SceneSpecError, match="wait_at"):
+        validate_scene_spec(
+            {
+                "segment_id": "1",
+                "class_name": "X",
+                "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+                "rows": [
+                    {
+                        "run_time": 1.0,
+                        "wait_at": 1.0,
+                        "boxes": [
+                            {
+                                "label": "A",
+                                "color": "C_GREEN",
+                                "width": 2.0,
+                                "height": 1.0,
+                                "font_size": 18,
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+
+def test_validate_rejects_wait_word_and_wait_segment_together() -> None:
     with pytest.raises(SceneSpecError, match="at most one"):
         validate_scene_spec(
             {
@@ -190,8 +356,8 @@ def test_validate_rejects_wait_segment_and_wait_at_together() -> None:
                 "rows": [
                     {
                         "run_time": 1.0,
-                        "wait_segment": 0,
-                        "wait_at": 1.0,
+                        "wait_word": 0,
+                        "wait_segment": 1,
                         "boxes": [
                             {
                                 "label": "A",
@@ -340,7 +506,7 @@ def test_auto_paginate_preserves_explicit_pages_transitions() -> None:
     assert pages[1]["transition"] == "none"
 
 
-def test_align_wait_at_to_words_picks_first_mention_per_label() -> None:
+def test_sync_row_labels_sets_wait_word_indices() -> None:
     spec = {
         "segment_id": "1",
         "class_name": "X",
@@ -355,13 +521,88 @@ def test_align_wait_at_to_words_picks_first_mention_per_label() -> None:
         {"word": "and", "start": 4.0, "end": 4.2},
         {"word": "Compose", "start": 5.5, "end": 5.9},
     ]
-    out = align_wait_at_to_words(spec, words)
-    assert out["rows"][0]["wait_at"] == 1.5
-    assert out["rows"][1]["wait_at"] == 3.5
-    assert out["rows"][2]["wait_at"] == 5.5
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert [out["rows"][i]["boxes"][0].get("wait_word") for i in range(3)] == [1, 3, 5]
 
 
-def test_align_wait_at_handles_multi_word_labels_and_advances_cursor() -> None:
+def test_sync_row_labels_assigns_each_box_in_a_row() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {"label": "Alpha", "color": "C_GREEN", "width": 2.0, "height": 1.0, "font_size": 18},
+                    {"label": "Beta", "color": "C_BLUE", "width": 2.0, "height": 1.0, "font_size": 18},
+                ],
+            }
+        ],
+    }
+    words = [
+        {"word": "x", "start": 0.0, "end": 0.1},
+        {"word": "alpha", "start": 1.0, "end": 1.2},
+        {"word": "beta", "start": 2.0, "end": 2.2},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    b = out["rows"][0]["boxes"]
+    assert b[0]["wait_word"] == 1
+    assert b[1]["wait_word"] == 2
+
+
+def test_compile_legacy_row_wait_word_fades_each_box() -> None:
+    """Row-level ``wait_word`` paces only the first box; every box still gets its own FadeIn."""
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "timing_key": "k",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 0.5,
+                "wait_word": 5,
+                "boxes": [
+                    {"label": "A", "color": "C_GREEN", "width": 2.0, "height": 1.0, "font_size": 18},
+                    {"label": "B", "color": "C_BLUE", "width": 2.0, "height": 1.0, "font_size": 18},
+                ],
+            }
+        ],
+    }
+    out = compile_scene_class(spec)
+    assert out.count("wait_until_word(timing_words, 5)") == 1
+    assert "FadeIn(_bx_0_0_0)" in out
+    assert "FadeIn(_bx_0_0_1)" in out
+
+
+def test_validate_rejects_row_and_box_wait_word_together() -> None:
+    with pytest.raises(SceneSpecError, match="not both"):
+        validate_scene_spec(
+            {
+                "segment_id": "1",
+                "class_name": "X",
+                "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+                "rows": [
+                    {
+                        "run_time": 1.0,
+                        "wait_word": 0,
+                        "boxes": [
+                            {
+                                "label": "A",
+                                "color": "C_GREEN",
+                                "width": 2.0,
+                                "height": 1.0,
+                                "font_size": 18,
+                                "wait_word": 1,
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+
+def test_sync_row_labels_multi_word_phrase_starts_at_first_spoken_word() -> None:
     spec = {
         "segment_id": "1",
         "class_name": "X",
@@ -375,13 +616,13 @@ def test_align_wait_at_handles_multi_word_labels_and_advances_cursor() -> None:
         {"word": "called", "start": 2.0, "end": 2.4},
         {"word": "function", "start": 4.0, "end": 4.4},
     ]
-    out = align_wait_at_to_words(spec, words)
-    assert out["rows"][0]["wait_at"] == 1.0
-    assert out["rows"][1]["wait_at"] == 4.0
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 1
+    assert out["rows"][1]["boxes"][0]["wait_word"] == 4
 
 
-def test_align_wait_at_matches_label_to_inflected_word() -> None:
-    """Engine-side stem matcher: ``Trace`` aligns to spoken ``tracing`` without YAML edits."""
+def test_sync_row_labels_stem_match_trace_tracing() -> None:
+    """``Trace`` aligns to spoken ``tracing`` without YAML edits."""
     spec = {
         "segment_id": "1",
         "class_name": "X",
@@ -394,13 +635,13 @@ def test_align_wait_at_matches_label_to_inflected_word() -> None:
         {"word": "step", "start": 2.1, "end": 2.4},
         {"word": "composing", "start": 5.5, "end": 6.0},
     ]
-    out = align_wait_at_to_words(spec, words)
-    assert out["rows"][0]["wait_at"] == 1.5
-    assert out["rows"][1]["wait_at"] == 5.5
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 1
+    assert out["rows"][1]["boxes"][0]["wait_word"] == 3
 
 
-def test_align_wait_at_does_not_stem_match_short_tokens() -> None:
-    """Short product names like ``TTS`` keep strict equality so they don't snag random tokens."""
+def test_sync_row_labels_short_token_tts_strict() -> None:
+    """Short product names like ``TTS`` keep strict token equality."""
     spec = {
         "segment_id": "1",
         "class_name": "X",
@@ -411,21 +652,69 @@ def test_align_wait_at_does_not_stem_match_short_tokens() -> None:
         {"word": "the", "start": 0.0, "end": 0.3},
         {"word": "tts", "start": 1.0, "end": 1.4},
     ]
-    out = align_wait_at_to_words(spec, words)
-    assert out["rows"][0]["wait_at"] == 1.0
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 1
 
 
-def test_align_wait_at_does_not_overwrite_existing_unless_asked() -> None:
+def test_sync_row_labels_does_not_overwrite_wait_word_unless_forced() -> None:
     spec = {
         "segment_id": "1",
         "class_name": "X",
         "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
         "rows": [
-            {**_row("Whisper"), "wait_at": 99.0},
+            {**_row("Whisper"), "wait_word": 99},
         ],
     }
-    words = [{"word": "Whisper", "start": 1.5, "end": 1.9}]
-    out = align_wait_at_to_words(spec, words)
-    assert out["rows"][0]["wait_at"] == 99.0
-    out2 = align_wait_at_to_words(spec, words, overwrite=True)
-    assert out2["rows"][0]["wait_at"] == 1.5
+    words = [
+        {"word": "noise", "start": 0.0},
+        {"word": "Whisper", "start": 1.5},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words, overwrite=False)
+    assert out["rows"][0]["wait_word"] == 99
+    out2 = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    assert out2["rows"][0]["boxes"][0]["wait_word"] == 1
+    assert out2["rows"][0].get("wait_word") is None
+
+
+def test_sync_row_labels_overwrite_true_fixes_llm_duplicate_wait_words() -> None:
+    """Duplicate LLM wait_word indices make wait_until_word a no-op; label sync must replace."""
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {**_row("Whisper"), "wait_word": 0},
+            {**_row("Manim"), "wait_word": 0},
+            {**_row("Compose"), "wait_word": 0},
+        ],
+    }
+    words = [
+        {"word": "the", "start": 0.0, "end": 0.3},
+        {"word": "Whisper", "start": 1.5, "end": 1.9},
+        {"word": "tool", "start": 2.0, "end": 2.4},
+        {"word": "Manim", "start": 3.5, "end": 3.9},
+        {"word": "and", "start": 4.0, "end": 4.2},
+        {"word": "Compose", "start": 5.5, "end": 5.9},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    assert [out["rows"][i]["boxes"][0].get("wait_word") for i in range(3)] == [1, 3, 5]
+
+
+def test_sync_row_labels_overwrite_true_clears_unmatched_wait_word() -> None:
+    box = {
+        "label": "NotInTranscript",
+        "color": "C_GREEN",
+        "width": 3.0,
+        "height": 1.0,
+        "font_size": 22,
+        "wait_word": 99,
+    }
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [{"run_time": 1.0, "boxes": [box]}],
+    }
+    words = [{"word": "hello", "start": 0.0, "end": 0.3}]
+    out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    assert out["rows"][0]["boxes"][0].get("wait_word") is None

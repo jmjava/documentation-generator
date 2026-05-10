@@ -1,11 +1,12 @@
 # Milestones
 
-**Active plan (canonical):** [checklist-playwright-auto-narration.md](checklist-playwright-auto-narration.md) — Node-first Playwright discovery, catalog, `playwright_test` / compose, and LLM narration. Update this checklist as work ships.
+**Consumers:** See **[upstream-dogfood.md](upstream-dogfood.md)** — notes for
+repositories that install `docgen` and maintain their own demo bundle. The
+library no longer ships an in-repo dogfood; consumers are the integration test
+of record.
 
-**Next session — dogfood (two tracks):**
-- **[In-repo](next-session-dogfood.md)** — run **`docs/demos`** through catalog, narration, one `playwright_test` segment, **`generate-all`**, validate.
-- **[Upstream](upstream-dogfood.md)** — **`courseforge/course-builder`** (`pip install`s docgen, consumer CI: catalog workflow, secrets, xvfb/ttyd).
+**Archived roadmaps:** [archive/](archive/) — older write-ups kept for history;
+not the day-to-day execution list.
 
-**Archived roadmaps:** [archive/](archive/) — older milestone write-ups (hardening, slides, i18n, early Playwright-video spec, Embabel sketch). Kept for history; not the day-to-day execution list.
-
-**Session notes (ad hoc):** [Declarative Manim — May 2026](../docs/session-notes-2026-05-08-manim-declarative-specs.md) (`scene-spec-generate`, YAML compile path, dogfood refresh).
+**Session notes (ad hoc):** e.g. declarative Manim work under
+`docs/session-notes*.md` when present.

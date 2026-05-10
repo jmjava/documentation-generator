@@ -10,8 +10,6 @@ from docgen.init import (
     InitPlan,
     build_defaults_plan,
     detect_git_root,
-    detect_playwright_project_dirs,
-    discover_default_discover_roots,
     generate_files,
     infer_segments_from_narrations,
     read_segments_file,
@@ -91,7 +89,6 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert (tmp_path / "demos" / "rebuild-after-audio.sh").exists()
     assert (tmp_path / "demos" / "validate.sh").exists()
     assert (tmp_path / "demos" / "narration" / "README.md").exists()
-    assert (tmp_path / "demos" / "terminal" / "README.md").exists()
     assert (tmp_path / "demos" / "narration" / "01-intro.md").exists()
     assert (tmp_path / "demos" / "narration" / "02-setup.md").exists()
 
@@ -100,10 +97,10 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert cfg["segments"]["all"] == ["01", "02"]
     assert cfg["segment_names"]["01"] == "01-intro"
     assert "manim" not in cfg
-    assert cfg["vhs"]["render_timeout_sec"] == 120
+    assert "vhs" not in cfg
     assert "test-project" in cfg["tts"]["instructions"]
 
-    assert len(created) >= 7
+    assert len(created) >= 6
 
 
 def test_generate_files_preserves_existing_narration(tmp_path: Path) -> None:
@@ -160,7 +157,7 @@ def test_generate_files_creates_directories(tmp_path: Path) -> None:
     )
     generate_files(plan)
 
-    for subdir in ["narration", "audio", "animations", "terminal", "terminal/rendered", "recordings"]:
+    for subdir in ["narration", "audio", "animations", "recordings"]:
         assert (tmp_path / "demos" / subdir).is_dir()
 
 
@@ -182,80 +179,12 @@ def test_generate_files_pre_push_hook(tmp_path: Path) -> None:
     assert "demos" in content
 
 
-# Generic Playwright detection (no fixture name is hardcoded into init).
-
-
-def test_detect_playwright_project_dirs_via_package_json(tmp_path: Path) -> None:
-    proj = tmp_path / "fixtures" / "any-name-here"
-    proj.mkdir(parents=True)
-    (proj / "package.json").write_text(
-        '{"name": "x", "devDependencies": {"@playwright/test": "^1.0"}}',
-        encoding="utf-8",
-    )
-    found = detect_playwright_project_dirs(tmp_path)
-    assert found == [proj.resolve()]
-
-
-def test_detect_playwright_project_dirs_via_config_file(tmp_path: Path) -> None:
-    proj = tmp_path / "e2e"
-    proj.mkdir()
-    (proj / "playwright.config.ts").write_text("export default {};", encoding="utf-8")
-    assert detect_playwright_project_dirs(tmp_path) == [proj.resolve()]
-
-
-def test_detect_playwright_project_dirs_skips_node_modules(tmp_path: Path) -> None:
-    nm = tmp_path / "node_modules" / "@playwright" / "test"
-    nm.mkdir(parents=True)
-    (nm / "package.json").write_text(
-        '{"name": "@playwright/test"}', encoding="utf-8"
-    )
-    assert detect_playwright_project_dirs(tmp_path) == []
-
-
-def test_detect_playwright_project_dirs_no_signal(tmp_path: Path) -> None:
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "main.py").write_text("print('hi')", encoding="utf-8")
-    assert detect_playwright_project_dirs(tmp_path) == []
-
-
-def test_discover_default_discover_roots_with_playwright(tmp_path: Path) -> None:
-    demo = tmp_path / "docs" / "demos"
-    demo.mkdir(parents=True)
-    proj = tmp_path / "apps" / "frontend"
-    proj.mkdir(parents=True)
-    (proj / "package.json").write_text(
-        '{"devDependencies": {"playwright": "^1.0"}}', encoding="utf-8"
-    )
-    roots = discover_default_discover_roots(tmp_path, demo)
-    assert roots[0] == "."
-    assert "apps/frontend" in roots
-
-
-def test_discover_default_discover_roots_blank_repo(tmp_path: Path) -> None:
-    demo = tmp_path / "docs" / "demos"
-    demo.mkdir(parents=True)
-    assert discover_default_discover_roots(tmp_path, demo) == ["."]
-
-
-def test_build_defaults_plan_no_bundle_no_fixture(tmp_path: Path, monkeypatch) -> None:
-    """Greenfield: build_defaults_plan never references a hardcoded fixture path."""
+def test_build_defaults_plan_greenfield(tmp_path: Path, monkeypatch) -> None:
+    """Greenfield: build_defaults_plan returns the starter segment for a blank repo."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
     plan = build_defaults_plan(target_dir=None)
-    assert plan.discover_roots == ["."]
     assert plan.segments == [{"id": "01", "name": "01-intro"}]
-
-
-def test_build_defaults_plan_detects_playwright_signal(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / ".git").mkdir()
-    proj = tmp_path / "fixtures" / "any-fixture"
-    proj.mkdir(parents=True)
-    (proj / "package.json").write_text(
-        '{"devDependencies": {"@playwright/test": "^1.0"}}', encoding="utf-8"
-    )
-    plan = build_defaults_plan(target_dir=None)
-    assert "fixtures/any-fixture" in plan.discover_roots
 
 
 def test_read_segments_file_basic(tmp_path: Path) -> None:

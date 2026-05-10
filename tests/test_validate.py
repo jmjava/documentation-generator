@@ -32,6 +32,7 @@ def _make_video(
     frames_fn=None,
 ) -> Path:
     """Create a synthetic MP4.  *frames_fn(frame_idx, total)* returns a BGR numpy array."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     total = int(duration_sec * fps)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(path), fourcc, fps, (width, height))
@@ -92,11 +93,11 @@ def cfg_dir(tmp_path):
     cfg = {
         "segments": {"default": ["01"], "all": ["01"]},
         "segment_names": {"01": "01-test"},
-        "visual_map": {"01": {"type": "vhs", "source": "01-test.mp4"}},
+        "visual_map": {"01": {"type": "still", "source": "01-test.mp4"}},
         "validation": {"max_drift_sec": 2.75, "max_freeze_ratio": 0.25},
     }
     (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
-    for d in ("narration", "audio", "recordings", "terminal/rendered", "animations"):
+    for d in ("narration", "audio", "recordings", "animations"):
         (tmp_path / d).mkdir(parents=True, exist_ok=True)
     return tmp_path
 
@@ -257,7 +258,8 @@ class TestComposeGuard:
     def test_compose_rejects_short_video(self, config, cfg_dir):
         """Compose in strict mode should raise when video is way shorter than audio."""
         audio = cfg_dir / "audio" / "01-test.mp3"
-        video = cfg_dir / "terminal" / "rendered" / "01-test.mp4"
+        # Source visual must not be the composed output path (recordings/01-test.mp4).
+        video = cfg_dir / "recordings" / "incoming" / "01-visual.mp4"
 
         _make_video(video, duration_sec=10.0, frames_fn=_changing_content)
         _make_silent_audio(audio, duration_sec=80.0)
@@ -269,7 +271,7 @@ class TestComposeGuard:
     def test_compose_allows_matching_durations(self, config, cfg_dir):
         """Compose should succeed when video roughly matches audio."""
         audio = cfg_dir / "audio" / "01-test.mp3"
-        video = cfg_dir / "terminal" / "rendered" / "01-test.mp4"
+        video = cfg_dir / "recordings" / "incoming" / "01-visual.mp4"
 
         _make_video(video, duration_sec=75.0, frames_fn=_changing_content)
         _make_silent_audio(audio, duration_sec=80.0)
@@ -281,7 +283,7 @@ class TestComposeGuard:
     def test_compose_nonstrict_warns(self, config, cfg_dir, capsys):
         """Non-strict mode prints a warning but doesn't raise."""
         audio = cfg_dir / "audio" / "01-test.mp3"
-        video = cfg_dir / "terminal" / "rendered" / "01-test.mp4"
+        video = cfg_dir / "recordings" / "incoming" / "01-visual.mp4"
 
         _make_video(video, duration_sec=10.0, frames_fn=_changing_content)
         _make_silent_audio(audio, duration_sec=80.0)

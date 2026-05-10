@@ -15,25 +15,28 @@ from typing import TYPE_CHECKING, Any, Callable
 import yaml
 
 from docgen.openai_retry import call_with_rate_limit_retries
-from docgen.scene_generate import (
+from docgen.manim_scene_support import (
     SceneGenerationError,
     collect_source_snippets,
     derive_class_name,
     extract_reference_classes,
     merged_scene_generation_settings,
 )
-from docgen.scene_generate import _load_narration as load_narration_for_scene
-from docgen.scene_generate import _load_timing_segments as load_timing_for_scene
+from docgen.manim_scene_support import _load_narration as load_narration_for_scene
+from docgen.manim_scene_support import _load_timing_segments as load_timing_for_scene
 from docgen.scene_spec import (
     ALLOWED_COLORS,
     FRAME_HEIGHT,
     FRAME_WIDTH,
     SceneSpecError,
-    align_wait_at_to_words,
     auto_paginate,
+    coerce_legacy_wait_at_to_whisper_rows,
     compile_scene_class,
     layout_budget_violations,
     layout_stack_budget,
+    spec_rows_reference_whisper_waits,
+    sync_row_labels_to_whisper_words,
+    upgrade_wait_segments_to_wait_words,
     validate_scene_spec,
 )
 
@@ -64,7 +67,7 @@ Required keys:
 - **Exactly one of:** ``rows`` (non-empty list of row mappings, single page) **or** ``pages`` (non-empty list of page mappings; each page has ``rows`` as above, optionally ``transition``: fade | none for pages after the first)
 
 Each row must have:
-- run_time: positive number (seconds for timed_play FadeIn of that row)
+- run_time: positive number (seconds for timed_play FadeIn of **each** box in that row)
 - boxes: non-empty list of box mappings, each with:
   - label: string
   - color: one of the palette tokens
@@ -72,9 +75,11 @@ Each row must have:
   - height: positive number (typical 0.65–1.1; **smaller when a page has many rows**)
   - font_size: int >= 14
 
-Optional per-row (at most one of):
-- wait_segment: non-negative int — wait_until that Whisper segment's **start** (often too early if the label word is spoken mid-segment).
-- wait_at: non-negative number — absolute seconds into the narration audio; use word timings in timing.json when labels must appear on first mention.
+Optional per-box (**Whisper ``words`` only**); omit if unsure — compile fills from each box ``label`` → first transcript match:
+- wait_word: non-negative int — index into ``timing.json`` → ``words``; that box waits until that token's **start**, then fades in (**one box at a time** within each row).
+
+Optional per-row (legacy; first box only — prefer per-box above):
+- wait_word: non-negative int — if set, and boxes omit ``wait_word``, only the **first** box in the row uses this index.
 
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
@@ -88,7 +93,7 @@ Design goals:
 - **Frame:** dogfood Manim canvas is ~14.22 × 8 units; title + buffer eat the top — see user-message budget. Never stack so many tall rows that boxes would clip off the bottom.
 - **Do not** rely on shrinking: split into **pages** with fade between them.
 - **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
-- Mirror **narration beats**; prefer **wait_at** from word-level times when first mention is not at a segment boundary; otherwise wait_segment is acceptable.
+- Mirror **narration beats**; each box appears when its label is spoken (toolchain sets ``wait_word`` from label → first match when you omit indices).
 - Keep labels concise; narration may be longer than on-screen text.
 """
 
@@ -128,7 +133,7 @@ def strip_yaml_fences(text: str) -> str:
 def _invoke_llm(
     *, system_prompt: str, user_message: str, model: str, temperature: float
 ) -> str:
-    from docgen.scene_generate import call_llm
+    from docgen.manim_scene_support import call_llm
 
     return call_with_rate_limit_retries(
         lambda: call_llm(
@@ -256,7 +261,7 @@ def linted_class_block_from_spec(
     timing_key: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Merge ``timing_key``, auto-paginate + word-align, compile, run ``manim_scene_lint``."""
-    from docgen.scene_generate import SceneGenerationError, lint_generated_block
+    from docgen.manim_scene_support import SceneGenerationError, lint_generated_block
 
     merged = dict(spec)
     sid = str(merged["segment_id"]).strip()
@@ -267,9 +272,23 @@ def linted_class_block_from_spec(
 
     # Engine-side layout planning + audio sync so authored YAML stays minimal.
     merged = auto_paginate(merged)
-    words = _load_timing_words(cfg, str(merged["timing_key"]))
+    tk = str(merged["timing_key"])
+    segments = load_timing_for_scene(cfg, tk)
+    words = _load_timing_words(cfg, tk)
+    merged = coerce_legacy_wait_at_to_whisper_rows(merged, words, segments)
+    if words and segments:
+        merged = upgrade_wait_segments_to_wait_words(merged, words, segments)
     if words:
-        merged = align_wait_at_to_words(merged, words)
+        # LLM-authored wait_word values are often wrong (duplicates / guesses). Compile
+        # always re-derives indices from each box label + transcript order so multi-box
+        # rows reveal one box at a time.
+        merged = sync_row_labels_to_whisper_words(merged, words, overwrite=True)
+
+    if spec_rows_reference_whisper_waits(merged) and not words:
+        raise SceneGenerationError(
+            f"timing.json has no word-level `words` for stem {tk!r}; run `docgen timestamps` "
+            "before compiling scenes that use wait_word or wait_segment."
+        )
 
     try:
         class_block = compile_scene_class(merged)
@@ -295,7 +314,7 @@ def inject_class_block_into_scenes_py(
     class_name: str,
     class_block: str,
 ) -> Path:
-    from docgen.scene_generate import SceneGenerationError, ensure_scenes_bootstrap, inject_or_replace
+    from docgen.manim_scene_support import SceneGenerationError, ensure_scenes_bootstrap, inject_or_replace
 
     scenes_path = cfg.animations_dir / "scenes.py"
     try:
@@ -336,7 +355,7 @@ def generate_scene_spec(
     )
     narration_text = load_narration_for_scene(cfg, seg_id, seg_name)
     whisper_segments = load_timing_for_scene(cfg, seg_name)
-    from docgen.scene_generate import build_timing_enrichment_for_prompt
+    from docgen.manim_scene_support import build_timing_enrichment_for_prompt
 
     timing_block = build_timing_enrichment_for_prompt(cfg, seg_id, seg_name, whisper_segments)
 
@@ -376,12 +395,19 @@ def generate_scene_spec(
         else float(settings.temperature or DEFAULT_SCENE_SPEC_TEMPERATURE)
     )
     invoke = llm or _invoke_llm
-    raw = invoke(
-        system_prompt=system_prompt,
-        user_message=user_message,
-        model=model,
-        temperature=temperature,
-    )
+    try:
+        raw = invoke(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=model,
+            temperature=temperature,
+        )
+    except RuntimeError as exc:
+        raise SceneGenerationError(
+            f"OpenAI/chat call failed ({exc}). "
+            "Check OPENAI_API_KEY, set DOCGEN_ENV_OVERRIDES=1 to load the bundle env_file, "
+            "or use --dry-run to inspect the prompt only."
+        ) from exc
     body = strip_yaml_fences(raw)
     try:
         loaded = yaml.safe_load(body)

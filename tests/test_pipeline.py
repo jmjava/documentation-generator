@@ -91,12 +91,10 @@ def test_retry_manim_after_freeze_guard(tmp_path, monkeypatch) -> None:
     cfg = SimpleNamespace(
         animations_dir=animations_dir,
         segments_all=["01"],
-        sync_vhs_after_timestamps=False,
         pipeline_manim_scene_names=lambda: ["Scene01"],
-        pipeline_vhs_tape_filenames=lambda: [],
     )
 
-    Pipeline(cfg).run(skip_tts=True, skip_vhs=True, retry_manim_on_freeze=True)
+    Pipeline(cfg).run(skip_tts=True, retry_manim_on_freeze=True)
 
     assert FlakyComposer.attempts == 2
     assert calls.count("manim") == 2, "Manim should run once initially and once on retry"
@@ -123,13 +121,11 @@ def test_no_retry_when_flag_disabled(tmp_path, monkeypatch) -> None:
     cfg = SimpleNamespace(
         animations_dir=animations_dir,
         segments_all=["01"],
-        sync_vhs_after_timestamps=False,
         pipeline_manim_scene_names=lambda: ["Scene01"],
-        pipeline_vhs_tape_filenames=lambda: [],
     )
 
     with pytest.raises(ComposeError, match="FREEZE GUARD"):
-        Pipeline(cfg).run(skip_tts=True, skip_vhs=True, retry_manim_on_freeze=False)
+        Pipeline(cfg).run(skip_tts=True, retry_manim_on_freeze=False)
 
     assert calls.count("manim") == 1
     assert media_dir.exists(), "Without retry flag, Manim cache should be untouched"

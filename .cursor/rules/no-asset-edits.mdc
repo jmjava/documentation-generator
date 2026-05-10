@@ -1,46 +1,42 @@
 ---
-description: Documentation assets are produced by docgen + OpenAI; Cursor never edits them by hand. No hardcoded segment numbers, scene classes, tape names, or fixture paths in `src/docgen/` or non-test docs.
+description: Documentation assets are produced by docgen + OpenAI; Cursor never edits them by hand. No hardcoded segment numbers or scene classes in `src/docgen/` outside tests.
 alwaysApply: true
 ---
 
-# Tool-only asset generation; no hardcoded segment / fixture references
+# Tool-only asset generation; no hardcoded segment / fixture references in library code
+
+This is a **library**: it ships no in-repo demo bundle. The categories below
+describe how a *consumer* bundle is expected to be structured (paths are
+relative to that consumer's bundle directory, typically `docs/demos/`).
 
 ## Three categories
 
-A. **Cursor edits OK** (code, tests, wrappers, rules, top-level docs):
+A. **Cursor edits OK** (library code, tests, wrappers, rules, top-level docs):
 - `src/docgen/**`
 - `tests/**`
-- `docs/demos/_*.sh`
 - `.cursor/rules/**`
-- `AGENTS.md`, root `README.md`, `docs/demo-function.md`, `docs/yaml-generate.md`, `docs/session-notes*.md`
-- `milestones/**`
+- `AGENTS.md`, root `README.md`, `milestones/**` (except archived trees per repo policy)
 
-B. **Hand-authored INPUTS / fixtures** (Cursor edits OK; **never** deleted by `clean-bundle` / reset; **not** LLM outputs):
-- `docs/demos/hints/**` — **maintainer hint files** (`.md`, …). Use YAML **front matter** (`docgen.segment`, `docgen.wiring`) so **`docgen yaml-generate`** merges segment list, `visual_map`, and per-segment narration/manim paths into `docgen.yaml`. Do **not** hand-edit those merged keys in `docgen.yaml` in Cursor; edit hints and re-run **`yaml-generate`**. Hints also steer **`docgen narration-generate`**, **`docgen scene-spec-generate`**, etc. **They are not OpenAI outputs.** Other demo bundles may use the same `<bundle>/hints/**` convention.
-- `docs/demos/terminal/*.tape` — VHS sources
-- `docs/demos/scripts/*.py` — Playwright capture drivers (matched to segments by id-in-filename)
-- `fixtures/**` — Playwright/Vite/etc. test apps; presence and project-type detected generically. The raw `*.spec.{ts,tsx,js,jsx,mjs}` files inside are the **input** to `docgen per-function-generate`.
-- `docs/demos/narration/README.md`
+B. **Hand-authored INPUTS / fixtures in a consumer bundle** (Cursor edits OK; **never** deleted by `clean-bundle`/reset; **not** raw LLM narration outputs):
+- `<bundle>/hints/**` — maintainer hint files. Use YAML **front matter** (`docgen.segment`, `docgen.wiring`) so **`docgen yaml-generate`** merges segment list, `visual_map`, and per-segment paths into `docgen.yaml`. Prefer editing hints and re-running **`yaml-generate`** over hand-editing merged keys in `docgen.yaml`. Hints steer **`narration-generate`**, **`scene-spec-generate`**, etc.
+- `<bundle>/scripts/**` — optional helper scripts checked in for maintainers.
+- `tests/**` fixtures inside this library.
+- `<bundle>/narration/README.md`
 
-C. **LLM/tool OUTPUTS — Cursor MUST NOT edit; only `docgen` (CLI/library) + OpenAI may produce:**
-- `docs/demos/docgen.yaml` (owner: `docgen yaml-generate`)
-- `docs/demos/narration/*.md` excluding `README.md` (owner: `docgen narration-generate`)
-- `docs/demos/animations/scenes.py`, `docs/demos/animations/timing.json` (owner: **`docgen scene-compile`**, **`docgen scene-spec-generate`**, pipeline)
-- `docs/demos/animations/specs/*.scene.yaml` — declarative Manim scene specs (owner: **`docgen scene-spec-generate`** with optional hand curation; compiled into `scenes.py` via **`docgen scene-compile`**)
-- `docs/demos/audio/*.mp3` (owner: `docgen tts`)
-- `docs/demos/per-function/*.docgen.yaml` and sibling `*.html` (owner: `docgen per-function-generate` — generated from raw Playwright specs in `fixtures/**`; wiped + regenerated each reset)
-- `docs/demos/recordings/**` including `recordings/per-function/<slug>/*` and top-level aliases (owner: `docgen generate-all` and `docgen demo-function` driven by `_rebuild-per-function.sh`)
+C. **LLM/tool OUTPUTS in a consumer bundle — Cursor MUST NOT edit; only `docgen` (CLI/library) + OpenAI may produce:**
+- `<bundle>/docgen.yaml` (as produced by **`yaml-generate`**; review diffs in Git)
+- `<bundle>/narration/*.md` excluding `README.md` (owner: **`narration-generate`** / maintainer workflow)
+- `<bundle>/animations/scenes.py`, `<bundle>/animations/timing.json` (owner: **`scene-compile`**, **`scene-spec-generate`**, **`timestamps`**, pipeline)
+- `<bundle>/animations/specs/*.scene.yaml` — declarative Manim scene specs
+- `<bundle>/audio/*.mp3` (owner: **`tts`**)
+- `<bundle>/recordings/**` (owner: **`compose`**, **`generate-all`**, etc., per bundle policy)
 
-If a generator can't produce shippable output yet, **fix the generator** under `src/docgen/**`. Never paste/edit a category-C file to bridge the gap.
+If a generator can't produce shippable output yet, **fix the generator** under
+`src/docgen/**`. Never paste-edit category-C files to paper over a toolchain
+gap.
 
-## No hardcoded segments or fixtures
+## Discovery is data-driven
 
-`docgen` itself contains **no** hardcoded segment numbers, scene class names, tape filenames, or fixture paths. Discovery only:
-
-- Segments → from `narration/<NN>-*.md` filenames.
-- VHS → from `terminal/<segment_stem>.tape` presence.
-- Playwright capture → from `scripts/*.py` whose filename contains the segment id.
-- Manim → from `class …Scene` definitions in `animations/scenes.py`, in source order.
-- Playwright projects (for `discover_tests.roots`) → from any directory with `@playwright/test` / `playwright` in `package.json` or a `playwright.config.{js,ts,mjs,cjs}`.
-
-Tests are exempt: concrete ids and class names there are intentional test data.
+Segments, Manim classes, and bundle paths come from **`docgen.yaml`**,
+narration filenames, and hint wiring — not from hardcoded lists inside library
+implementation (tests may use concrete examples).

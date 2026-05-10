@@ -28,25 +28,7 @@ Thumbs.db
 .pytest_cache/
 tests/.bin-cache/
 
-# Node fixture for Playwright discovery dogfood (fixtures/playwright-vite-dogfood)
-fixtures/playwright-vite-dogfood/node_modules/
 .coverage
 htmlcov/
 .mypy_cache/
 .ruff_cache/
-
-# Generated demo assets (reproducible via docgen generate-all)
-docs/demos/audio/*.mp3
-docs/demos/animations/media/
-docs/demos/terminal/rendered/*
-!docs/demos/terminal/rendered/07-playwright-dogfood.webm
-docs/demos/.docgen-state.json
-
-# recordings/*.mp4 — COMMITTED via Git LFS for GitHub Pages
-
-# Demo smoke artifacts — source files (lesson.docgen.yaml, demo-page.html)
-# are committed; rendered binaries are reproducible via the e2e test
-# (tests/e2e/test_demo_function_e2e.py) and should never land in git.
-milestones/demo-smoke/*.mp4
-milestones/demo-smoke/*.png
-milestones/demo-smoke/*.manifest.json
