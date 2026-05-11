@@ -34,6 +34,13 @@ if ! command -v java >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v dot >/dev/null 2>&1; then
+  echo "render-suite-diagrams: Graphviz 'dot' is required on PATH (PlantUML uses it for component diagrams)." >&2
+  echo "  Ubuntu/Debian: sudo apt-get install -y graphviz" >&2
+  echo "  macOS: brew install graphviz" >&2
+  exit 1
+fi
+
 args=()
 if [[ "$#" -eq 0 ]]; then
   mapfile -t args < <(find "${DIAGRAM_DIR}" -maxdepth 1 -name '*.puml' -type f | sort)

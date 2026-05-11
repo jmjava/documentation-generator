@@ -33,14 +33,21 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Render PlantUML → PNG
+      # Component/package diagrams need Graphviz (dot). Without it, PlantUML
+      # writes error text into the PNG — see third_party/plantuml/README.md.
+      - name: Install Graphviz for PlantUML
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Render PlantUML → PNG (vendored JAR)
         run: ./scripts/render-suite-diagrams.sh
 
       - name: Fail if generated PNGs are stale
         run: |
           set -euo pipefail
           if ! git diff --exit-code -- docs/suite/generated/; then
-            echo "::error::docs/suite/generated/ is out of date. Run ./scripts/render-suite-diagrams.sh locally and commit."
+            echo "::error::docs/suite/generated/ is out of date. Install Graphviz, run ./scripts/render-suite-diagrams.sh, and commit (see third_party/plantuml/README.md)."
             git diff -- docs/suite/generated/ | head -200
             exit 1
           fi
@@ -60,7 +67,14 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Render PlantUML → PNG
+      # Component/package diagrams need Graphviz (dot). Without it, PlantUML
+      # writes error text into the PNG — see third_party/plantuml/README.md.
+      - name: Install Graphviz for PlantUML
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Render PlantUML → PNG (vendored JAR)
         run: ./scripts/render-suite-diagrams.sh
 
       - name: Commit updated PNGs if needed

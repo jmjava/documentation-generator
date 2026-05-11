@@ -48,7 +48,7 @@ PlantUML sources: `docs/suite/diagrams/*.puml`. Regenerate PNGs:
 ./scripts/render-suite-diagrams.sh
 ```
 
-Requires **Java**. See `third_party/plantuml/README.md` for the vendored JAR and GPL note.
+Requires **Java** and **Graphviz** (`dot`). See `third_party/plantuml/README.md` for the vendored JAR, GPL note, and CI (`render-suite-diagrams.yml`).
 
 ---
 

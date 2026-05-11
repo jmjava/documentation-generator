@@ -6,7 +6,7 @@ that walk through how a system works.
 
 ## Suite handbook (Courseforge)
 
-Prose + **PlantUML** sources for how Courseforge repositories fit together live under **`docs/suite/`**. Regenerate PNGs with `./scripts/render-suite-diagrams.sh` (Java + vendored JAR in `third_party/plantuml/`). The rendered site at **courseforge.github.io** pulls this tree on each publish from **courseforge/infrastructure**.
+Prose + **PlantUML** sources for how Courseforge repositories fit together live under **`docs/suite/`**. Regenerate PNGs with `./scripts/render-suite-diagrams.sh` — **Java**, **Graphviz** (`dot`), and the vendored JAR in **`third_party/plantuml/`** (CI installs Graphviz and runs the same script; see `.github/workflows/render-suite-diagrams.yml`). The rendered site at **courseforge.github.io** pulls this tree on each publish from **courseforge/infrastructure**.
 
 ## What changed: Playwright is gone
 

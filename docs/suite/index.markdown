@@ -12,7 +12,7 @@ Sources for this section (Markdown, PlantUML, and the rendered diagram below) li
 
 ![Suite repository relationships]({{ '/docs/handbook/generated/suite-relationships.png' | relative_url }})
 
-*Diagram source:* [`docs/suite/diagrams/suite-relationships.puml`](https://github.com/jmjava/documentation-generator/blob/main/docs/suite/diagrams/suite-relationships.puml) in **documentation-generator**. To regenerate PNGs locally or in CI, use `./scripts/render-suite-diagrams.sh` (requires Java; see `third_party/plantuml/README.md`).
+*Diagram source:* [`docs/suite/diagrams/suite-relationships.puml`](https://github.com/jmjava/documentation-generator/blob/main/docs/suite/diagrams/suite-relationships.puml) in **documentation-generator**. To regenerate PNGs locally or in CI, use `./scripts/render-suite-diagrams.sh` (requires **Java** and **Graphviz** `dot`; vendored JAR under `third_party/plantuml/`; see `.github/workflows/render-suite-diagrams.yml`).
 
 ## Where to read next
 

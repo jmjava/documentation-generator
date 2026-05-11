@@ -20,7 +20,12 @@ From the repository root:
 ./scripts/render-suite-diagrams.sh
 ```
 
-Requires **Java** on `PATH`. Some diagram types require **Graphviz** (`dot`); the suite relationship diagram uses built-in layout and typically renders without Graphviz.
+Requires:
+
+- **Java** on `PATH`
+- **Graphviz** (`dot`) on `PATH` — the suite handbook **component** diagram (`suite-relationships.puml`) is laid out with Graphviz. Without `dot`, PlantUML still emits a PNG file that contains **only an error message** (green background), which is easy to miss in review.
+
+CI (`.github/workflows/render-suite-diagrams.yml`) installs Graphviz on `ubuntu-latest`, then runs this script against the **vendored JAR** above — no download of PlantUML at job time.
 
 Override the JAR path:
 
