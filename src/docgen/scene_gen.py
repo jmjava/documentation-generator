@@ -1,0 +1,347 @@
+"""Auto-generate Manim scenes from narration markdown and timing data.
+
+Implements Option A from issue #1: parse narration structure (headings,
+bullets, bold text, paragraph breaks) and combine with timing data to
+produce a renderable scenes.py.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from docgen.config import Config
+
+
+@dataclass
+class VisualBeat:
+    """A single visual element extracted from narration."""
+
+    kind: str  # title, bullets, text, transition
+    text: str = ""
+    items: list[str] = field(default_factory=list)
+    at_sec: float = 0.0
+    duration_sec: float = 5.0
+
+
+@dataclass
+class SegmentScene:
+    """Collected visual beats for one segment."""
+
+    segment_id: str
+    scene_name: str
+    beats: list[VisualBeat] = field(default_factory=list)
+    total_duration_sec: float = 60.0
+    font: str = "Liberation Sans"
+
+
+def parse_narration(text: str) -> list[VisualBeat]:
+    """Extract visual beats from narration markdown.
+
+    Recognises:
+    - ``# heading`` → title beat
+    - ``- item`` / ``* item`` / ``1. item`` → bullets beat
+    - Bold/code spans → highlighted text
+    - Paragraph breaks → transition
+    """
+    beats: list[VisualBeat] = []
+    lines = text.splitlines()
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].strip()
+
+        if not line:
+            i += 1
+            continue
+
+        if re.match(r"^(target duration|intended length|visual:|edit for voice)", line, re.I):
+            i += 1
+            continue
+
+        if re.match(r"^\*?\(.*\)\*?$", line):
+            i += 1
+            continue
+
+        if re.match(r"^[-*_]{3,}$", line):
+            beats.append(VisualBeat(kind="transition"))
+            i += 1
+            continue
+
+        heading_match = re.match(r"^(#{1,3})\s+(.+)$", line)
+        if heading_match:
+            title = heading_match.group(2).strip()
+            title = _strip_md_inline(title)
+            beats.append(VisualBeat(kind="title", text=title))
+            i += 1
+            continue
+
+        if re.match(r"^[-*]\s+", line) or re.match(r"^\d+\.\s+", line):
+            items: list[str] = []
+            while i < len(lines):
+                bline = lines[i].strip()
+                bullet_match = re.match(r"^(?:[-*]|\d+\.)\s+(.+)$", bline)
+                if bullet_match:
+                    items.append(_strip_md_inline(bullet_match.group(1)))
+                    i += 1
+                elif not bline:
+                    break
+                else:
+                    break
+            beats.append(VisualBeat(kind="bullets", items=items))
+            continue
+
+        text_content = _strip_md_inline(line)
+        if text_content:
+            beats.append(VisualBeat(kind="text", text=text_content))
+        i += 1
+
+    return beats
+
+
+def _strip_md_inline(text: str) -> str:
+    """Remove bold/italic markers, inline code, and links."""
+    text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    return text.strip()
+
+
+def assign_timing(beats: list[VisualBeat], total_duration: float) -> None:
+    """Distribute timing across beats evenly, with buffer between sections."""
+    displayable = [b for b in beats if b.kind != "transition"]
+    if not displayable:
+        return
+
+    buffer_sec = 1.0
+    available = total_duration - buffer_sec * len(displayable)
+    per_beat = max(3.0, available / len(displayable)) if displayable else 5.0
+
+    t = 0.0
+    beat_idx = 0
+    for beat in beats:
+        if beat.kind == "transition":
+            t += 1.0
+            continue
+        beat.at_sec = t
+        beat.duration_sec = per_beat
+        t += per_beat + buffer_sec
+        beat_idx += 1
+
+
+def load_timing(config: Config, seg_id: str) -> float | None:
+    """Read total audio duration from timing.json if it exists."""
+    timing_path = config.animations_dir / "timing.json"
+    if not timing_path.exists():
+        return None
+    try:
+        data = json.loads(timing_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    seg_name = config.resolve_segment_name(seg_id)
+    for key in (seg_name, seg_id):
+        entry = data.get(key, {})
+        if "duration" in entry:
+            return float(entry["duration"])
+        segments = entry.get("segments", [])
+        if segments:
+            last = segments[-1]
+            return float(last.get("end", 0))
+    return None
+
+
+def generate_scene_code(scene: SegmentScene) -> str:
+    """Generate Manim Python source for a single segment scene."""
+    font = scene.font.replace('"', '\\"')
+    lines = [
+        f'"""Auto-generated Manim scene for segment {scene.segment_id}.',
+        "",
+        "Generated by `docgen scene-gen`. Edit freely — manual changes are preserved",
+        "unless you re-run `docgen scene-gen --force`.",
+        '"""',
+        "",
+        "from manim import *",
+        "",
+        "",
+        f"class {scene.scene_name}(Scene):",
+        "    def construct(self):",
+        f'        Text.set_default(font="{font}")',
+        "        self.camera.background_color = \"#1e1e2e\"",
+        "",
+    ]
+
+    if not scene.beats:
+        lines.append("        self.wait(2)")
+        return "\n".join(lines) + "\n"
+
+    for beat in scene.beats:
+        if beat.kind == "title":
+            safe_text = _safe_string(beat.text)
+            lines.extend([
+                f"        # Title at {beat.at_sec:.1f}s",
+                f"        title = Text({safe_text}, font_size=36, color=WHITE)",
+                "        title.to_edge(UP, buff=1.0)",
+                "        self.play(FadeIn(title), run_time=0.8)",
+                f"        self.wait({max(1.0, beat.duration_sec - 1.5):.1f})",
+                "        self.play(FadeOut(title), run_time=0.5)",
+                "",
+            ])
+        elif beat.kind == "bullets":
+            lines.append(f"        # Bullets at {beat.at_sec:.1f}s")
+            lines.append("        bullet_group = VGroup()")
+            for item in beat.items:
+                safe_item = _safe_string(item)
+                lines.append(
+                    f"        bullet_group.add(Text({safe_item}, font_size=18, color=WHITE))"
+                )
+            lines.extend([
+                "        bullet_group.arrange(DOWN, buff=0.25, aligned_edge=LEFT)",
+                "        bullet_group.center()",
+                "        for mob in bullet_group:",
+                "            self.play(FadeIn(mob, shift=RIGHT * 0.3), run_time=0.4)",
+                f"        self.wait({max(1.0, beat.duration_sec - len(beat.items) * 0.5 - 0.5):.1f})",
+                "        self.play(FadeOut(bullet_group), run_time=0.5)",
+                "",
+            ])
+        elif beat.kind == "text":
+            safe_text = _safe_string(beat.text)
+            lines.extend([
+                f"        # Text at {beat.at_sec:.1f}s",
+                f"        body = Text({safe_text}, font_size=20, color=WHITE)",
+                "        body.center()",
+                "        self.play(FadeIn(body), run_time=0.6)",
+                f"        self.wait({max(1.0, beat.duration_sec - 1.3):.1f})",
+                "        self.play(FadeOut(body), run_time=0.5)",
+                "",
+            ])
+        elif beat.kind == "transition":
+            lines.append("        self.wait(1.0)")
+            lines.append("")
+
+    remaining = max(0, scene.total_duration_sec - (
+        sum(b.duration_sec + 1.0 for b in scene.beats if b.kind != "transition")
+    ))
+    if remaining > 0.5:
+        lines.append(f"        self.wait({remaining:.1f})")
+
+    return "\n".join(lines) + "\n"
+
+
+def _safe_string(text: str) -> str:
+    """Return a Python string literal safe for embedding in generated code."""
+    _UNSAFE_MAP = {
+        "\u2192": "->", "\u2190": "<-", "\u2194": "<->",
+        "\u203a": ">", "\u2039": "<",
+        "\u2260": "!=", "\u2264": "<=", "\u2265": ">=",
+        "\u2014": "--", "\u2013": "-",
+        "\u2018": "'", "\u2019": "'",
+        "\u201c": '"', "\u201d": '"',
+        "\u2022": "-", "\u2026": "...",
+    }
+    for ch, repl in _UNSAFE_MAP.items():
+        text = text.replace(ch, repl)
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+class SceneGenerator:
+    """Generates Manim scenes from narration markdown files."""
+
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def generate(
+        self,
+        segment: str | None = None,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> list[str]:
+        """Generate scene files. Returns list of created/updated file paths."""
+        segments = [segment] if segment else self.config.segments_all
+        created: list[str] = []
+
+        for seg_id in segments:
+            vmap = self.config.visual_map.get(seg_id, {})
+            if vmap.get("type", "manim") != "manim":
+                print(f"[scene-gen] {seg_id}: type={vmap.get('type')} — skipping (not manim)")
+                continue
+
+            result = self._generate_one(seg_id, vmap, force=force, dry_run=dry_run)
+            if result:
+                created.append(result)
+
+        return created
+
+    def _generate_one(
+        self,
+        seg_id: str,
+        vmap: dict,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> str | None:
+        narration = self._find_narration(seg_id)
+        if not narration:
+            print(f"[scene-gen] {seg_id}: no narration file found")
+            return None
+
+        text = narration.read_text(encoding="utf-8")
+        beats = parse_narration(text)
+        if not beats:
+            print(f"[scene-gen] {seg_id}: no visual beats extracted from narration")
+            return None
+
+        scene_name = vmap.get("scene", f"Scene{seg_id}")
+        total_duration = load_timing(self.config, seg_id) or 60.0
+
+        assign_timing(beats, total_duration)
+
+        scene = SegmentScene(
+            segment_id=seg_id,
+            scene_name=scene_name,
+            beats=beats,
+            total_duration_sec=total_duration,
+            font=self.config.manim_font,
+        )
+
+        code = generate_scene_code(scene)
+
+        if dry_run:
+            print(f"[scene-gen] {seg_id}: {scene_name} ({len(beats)} beats, {total_duration:.1f}s)")
+            print(code)
+            return None
+
+        output_dir = self.config.animations_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / f"scene_{seg_id}.py"
+
+        if output_file.exists() and not force:
+            print(
+                f"[scene-gen] {seg_id}: {output_file} already exists. "
+                "Use --force to overwrite."
+            )
+            return None
+
+        output_file.write_text(code, encoding="utf-8")
+        print(f"[scene-gen] {seg_id}: wrote {output_file} ({len(beats)} beats, {total_duration:.1f}s)")
+        return str(output_file)
+
+    def _find_narration(self, seg_id: str) -> Path | None:
+        d = self.config.narration_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.md"
+        if exact.exists():
+            return exact
+        for md in d.glob(f"{seg_id}-*.md"):
+            return md
+        for md in d.glob(f"*{seg_id}*.md"):
+            return md
+        return None
