@@ -439,10 +439,10 @@ def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
         spec = vm.get(str(sid))
         if not isinstance(spec, dict) or spec.get("type") != "manim":
             continue
-        sc = spec.get("scene")
-        if not sc:
+        sc_raw = spec.get("scene") or spec.get("class")
+        if not sc_raw:
             continue
-        s = str(sc)
+        s = str(sc_raw).strip()
         if s not in seen:
             seen.add(s)
             scenes.append(s)
@@ -477,9 +477,10 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
             continue
         if spec.get("type") != "manim":
             continue
-        cn = spec.get("scene")
-        if not cn:
+        cn_raw = spec.get("scene") or spec.get("class")
+        if not cn_raw:
             continue
+        cn = str(cn_raw).strip()
         synced[str(seg_id)] = {"class_name": str(cn)}
 
     old = mg.get("segments")

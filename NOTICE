@@ -1,0 +1,1 @@
+This project includes third-party binaries under `third_party/plantuml/`. See `third_party/plantuml/README.md` for the PlantUML JAR (GPL-3.0+).

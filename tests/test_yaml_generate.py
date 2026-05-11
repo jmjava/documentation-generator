@@ -448,3 +448,29 @@ def test_merge_defaults_syncs_manim_scenes_list_in_segment_order(tmp_path: Path)
     cfg = Config.from_yaml(tmp_path / "docgen.yaml")
     merge_defaults(raw, cfg)
     assert raw["manim"]["scenes"] == ["AlphaScene", "ZedScene"]
+
+
+def test_merge_defaults_syncs_manim_scenes_from_visual_map_class_key(tmp_path: Path) -> None:
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": ["01", "02"], "default": ["01", "02"]},
+        "discovery": {"auto_visual_map": False},
+        "visual_map": {
+            "01": {"type": "manim", "class": "OnlyClassScene"},
+            "02": {"type": "manim", "scene": "ExplicitScene"},
+        },
+        "manim": {"scenes": []},
+        "manim_scene_generation": {"segments": {}},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    merge_defaults(raw, cfg)
+    assert raw["manim"]["scenes"] == ["OnlyClassScene", "ExplicitScene"]
+    assert raw["manim_scene_generation"]["segments"]["01"]["class_name"] == "OnlyClassScene"
+    assert raw["manim_scene_generation"]["segments"]["02"]["class_name"] == "ExplicitScene"

@@ -4,6 +4,10 @@ Reusable Python library and CLI for **narrated demo videos** built around **Mani
 **OpenAI TTS**, and **ffmpeg** composition. Aimed at long-form, scripted explainers
 that walk through how a system works.
 
+## Suite handbook (Courseforge)
+
+Prose + **PlantUML** sources for how Courseforge repositories fit together live under **`docs/suite/`**. Regenerate PNGs with `./scripts/render-suite-diagrams.sh` (Java + vendored JAR in `third_party/plantuml/`). The rendered site at **courseforge.github.io** pulls this tree on each publish from **courseforge/infrastructure**.
+
 ## What changed: Playwright is gone
 
 `docgen` no longer ships any Playwright-driven UI demo path. The previous

@@ -133,3 +133,17 @@ def test_pipeline_manim_scene_names_from_visual_map(tmp_path):
     (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
     c = Config.from_yaml(tmp_path / "docgen.yaml")
     assert c.pipeline_manim_scene_names() == ["OverviewScene", "WizardScene"]
+
+
+def test_pipeline_manim_scene_names_falls_back_to_visual_map_class(tmp_path):
+    cfg = {
+        "segments": {"all": ["01", "02", "03"]},
+        "visual_map": {
+            "01": {"type": "manim", "class": "FromClassScene"},
+            "02": {"type": "manim", "scene": "FromSceneScene"},
+            "03": {"type": "manim", "scene": "WinsScene", "class": "IgnoredScene"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert c.pipeline_manim_scene_names() == ["FromClassScene", "FromSceneScene", "WinsScene"]

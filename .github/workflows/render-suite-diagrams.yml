@@ -1,0 +1,77 @@
+# Render PlantUML sources under docs/suite/diagrams/ to PNG in docs/suite/generated/
+# using the vendored JAR in third_party/plantuml/.
+
+name: Render suite handbook diagrams
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/suite/diagrams/**"
+      - "third_party/plantuml/**"
+      - "scripts/render-suite-diagrams.sh"
+      - ".github/workflows/render-suite-diagrams.yml"
+  pull_request:
+    paths:
+      - "docs/suite/diagrams/**"
+      - "third_party/plantuml/**"
+      - "scripts/render-suite-diagrams.sh"
+      - ".github/workflows/render-suite-diagrams.yml"
+  workflow_dispatch:
+
+jobs:
+  pull_request:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Render PlantUML → PNG
+        run: ./scripts/render-suite-diagrams.sh
+
+      - name: Fail if generated PNGs are stale
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- docs/suite/generated/; then
+            echo "::error::docs/suite/generated/ is out of date. Run ./scripts/render-suite-diagrams.sh locally and commit."
+            git diff -- docs/suite/generated/ | head -200
+            exit 1
+          fi
+
+  main:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Render PlantUML → PNG
+        run: ./scripts/render-suite-diagrams.sh
+
+      - name: Commit updated PNGs if needed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/suite/generated
+          if git diff --staged --quiet; then
+            echo "No PNG changes."
+            exit 0
+          fi
+          git commit -m "chore(docs/suite): regenerate handbook diagram PNGs"
+          git push

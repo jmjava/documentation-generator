@@ -100,7 +100,7 @@ class Config:
                 continue
             if str(vm.get("type", "")).lower() != "manim":
                 continue
-            scene = str(vm.get("scene", "")).strip()
+            scene = str(vm.get("scene", "")).strip() or str(vm.get("class", "")).strip()
             if scene and scene not in seen:
                 seen.add(scene)
                 ordered.append(scene)
