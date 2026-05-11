@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-10T12:00:00Z",
+  "docgen_version": "0.4.0",
+  "project": {
+    "name": "docgen (library dogfood)",
+    "repo": "jmjava/documentation-generator",
+    "repo_url": "https://github.com/jmjava/documentation-generator",
+    "ref": "main"
+  },
+  "asset_sets": [
+    {
+      "id": "demos",
+      "type": "manim-dogfood",
+      "asset_count": 5,
+      "narration_mode": null,
+      "visual_mode": "manim"
+    }
+  ],
+  "segments": [
+    {
+      "id": "demos-overview",
+      "asset_set": "demos",
+      "asset_path": null,
+      "asset_path_url": null,
+      "name": "Overview",
+      "kind": "segment",
+      "intent": "Docgen library overview and documentation tour.",
+      "fragment_id": "fn-docgen-overview",
+      "rendered": {
+        "mp4": "recordings/01-overview.mp4",
+        "poster": null,
+        "duration_seconds": null,
+        "resolution": "1280x720",
+        "narration": null
+      },
+      "validate": null
+    },
+    {
+      "id": "demos-init-scaffold",
+      "asset_set": "demos",
+      "asset_path": null,
+      "asset_path_url": null,
+      "name": "Init scaffold",
+      "kind": "segment",
+      "intent": "Initialize a consumer bundle scaffold.",
+      "fragment_id": "fn-docgen-init-scaffold",
+      "rendered": {
+        "mp4": "recordings/02-init-scaffold.mp4",
+        "poster": null,
+        "duration_seconds": null,
+        "resolution": "1280x720",
+        "narration": null
+      },
+      "validate": null
+    },
+    {
+      "id": "demos-wizard-gui",
+      "asset_set": "demos",
+      "asset_path": null,
+      "asset_path_url": null,
+      "name": "Wizard GUI",
+      "kind": "segment",
+      "intent": "Walk through the wizard-style configuration flow.",
+      "fragment_id": "fn-docgen-wizard-gui",
+      "rendered": {
+        "mp4": "recordings/03-wizard-gui.mp4",
+        "poster": null,
+        "duration_seconds": null,
+        "resolution": "1280x720",
+        "narration": null
+      },
+      "validate": null
+    },
+    {
+      "id": "demos-pipeline-hints",
+      "asset_set": "demos",
+      "asset_path": null,
+      "asset_path_url": null,
+      "name": "Pipeline hints",
+      "kind": "segment",
+      "intent": "Hints and validation in the docgen pipeline.",
+      "fragment_id": "fn-docgen-pipeline-hints",
+      "rendered": {
+        "mp4": "recordings/04-pipeline-hints.mp4",
+        "poster": null,
+        "duration_seconds": null,
+        "resolution": "1280x720",
+        "narration": null
+      },
+      "validate": null
+    },
+    {
+      "id": "demos-compose-pipeline",
+      "asset_set": "demos",
+      "asset_path": null,
+      "asset_path_url": null,
+      "name": "Compose pipeline",
+      "kind": "segment",
+      "intent": "Compose narration and animation into segment MP4s.",
+      "fragment_id": "fn-docgen-compose-pipeline",
+      "rendered": {
+        "mp4": "recordings/05-compose-pipeline.mp4",
+        "poster": null,
+        "duration_seconds": null,
+        "resolution": "1280x720",
+        "narration": null
+      },
+      "validate": null
+    }
+  ]
+}

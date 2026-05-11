@@ -80,7 +80,7 @@ pages:
   - run_time: 2.0
     wait_segment: 14
     boxes:
-    - label: 'Legacy Support: VHS'
+    - label: 'CI & validation'
       color: C_ORANGE
       width: 6.0
       height: 1.0

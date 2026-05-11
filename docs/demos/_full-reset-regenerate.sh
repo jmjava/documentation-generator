@@ -23,8 +23,7 @@
 #   4. ``docgen yaml-generate`` discovers visual_map entries from disk.
 #   5. ``docgen narration-generate --all --force`` fills narration/*.md.
 #   6. ``docgen scene-spec-generate --all --compile`` fills ``animations/specs/*.scene.yaml``
-#      and injects compiled classes into animations/scenes.py for every segment
-#      that has no VHS tape or capture script.
+#      and injects compiled classes into animations/scenes.py for every manim segment.
 #   7. ``docgen yaml-generate`` re-syncs visual_map after scenes.py is filled.
 #   8. ``docgen generate-all`` produces audio + recordings.
 #   9. ``docgen validate --pre-push`` enforces the bundle invariants.
@@ -33,7 +32,6 @@
 # Requires the toolchain that matches what discovery finds on disk:
 #   * OPENAI_API_KEY (narration, TTS, optional yaml/scene prose)
 #   * Manim + ffmpeg whenever any segment has a `class …Scene` in animations/scenes.py
-#   * VHS / ttyd / Xvfb whenever any segment has a matching terminal/<stem>.tape
 #
 # Scope: docs/demos only. Preserves: narration/README.md, terminal/README.md,
 # ../../fixtures/, scripts/.
@@ -114,7 +112,7 @@ docgen --config docgen.yaml yaml-generate
 echo "=== [$(date +%H:%M:%S)] narration-generate --all --force ==="
 docgen --config docgen.yaml narration-generate --all --force
 
-echo "=== [$(date +%H:%M:%S)] scene-spec-generate --all --compile (skip segments with existing tape/script) ==="
+echo "=== [$(date +%H:%M:%S)] scene-spec-generate --all --compile (Manim segments) ==="
 docgen --config docgen.yaml scene-spec-generate --all --compile
 
 echo "=== [$(date +%H:%M:%S)] yaml-generate (re-sync visual_map + manim from scenes.py) ==="

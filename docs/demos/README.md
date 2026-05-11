@@ -1,5 +1,7 @@
 # docgen demo videos (dogfood)
 
+**Where recordings land:** composed segment MP4s and `full-demo.mp4` are written to **`recordings/`** in this directory — i.e. **[`documentation-generator/docs/demos/recordings/`](https://github.com/jmjava/documentation-generator/tree/main/docs/demos/recordings)** on GitHub. That is the library’s **dogfood** output path. It is **not** the same as a product repo’s slim **`docs/rendered/`** tree (from **`docs/rendered-site/`**) used for **courseforge.github.io** aggregation.
+
 This tree is the **in-repo dogfood** bundle: same **`docgen.yaml`** + CLI workflow as any downstream repo (paths relative to this directory unless noted).
 
 Use **one** path below—they are **not** combined in a single session:
@@ -8,7 +10,7 @@ Use **one** path below—they are **not** combined in a single session:
 
 1. **`docgen init .`** — interactive **terminal** wizard (segments, paths, TTS).  
    *Or* **`docgen init . --defaults`** — same scaffold, no prompts (scripts/CI).
-2. **`docgen --config docgen.yaml yaml-generate`** (or **`./_regenerate-docgen-config.sh`**) — merge tool defaults; (re)build **`visual_map`** from assets that **already exist** on disk (VHS tapes, `*Scene` classes in **`animations/scenes.py`**)—**never** invented placeholders (unless **`discovery.auto_visual_map: false`** and you edit by hand).
+2. **`docgen --config docgen.yaml yaml-generate`** (or **`./_regenerate-docgen-config.sh`**) — merge tool defaults; (re)build **`visual_map`** from **`animations/scenes.py`**, hint wiring, and assets that already exist on disk — **never** invented placeholders (unless **`discovery.auto_visual_map: false`** and you edit by hand).
 3. Then **`scene-spec-generate`** / **`scene-compile`**, **`generate-all`**, **`validate`**, etc. as needed.
 
 Do **not** open the browser wizard until step 1–2 exist; **`docgen wizard`** is not a substitute for **`docgen init`**.
@@ -24,17 +26,16 @@ Full **`docgen generate-all`** for this bundle needs:
 
 - **`OPENAI_API_KEY`** — narration, TTS, optional scene-spec prose.
 - **Manim** + **ffmpeg** — for segments whose `visual_map` type is **`manim`** (a `class …Scene` in **`animations/scenes.py`**).
-- **VHS** stack (**`vhs`**, **`ttyd`**, plus **Xvfb** or a display) — only if you still ship matching **`terminal/<stem>.tape`** segments (legacy; not required for the default Manim-only demos here).
 
-`docgen yaml-generate` discovers which combination applies from what is on disk; nothing is hardcoded per segment number.
+`docgen yaml-generate` discovers Manim segments from **`animations/scenes.py`** and hint wiring; nothing terminal- or tape-based is used in this bundle.
 
 **Note:** If you edit `narration/*.md`, run **`docgen tts`** and **`docgen timestamps`** when you want **`animations/timing.json`** (including Whisper **words** / **segments**) to match the new spoken audio. Until then, timing data may still mention older phrasing even though maintainer-facing prose is updated.
 
 ## `visual_map` (in `docgen.yaml`)
 
-**`visual_map`** names the video source per segment (today: **Manim** scenes, or legacy **VHS** tapes).
+**`visual_map`** names the video source per segment (**Manim** in this bundle).
 
-- **`docgen init`** writes structure only. **`docgen yaml-generate`** (**`--merge-defaults`**) maps segments when **`terminal/<stem>.tape`** or the next **`class …Scene`** in **`animations/scenes.py`** is present.
+- **`docgen init`** writes structure only. **`docgen yaml-generate`** (**`--merge-defaults`**) aligns **`visual_map`** with **`animations/scenes.py`** (and hint wiring where present).
 - The same command syncs **`manim.scenes`** and **`manim_scene_generation.segments`** from Manim rows in **`visual_map`**.
 
 Historic **Playwright** / **demo-function** / **per-function** capture paths were **removed** from the library (see root **`AGENTS.md`**); do not expect browser-test recording commands in current `docgen`.

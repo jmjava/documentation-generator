@@ -7,7 +7,6 @@ dirs:
   narration: narration
   audio: audio
   animations: animations
-  terminal: terminal
   recordings: recordings
 segments:
   default: &id001
@@ -23,16 +22,8 @@ segment_names:
   '03': 03-wizard-gui
   '04': 04-pipeline-hints
   '05': 05-compose-pipeline
-vhs:
-  vhs_path: ''
-  sync_from_timing: false
-  typing_ms_per_char: 55
-  max_typing_sec: 3.0
-  min_sleep_sec: 0.2
-  render_timeout_sec: 120
 compose:
   ffmpeg_timeout_sec: 300
-  warn_stale_vhs: true
 tts:
   model: gpt-4o-mini-tts
   voice: coral
