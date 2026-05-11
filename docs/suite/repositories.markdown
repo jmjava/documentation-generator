@@ -9,7 +9,7 @@ Canonical **GitHub** remotes for the suite (also the Cursor **multi-root workspa
 | Repository | Role |
 |------------|------|
 | [**courseforge/infrastructure**](https://github.com/courseforge/infrastructure) | Orchestration: Kind installer, Tekton reuse, pins, **Publish GitHub Pages** (`publish-github-io.yml`), doc aggregation from product repos. |
-| [**courseforge/course-builder**](https://github.com/courseforge/course-builder) | Main **Courseforge** application; hosts **docgen** consumer bundles (`docs/demos/`, `docs/rendered-site/`). |
+| [**courseforge/course-builder**](https://github.com/courseforge/course-builder) | Main **Courseforge** application; **docgen** bundles under **`docs/demos/`** (recordings, long-form demos) and **`docs/rendered-site/`** → **`docs/rendered/`**. **GitHub Pages aggregation** pulls **only** **`docs/rendered/`** (+ **`index.json`**) from **`main`** — not **`docs/demos/recordings/`**. |
 | [**courseforge/github.io**](https://github.com/courseforge/github.io) | **Deployed** GitHub Pages repository; content is synced from `courseforge-github-io/` in **infrastructure**. |
 | [**jmjava/documentation-generator**](https://github.com/jmjava/documentation-generator) | **`docgen`** CLI/library (Manim, TTS, validation) and this **suite handbook** (`docs/suite/`). |
 | [**jmjava/tekton-dag**](https://github.com/jmjava/tekton-dag) | Reusable **Tekton DAG** / task library; version pins and reuse notes live in **infrastructure**. |

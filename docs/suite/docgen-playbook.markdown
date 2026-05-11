@@ -32,7 +32,9 @@ Consumer resets (after pin bumps): **`yaml-generate`** → regenerate media → 
 
 ## Per-repo matrix (workspace)
 
-Outputs are **not** interchangeable: the long-form **demos** bundle writes under **`docs/demos/`** (including **`recordings/`**); the slim **org-site** bundle writes **`docs/rendered/`**, which is what [**publish-github-io**](https://github.com/courseforge/infrastructure/blob/main/.github/workflows/publish-github-io.yml) aggregates into **https://courseforge.github.io/docs/course-builder/** (sparse clone of **`docs/rendered/`** from the repo default branch, today **`main`**).
+Outputs are **not** interchangeable: the long-form **demos** bundle writes under **`docs/demos/`** (including **`recordings/`**). That tree is **never** read by the suite docs aggregator.
+
+**courseforge.github.io pull contract (course-builder):** [**publish-github-io**](https://github.com/courseforge/infrastructure/blob/main/.github/workflows/publish-github-io.yml) sparse-clones **only** **`docs/rendered/`** from [**courseforge/course-builder**](https://github.com/courseforge/course-builder) **`main`** (see [`aggregate-rendered-docs.sh`](https://github.com/courseforge/infrastructure/blob/main/scripts/aggregate-rendered-docs.sh)). It expects a schema-valid **`docs/rendered/index.json`** next to the MP4s. **`docs/demos/recordings/`** does **not** populate **https://courseforge.github.io/docs/course-builder/** — run [**`docgen-render.yml`**](https://github.com/courseforge/course-builder/blob/main/.github/workflows/docgen-render.yml) (org bundle **`docs/rendered-site/`** → **`docs/rendered/`**) and merge to **`main`**.
 
 | Repository | Bundle / paths today | Typical commands | CI workflow(s) | Status |
 |------------|----------------------|------------------|----------------|--------|

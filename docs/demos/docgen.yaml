@@ -1,0 +1,180 @@
+# docgen.yaml — updated by docgen yaml-generate
+# Source: /home/ubuntu/github/jmjava/documentation-generator/docs/demos/docgen.yaml
+# Note: PyYAML rewrite drops comments; review diff in Git.
+
+repo_root: ../..
+dirs:
+  narration: narration
+  audio: audio
+  animations: animations
+  terminal: terminal
+  recordings: recordings
+segments:
+  default: &id001
+  - '01'
+  - '02'
+  - '03'
+  - '04'
+  - '05'
+  all: *id001
+segment_names:
+  '01': 01-overview
+  '02': 02-init-scaffold
+  '03': 03-wizard-gui
+  '04': 04-pipeline-hints
+  '05': 05-compose-pipeline
+vhs:
+  vhs_path: ''
+  sync_from_timing: false
+  typing_ms_per_char: 55
+  max_typing_sec: 3.0
+  min_sleep_sec: 0.2
+  render_timeout_sec: 120
+compose:
+  ffmpeg_timeout_sec: 300
+  warn_stale_vhs: true
+tts:
+  model: gpt-4o-mini-tts
+  voice: coral
+  instructions: You are narrating a technical demo video about documentation-generator. Speak in a calm, professional tone.
+    Pronounce technical terms clearly.
+concat:
+  full-demo: *id001
+validation:
+  max_drift_sec: 2.75
+  narration_lint:
+    pre_tts_deny_patterns:
+    - target duration
+    - intended length
+    - 'visual:'
+    - edit for voice
+wizard:
+  llm_model: gpt-4o
+  system_prompt: You are a technical writer creating narration scripts for demo videos about documentation-generator. Write
+    in plain spoken English suitable for text-to-speech. No markdown formatting, no headings, no bullet points. Conversational
+    but professional tone, like a senior engineer presenting at a conference.
+  exclude_patterns:
+  - '**/node_modules/**'
+  - '**/.pytest_cache/**'
+  - '**/__pycache__/**'
+  - '**/.venv/**'
+  - '**/archive/**'
+discover_tests:
+  roots:
+  - .
+env_file: ../../.env
+narration_from_source:
+  model: gpt-4o-mini
+  temperature: 0.65
+  max_context_bytes: 120000
+  hints: []
+  context:
+    paths:
+    - README.md
+    - AGENTS.md
+    globs: []
+  segments:
+    '04':
+      hints:
+      - This segment explains maintainer hint files under docs/demos/hints and how yaml-generate merges them into docgen.yaml.
+      context:
+        paths:
+        - docs/demos/hints/narration-tts.md
+        - docs/demos/hints/segment-04-topic.md
+    '05':
+      hints:
+      - 'Walk the long-form path only: narration markdown, docgen TTS, docgen timestamps so diagrams track the real voice,
+        Manim for the visual, docgen compose with ffmpeg, then validate and optional concat — describe roles only, not file
+        layouts or APIs.'
+      - 'One crisp idea: everything hangs off one voice track and timed Manim; there is no separate browser automation layer
+        in the supported tool.'
+      - Optional one-liner that busy clips can be slowed for viewing legibility; do not explain ffmpeg filters or math.
+      context:
+        paths:
+        - docs/demos/hints/narration-tts.md
+        - docs/demos/hints/segment-05-topic.md
+        - docs/demos/hints/compose-pipeline.md
+      system_prompt: 'You write narration markdown for a technical demo video. The text will be read by text-to-speech.
+
+
+        Focus on which docgen commands and external tools participate in the pipeline and what each step is for.
+
+        Cover OpenAI text-to-speech, Whisper-style timing via docgen timestamps, Manim for visuals,
+
+        ffmpeg composition, validation, and optional concat — at the level a maintainer would explain in a
+
+        walkthrough, not source-code or algorithm internals.
+
+
+        Use a few short paragraphs with blank lines; keep total length moderate (clear but not a
+
+        lecture). No backticks, no hash headings, no bullet lists.
+
+
+        No episode ordinals, no "in this section" meta talk, no YAML front matter, no whole-script
+
+        code fences. Do not lecture the listener about formatting or instructions.
+
+        '
+manim_scene_generation:
+  model: gpt-4o
+  temperature: 0.4
+  max_context_bytes: 80000
+  hints:
+  - Match palette and _TimedScene timing patterns from existing scenes in animations/scenes.py.
+  context:
+    paths: []
+    globs: []
+  segments:
+    '01':
+      class_name: OverviewScene
+    '02':
+      class_name: InitScaffoldScene
+    '03':
+      class_name: WizardGuiScene
+    '04':
+      class_name: PipelineHintsScene
+      hints:
+      - Boxes for Hint files, Declarative YAML, Manim long-form walkthroughs; tie labels to segment-04-topic.
+      context:
+        paths:
+        - docs/demos/hints/manim-scene-specs.md
+        - docs/demos/hints/segment-04-topic.md
+    '05':
+      class_name: ComposePipelineScene
+      hints:
+      - Diagram lists tools in order with short labels — TTS, timestamps plus Whisper, Manim, compose, validate, concat —
+        no module-level detail.
+      context:
+        paths:
+        - docs/demos/hints/manim-scene-specs.md
+        - docs/demos/hints/segment-05-topic.md
+        - docs/demos/hints/compose-pipeline.md
+visual_map:
+  '01':
+    type: manim
+    scene: OverviewScene
+    source: OverviewScene.mp4
+  '02':
+    type: manim
+    scene: InitScaffoldScene
+    source: InitScaffoldScene.mp4
+  '03':
+    type: manim
+    scene: WizardGuiScene
+    source: WizardGuiScene.mp4
+  '04':
+    type: manim
+    scene: PipelineHintsScene
+    source: PipelineHintsScene.mp4
+  '05':
+    type: manim
+    scene: ComposePipelineScene
+    source: ComposePipelineScene.mp4
+manim:
+  scenes:
+  - OverviewScene
+  - InitScaffoldScene
+  - WizardGuiScene
+  - PipelineHintsScene
+  - ComposePipelineScene

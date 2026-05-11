@@ -18,7 +18,7 @@ INF -down-> TD : pins versions,\nreuse docs
 INF -down-> DG : pins docgen SHA
 INF -down-> CB : suite CI,\nverify access
 INF -down-> PAGES : publish-github-io\n(sync + aggregate)
-CB -right-> DG : docgen bundles\n(`docs/demos`, `docs/rendered-site`)
+CB -right-> DG : docgen bundles\n(`docs/demos`, `rendered-site`\n→ `docs/rendered` for Pages)
 DG ..> PAGES : `docs/suite/` handbook\nsynced into Pages
 TD ..> CB : build / clone tasks\n(consumer-defined)
 
