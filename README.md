@@ -116,7 +116,7 @@ docgen validate --pre-push
 | `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force]` | Generate narration `.md` from repo sources + owner hints (OpenAI); see `narration_from_source` in YAML |
 | `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into `docgen.yaml`; optional OpenAI refresh of `tts.instructions` / `wizard.system_prompt` (rewrites the file — review in Git) |
 | `docgen scene-compile SPEC.scene.yaml [--dry-run]` | Compile a declarative scene spec (YAML) into a `_TimedScene` class and inject it into `animations/scenes.py` — deterministic layout (rows of `_box`); applies auto-pagination + Whisper `wait_word` |
-| `docgen scene-spec-generate [--segment 01 \| --all] [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit YAML only (same schema as `scene-compile`); rejects specs that exceed the stack budget or safe row width, runs the same auto-paginate + word-alignment, optionally writes `animations/specs/<stem>.scene.yaml` and `--compile`s into `scenes.py` |
+| `docgen scene-spec-generate [--segment 01 \| --all] [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit YAML only (same schema as `scene-compile`); rejects frame-budget overflow and **subject-beat coverage** failures (hold board on same topic; cover topic shifts; no invented labels — not a blind count); auto-paginate + word-alignment; optionally writes `animations/specs/<stem>.scene.yaml` and `--compile`s into `scenes.py` |
 
 ## Configuration
 
@@ -200,6 +200,10 @@ manim:
   manim_path: ""             # optional explicit binary path (relative to docgen.yaml or absolute)
   font: "Liberation Sans"
   min_font_size: 14
+
+validation:
+  subject_beat_coverage:
+    enabled: true            # scene-spec-generate + validate: cover narration topic beats
 
 compose:
   ffmpeg_timeout_sec: 300    # can also be overridden with: docgen compose --ffmpeg-timeout N

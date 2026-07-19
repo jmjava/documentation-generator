@@ -623,6 +623,7 @@ def scene_spec_generate_cmd(
             raise click.ClickException("segments.all is empty in docgen.yaml")
         names = (cfg.raw.get("segment_names") or {})
         scripts_dir = cfg.base_dir / "scripts"
+        failures: list[str] = []
         for seg_id in ids:
             sid = str(seg_id)
             name = names.get(sid) or names.get(seg_id) or sid
@@ -644,7 +645,16 @@ def scene_spec_generate_cmd(
                     )
                     continue
             click.echo(f"=== scene-spec-generate --segment {sid} ===")
-            _one_sid(sid)
+            try:
+                _one_sid(sid)
+            except click.ClickException as exc:
+                click.echo(f"[scene-spec-generate --all] FAIL {sid}: {exc}", err=True)
+                failures.append(sid)
+        if failures:
+            raise click.ClickException(
+                f"scene-spec-generate --all: {len(failures)} segment(s) failed: "
+                + ", ".join(failures)
+            )
         return
 
     assert segment is not None  # type-checker

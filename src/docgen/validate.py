@@ -299,6 +299,7 @@ class Validator:
         report.checks.append(self._check_narration_lint(seg_id))
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
+            report.checks.append(self._check_subject_beat_coverage(seg_id))
 
         return report.to_dict()
 
@@ -322,6 +323,10 @@ class Validator:
                             "layout",
                             # OCR keyword anchoring is heuristic; warn, don't block.
                             "av_sync",
+                            # Subject-beat coverage is enforced hard at scene-spec-generate;
+                            # on pre-push warn so shipping committed recordings is not blocked
+                            # by a new heuristic gate mid-regeneration.
+                            "subject_beat_coverage",
                         }
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
@@ -519,6 +524,64 @@ class Validator:
         )
         self._manim_lint_cache = result
         return result
+
+    def _check_subject_beat_coverage(self, seg_id: str) -> CheckResult:
+        """Ensure declarative scene YAML covers narration subject beats (not a blind count)."""
+        if not self.config.subject_beat_coverage_enabled:
+            return CheckResult(
+                "subject_beat_coverage",
+                True,
+                ["validation.subject_beat_coverage disabled in config (skipped)"],
+            )
+
+        narr_path = self._find_narration(seg_id)
+        if narr_path is None or not narr_path.is_file():
+            return CheckResult(
+                "subject_beat_coverage",
+                True,
+                ["No narration file (skipped)"],
+            )
+
+        seg_name = self.config.resolve_segment_name(seg_id)
+        spec_path = self.config.animations_dir / "specs" / f"{seg_name}.scene.yaml"
+        if not spec_path.is_file():
+            return CheckResult(
+                "subject_beat_coverage",
+                True,
+                [
+                    f"No {spec_path.name} (skipped — hand-authored scenes.py "
+                    "without declarative spec)"
+                ],
+            )
+
+        import yaml
+
+        from docgen.scene_spec import layout_density_violations
+
+        try:
+            raw = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            return CheckResult(
+                "subject_beat_coverage",
+                False,
+                [f"could not load {spec_path.name}: {exc}"],
+            )
+        if not isinstance(raw, dict):
+            return CheckResult(
+                "subject_beat_coverage",
+                False,
+                [f"{spec_path.name}: root must be a mapping"],
+            )
+
+        narration_text = narr_path.read_text(encoding="utf-8")
+        issues = layout_density_violations(raw, narration_text=narration_text)
+        if issues:
+            return CheckResult("subject_beat_coverage", False, issues)
+        return CheckResult(
+            "subject_beat_coverage",
+            True,
+            ["Subject beats covered; no invented unspoken labels"],
+        )
 
     def _check_layout(self, path: Path) -> CheckResult:
         """Run overlap/spacing/edge layout checks on a Manim video recording."""

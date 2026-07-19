@@ -260,7 +260,13 @@ def merge_hint_project(raw: dict[str, Any], cfg: "Config") -> list[str]:
             raw["env_file"] = env_file.strip()
             changes.append("env_file: merged from hints/*.md (docgen.project)")
 
-    for key in ("narration_from_source", "manim_scene_generation", "discovery", "concat"):
+    for key in (
+        "narration_from_source",
+        "manim_scene_generation",
+        "discovery",
+        "concat",
+        "timestamps",
+    ):
         block = project.get(key)
         if not isinstance(block, dict) or not block:
             continue

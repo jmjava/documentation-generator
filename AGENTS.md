@@ -47,10 +47,10 @@ Commands registered on the **`docgen`** CLI include:
 - **`image-generate`** — render scene-spec **image elements** (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle (also runs for missing assets inside `generate-all`).
 - **`manim`** — render Manim scenes declared in config.
 - **`compose`** — mux narration audio with visual sources via ffmpeg.
-- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`** (stale `timing.json` vs mp3 durations; hard fail), **`av_sync`** (OCR anchor keywords near spoken time; soft), and related checks.
+- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`**, **`av_sync`** (soft), **`subject_beat_coverage`** (declarative specs vs narration topic beats; hard fail when enabled), and related checks.
 - **`lint`** — narration lint helper.
 - **`narration-generate`** — LLM-assisted narration from hints and repo context.
-- **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**.
+- **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**; enforces frame budget + **subject-beat coverage** (dwell OK; cover topic shifts; reject invented labels).
 - **`scene-compile`** — compile specs into **`scenes.py`** (generated regions only).
 - **`yaml-generate`** — merge defaults and hint wiring into **`docgen.yaml`**.
 - **`clean-bundle`** — remove regenerable outputs per policy.
@@ -62,6 +62,7 @@ Commands registered on the **`docgen`** CLI include:
 ## Implications for changes here
 
 - **Manim / `scenes.py` (marker blocks):** Fix generators under `src/docgen/**` (`manim_scene_support.py`, `scene_spec.py`, `scene_spec_generate.py`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside a consumer's **`animations/scenes.py`** between **`BEGIN/END GENERATED SCENE`** markers; re-run **`scene-spec-generate`** / **`scene-compile`** and **`manim`** instead.
+- **Subject-beat coverage:** implemented in `scene_spec.layout_density_violations` / `cluster_subject_beats`; enforced by **`scene-spec-generate`** and **`validate`** (`validation.subject_beat_coverage.enabled`, default true). Not a blind label count.
 - Prefer **stable CLI / library contracts** and **documented exit codes** so CI can depend on them.
 - **`narration_from_source`:** hints in config + **`docgen narration-generate`** — owner-supplied context paths, not opaque bulk edits to outputs.
 - Avoid duplicating long orchestration docs here; **link** to downstream repos when describing their publish pipelines.

@@ -209,12 +209,24 @@ class PagesGenerator:
         return "varies"
 
     def _find_recording(self, seg_id: str) -> Path | None:
+        """Resolve the committed recording for ``seg_id``.
+
+        Prefer ``segment_names[id].mp4`` so a leftover ``18-roadmap.mp4`` does not
+        win over ``18-roadmap-forward.mp4`` when both match a naive ``*18*`` glob.
+        """
         d = self.config.recordings_dir
         if not d.exists():
             return None
-        for mp4 in d.glob(f"*{seg_id}*.mp4"):
-            return mp4
-        return None
+        stem = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{stem}.mp4"
+        if exact.is_file():
+            return exact
+        # Fallbacks: id-prefixed stems, then broad glob (deterministic order).
+        prefixed = sorted(d.glob(f"{seg_id}-*.mp4"))
+        if prefixed:
+            return prefixed[0]
+        matches = sorted(d.glob(f"*{seg_id}*.mp4"))
+        return matches[0] if matches else None
 
     def _find_recording_name(self, seg_id: str) -> str:
         rec = self._find_recording(seg_id)

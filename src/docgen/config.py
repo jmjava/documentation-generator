@@ -187,6 +187,17 @@ class Config:
         return bool(self.raw.get("manim", {}).get("scene_lint", True))
 
     @property
+    def subject_beat_coverage_enabled(self) -> bool:
+        """When true (default), validate + scene-spec-generate enforce subject-beat coverage.
+
+        Config: ``validation.subject_beat_coverage.enabled`` (bool).
+        """
+        block = self.raw.get("validation", {}).get("subject_beat_coverage")
+        if isinstance(block, dict) and "enabled" in block:
+            return bool(block.get("enabled"))
+        return True
+
+    @property
     def manim_path(self) -> str | None:
         """Optional absolute/relative path to the Manim executable."""
         value = self.raw.get("manim", {}).get("manim_path")

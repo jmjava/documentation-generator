@@ -23,16 +23,22 @@ Typical workflow:
 2. ``docgen scene-compile path/to/spec.scene.yaml --config docgen.yaml`` (if not using ``--compile``).
 3. ``docgen timestamps`` → ``docgen manim`` as usual.
 
-``docgen scene-spec-generate`` also runs :func:`layout_budget_violations` so generated YAML
-must fit the dogfood frame; ``scene-compile`` does not apply that check.
+``docgen scene-spec-generate`` also runs :func:`layout_budget_violations` (frame fit) and
+:func:`layout_density_violations` (**subject-beat coverage**: hold the board across sentences
+on the same topic; cover each topic shift with a spoken-phrase label; reject invented labels —
+not a blind label count). ``docgen validate`` re-checks coverage when a ``*.scene.yaml`` exists.
+``scene-compile`` does not enforce layout budget (hand fixes allowed).
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 ALLOWED_COLORS = frozenset(
     {
@@ -129,6 +135,101 @@ def _row_width(row: dict[str, Any], col_gap: float) -> float:
     if not ws:
         return 0.0
     return sum(ws) + max(0, len(ws) - 1) * col_gap
+
+
+def auto_fit_row_widths(spec: dict[str, Any]) -> dict[str, Any]:
+    """Scale or split rows that exceed the horizontal safe width.
+
+    Prefer proportional width scaling (keeps the author's row composition). If a row
+    still cannot fit (too many boxes even at a floor width), split it into chunks of
+    at most three boxes so ``layout_budget_violations`` can pass after LLM drafts.
+    """
+    layout = spec.get("layout") if isinstance(spec.get("layout"), dict) else {}
+    col_gap = float(layout.get("column_gap", 0.8))
+    safe = _LAYOUT_HORIZONTAL_SAFE
+    min_box_w = 1.6
+
+    def _row_width(boxes: list[dict[str, Any]]) -> float:
+        ws = [float(b.get("width", 0)) for b in boxes]
+        if not ws:
+            return 0.0
+        return sum(ws) + max(0, len(ws) - 1) * col_gap
+
+    def _fit_boxes(boxes: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        if not boxes:
+            return []
+        rw = _row_width(boxes)
+        if rw <= safe + 0.05:
+            return [boxes]
+        # Proportional scale down to safe width.
+        scale = safe / rw if rw > 0 else 1.0
+        scaled = []
+        for b in boxes:
+            nb = dict(b)
+            try:
+                nb["width"] = max(min_box_w, float(b["width"]) * scale)
+            except (KeyError, TypeError, ValueError):
+                pass
+            scaled.append(nb)
+        if _row_width(scaled) <= safe + 0.05:
+            return [scaled]
+        # Still too wide: split into chunks of ≤3, then scale each chunk.
+        chunks: list[list[dict[str, Any]]] = []
+        for i in range(0, len(boxes), 3):
+            part = [dict(b) for b in boxes[i : i + 3]]
+            prw = _row_width(part)
+            if prw > safe + 0.05 and prw > 0:
+                pscale = safe / prw
+                for b in part:
+                    try:
+                        b["width"] = max(min_box_w, float(b["width"]) * pscale)
+                    except (KeyError, TypeError, ValueError):
+                        pass
+            chunks.append(part)
+        return chunks
+
+    def _rewrite_rows(rows: list[Any]) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list) or not boxes:
+                out.append(dict(row))
+                continue
+            clean = [b for b in boxes if isinstance(b, dict)]
+            fitted = _fit_boxes(clean)
+            if len(fitted) == 1:
+                nr = dict(row)
+                nr["boxes"] = fitted[0]
+                out.append(nr)
+            else:
+                for bi, chunk in enumerate(fitted):
+                    nr = dict(row)
+                    nr["boxes"] = chunk
+                    if bi > 0:
+                        nr.pop("wait_word", None)
+                        nr.pop("wait_segment", None)
+                        nr.pop("wait_at", None)
+                    out.append(nr)
+        return out
+
+    out = dict(spec)
+    if out.get("pages") is not None:
+        new_pages: list[Any] = []
+        for page in out["pages"]:
+            if not isinstance(page, dict):
+                new_pages.append(page)
+                continue
+            p = dict(page)
+            rows = p.get("rows")
+            if isinstance(rows, list):
+                p["rows"] = _rewrite_rows(rows)
+            new_pages.append(p)
+        out["pages"] = new_pages
+    elif isinstance(out.get("rows"), list):
+        out["rows"] = _rewrite_rows(out["rows"])
+    return out
 
 
 def auto_paginate(spec: dict[str, Any]) -> dict[str, Any]:
@@ -533,6 +634,242 @@ def coerce_legacy_wait_at_to_whisper_rows(
     return out
 
 
+def sanitize_pacing_conflicts(spec: dict[str, Any]) -> dict[str, Any]:
+    """Prefer box-level ``wait_word`` when a row also has row-level pacing (LLM drafts)."""
+
+    def _fix_rows(rows: list[Any]) -> list[Any]:
+        out: list[Any] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                out.append(row)
+                continue
+            nr = dict(row)
+            boxes = nr.get("boxes")
+            if isinstance(boxes, list):
+                box_pacing = any(
+                    isinstance(b, dict)
+                    and (b.get("wait_word") is not None or b.get("wait_segment") is not None)
+                    for b in boxes
+                )
+                if box_pacing:
+                    nr.pop("wait_word", None)
+                    nr.pop("wait_segment", None)
+            out.append(nr)
+        return out
+
+    out = dict(spec)
+    if out.get("pages") is not None:
+        new_pages: list[Any] = []
+        for page in out["pages"]:
+            if not isinstance(page, dict):
+                new_pages.append(page)
+                continue
+            p = dict(page)
+            if isinstance(p.get("rows"), list):
+                p["rows"] = _fix_rows(p["rows"])
+            new_pages.append(p)
+        out["pages"] = new_pages
+    elif isinstance(out.get("rows"), list):
+        out["rows"] = _fix_rows(out["rows"])
+    return out
+
+
+# Light stopword list for subject-beat clustering / label coverage (not NLP-grade).
+_CONTENT_STOPWORDS = frozenset(
+    """
+    a an the and or but if then else when while for from into onto with without
+    this that these those it its they them their we our you your he she his her
+    is are was were be been being do does did done have has had having will would
+    can could should may might must shall of to in on at by as so not no nor
+    also just only very more most such than then there here about into over under
+    up down out off again further once each every both few other some any all
+    """.split()
+)
+
+
+def count_spec_labels(spec: dict[str, Any]) -> int:
+    """Count labeled boxes / image elements across ``pages`` or ``rows``."""
+    return len(list_spec_labels(spec))
+
+
+def list_spec_labels(spec: dict[str, Any]) -> list[str]:
+    """Return non-empty box/image labels in page order."""
+    out: list[str] = []
+    pages = _spec_pages_rows(spec)
+    for rows in pages:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            for box in boxes:
+                if not isinstance(box, dict):
+                    continue
+                label = str(box.get("label", "")).strip()
+                if label:
+                    out.append(label)
+                elif str(box.get("image", "")).strip():
+                    # Image-only: use stem as a weak anchor for coverage checks.
+                    stem = Path(str(box["image"])).stem.replace("-", " ").replace("_", " ")
+                    if stem.strip():
+                        out.append(stem.strip())
+    return out
+
+
+def narration_sentences(narration_text: str) -> list[str]:
+    """Split narration markdown into spoken sentences (heading-stripped)."""
+    text = re.sub(r"(?m)^#.*$", " ", narration_text or "")
+    text = re.sub(r"[`*_>#]", " ", text)
+    out: list[str] = []
+    for para in re.split(r"\n\s*\n", text):
+        para = " ".join(para.split())
+        if not para:
+            continue
+        for sent in _SENTENCE_SPLIT_RE.split(para):
+            s = sent.strip()
+            if s:
+                out.append(s)
+    return out
+
+
+def narration_sentence_count(narration_text: str) -> int:
+    """Count spoken sentences in narration markdown."""
+    return len(narration_sentences(narration_text))
+
+
+def content_tokens(text: str) -> set[str]:
+    """Content tokens for beat clustering / label↔narration coverage."""
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {w for w in words if len(w) > 2 and w not in _CONTENT_STOPWORDS}
+
+
+def cluster_subject_beats(
+    sentences: list[str],
+    *,
+    jaccard_threshold: float = 0.25,
+) -> list[str]:
+    """Merge consecutive sentences that continue the same subject into beats.
+
+    Overlap is measured against the **previous sentence only** (not the whole
+    accumulated beat) so a shared domain word like ``pipeline`` across distant
+    topics does not glue unrelated beats. Several sentences may elaborate one
+    on-screen idea; a sharp topic shift starts a new beat that needs its own label.
+    """
+    if not sentences:
+        return []
+    # Document-frequent tokens are weak merge signals (appear in many sentences).
+    per_sent = [content_tokens(s) for s in sentences]
+    df: dict[str, int] = {}
+    for toks in per_sent:
+        for w in toks:
+            df[w] = df.get(w, 0) + 1
+    n = len(sentences)
+    glue = {w for w, c in df.items() if c >= max(3, (n + 1) // 2)}
+
+    beats: list[list[str]] = []
+    for i, sent in enumerate(sentences):
+        toks = per_sent[i]
+        if not beats:
+            beats.append([sent])
+            continue
+        prev_toks = per_sent[i - 1]
+        if not toks or not prev_toks:
+            beats.append([sent])
+            continue
+        shared = (toks & prev_toks) - glue
+        union = (toks | prev_toks) - glue
+        jacc = (len(shared) / len(union)) if union else 0.0
+        if shared or jacc >= jaccard_threshold:
+            beats[-1].append(sent)
+        else:
+            beats.append([sent])
+    return [" ".join(group) for group in beats]
+
+
+def label_covers_beat(label: str, beat_text: str) -> bool:
+    """True when a label's content tokens substantially appear in the beat text."""
+    lt = content_tokens(label)
+    bt = content_tokens(beat_text)
+    if not lt or not bt:
+        return False
+    shared = lt & bt
+    if not shared:
+        return False
+    # Short labels: any shared content word. Longer: majority of label tokens.
+    need = 1 if len(lt) <= 2 else max(1, (len(lt) + 1) // 2)
+    return len(shared) >= need
+
+
+def min_labels_for_narration(narration_text: str, *, word_count: int = 0) -> int:
+    """Soft prompt hint: number of subject beats (not a hard label quota).
+
+    ``word_count`` is accepted for API compatibility; coverage uses beats, not words.
+    """
+    del word_count  # coverage gate does not use blind word quotas
+    beats = cluster_subject_beats(narration_sentences(narration_text))
+    return len(beats)
+
+
+def layout_density_violations(
+    spec: dict[str, Any],
+    *,
+    narration_text: str,
+    word_count: int = 0,
+    slack: int = 0,
+) -> list[str]:
+    """Reject specs that miss subject beats or invent unspoken labels.
+
+    This is **coverage**, not a blind label count: holding one board across several
+    sentences in the same beat is fine; changing topic without a spoken-phrase
+    label for that beat is not. ``slack`` is how many beats may remain uncovered
+    after an LLM retry (near-miss).
+    """
+    del word_count
+    sentences = narration_sentences(narration_text)
+    if not sentences:
+        return []
+    beats = cluster_subject_beats(sentences)
+    labels = list_spec_labels(spec)
+    issues: list[str] = []
+
+    uncovered: list[str] = []
+    for i, beat in enumerate(beats, start=1):
+        if not any(label_covers_beat(lab, beat) for lab in labels):
+            preview = beat if len(beat) <= 72 else beat[:69] + "..."
+            uncovered.append(f"beat {i}: {preview}")
+
+    allowed_uncovered = max(0, slack)
+    if len(uncovered) > allowed_uncovered:
+        shown = "; ".join(uncovered[:5])
+        more = f" (+{len(uncovered) - 5} more)" if len(uncovered) > 5 else ""
+        note = (
+            f" ({len(uncovered)} uncovered; allow ≤{allowed_uncovered} after retry)"
+            if slack
+            else f" ({len(uncovered)} of {len(beats)} beats uncovered)"
+        )
+        issues.append(
+            f"subject-beat coverage failed{note}: {shown}{more}. "
+            "Add a spoken-phrase label for each new topic; keep the same board while "
+            "sentences elaborate the same subject."
+        )
+
+    narr_toks = content_tokens(narration_text)
+    invented = [
+        lab
+        for lab in labels
+        if content_tokens(lab) and not (content_tokens(lab) & narr_toks)
+    ]
+    if invented:
+        sample = ", ".join(repr(x) for x in invented[:6])
+        more = f" (+{len(invented) - 6} more)" if len(invented) > 6 else ""
+        issues.append(
+            f"labels not spoken in narration (invented diagram terms): {sample}{more}"
+        )
+
+    return issues
+
+
 def layout_budget_violations(spec: dict[str, Any]) -> list[str]:
     """Return human-readable layout problems if a spec likely overflows the Manim frame.
 
@@ -604,6 +941,7 @@ def load_scene_spec(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise SceneSpecError(f"{path}: root must be a mapping")
+    data = sanitize_pacing_conflicts(data)
     validate_scene_spec(data, path_label=str(path))
     return data
 

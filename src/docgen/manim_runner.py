@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,10 @@ class ManimRunner:
         * ``scene=`` — single scene (CLI / wizard).
         * ``scenes=`` — explicit list (pipeline uses :meth:`Config.pipeline_manim_scene_names`).
         * Otherwise — ``config.manim`` ``scenes:`` list (legacy).
+
+        Per-scene failures clear that scene's partial-movie cache and retry once
+        with ``--flush_cache`` (handles corrupt partials left by interrupted runs).
+        If any scene still fails after retry, raises :class:`RuntimeError`.
         """
         if scene is not None:
             to_render = [scene]
@@ -53,8 +58,17 @@ class ManimRunner:
 
         font = self.config.manim_font
         print(f"[manim] Rendering at {quality_label}, font={font}")
+        failed: list[str] = []
         for s in to_render:
-            self._render_one(manim_bin, scenes_file, s, quality_args)
+            if not self._render_one(manim_bin, scenes_file, s, quality_args):
+                failed.append(s)
+        if failed:
+            raise RuntimeError(
+                "Manim failed for scene(s): "
+                + ", ".join(failed)
+                + ". Partial caches were flushed and retried once; inspect "
+                "animations/media or re-run `docgen manim --scene <Name>`."
+            )
 
     def _check_font(self) -> None:
         """Verify the configured font is installed on the system."""
@@ -76,32 +90,97 @@ class ManimRunner:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
+    def _clear_scene_partials(self, scene_name: str) -> None:
+        """Remove partial movie files / output for one scene (corrupt-cache recovery)."""
+        media = self.config.animations_dir / "media" / "videos" / "scenes"
+        if not media.is_dir():
+            return
+        cleared = False
+        for quality_dir in media.iterdir():
+            if not quality_dir.is_dir():
+                continue
+            partials = quality_dir / "partial_movie_files" / scene_name
+            if partials.is_dir():
+                shutil.rmtree(partials, ignore_errors=True)
+                cleared = True
+            out = quality_dir / f"{scene_name}.mp4"
+            if out.is_file():
+                out.unlink(missing_ok=True)
+                cleared = True
+        if cleared:
+            print(f"[manim] Cleared partial/cache output for {scene_name}")
+
+    def _run_manim(
+        self,
+        manim_bin: str,
+        scenes_file: Path,
+        scene_name: str,
+        quality_args: list[str],
+        *,
+        flush_cache: bool,
+    ) -> None:
+        cmd = [manim_bin, *quality_args]
+        if flush_cache:
+            cmd.append("--flush_cache")
+        cmd.extend([str(scenes_file), scene_name])
+        subprocess.run(
+            cmd,
+            check=True,
+            cwd=str(self.config.animations_dir),
+            timeout=300,
+        )
+
     def _render_one(
         self,
         manim_bin: str,
         scenes_file: Path,
         scene_name: str,
         quality_args: list[str],
-    ) -> None:
+    ) -> bool:
+        """Render one scene; on failure flush partials and retry once. Return success."""
         print(f"[manim] Rendering {scene_name}")
-        cmd = [manim_bin, *quality_args, str(scenes_file), scene_name]
         try:
-            subprocess.run(
-                cmd,
-                check=True,
-                cwd=str(self.config.animations_dir),
-                timeout=300,
+            self._run_manim(
+                manim_bin, scenes_file, scene_name, quality_args, flush_cache=False
             )
+            return True
         except FileNotFoundError:
             print(
                 "[manim] manim executable not found. "
                 "Install with `pip install manim` in this environment or set "
                 "`manim.manim_path` in docgen.yaml."
             )
-        except subprocess.CalledProcessError as exc:
-            print(f"[manim] FAILED {scene_name}: exit code {exc.returncode}")
+            return False
         except subprocess.TimeoutExpired:
             print(f"[manim] TIMEOUT {scene_name}")
+            self._clear_scene_partials(scene_name)
+            return False
+        except subprocess.CalledProcessError as exc:
+            print(f"[manim] FAILED {scene_name}: exit code {exc.returncode}")
+            print(
+                f"[manim] Retrying {scene_name} after clearing partials "
+                "(--flush_cache)…"
+            )
+            self._clear_scene_partials(scene_name)
+            try:
+                self._run_manim(
+                    manim_bin,
+                    scenes_file,
+                    scene_name,
+                    quality_args,
+                    flush_cache=True,
+                )
+                print(f"[manim] Retry OK {scene_name}")
+                return True
+            except subprocess.TimeoutExpired:
+                print(f"[manim] TIMEOUT on retry {scene_name}")
+                return False
+            except subprocess.CalledProcessError as retry_exc:
+                print(
+                    f"[manim] FAILED retry {scene_name}: "
+                    f"exit code {retry_exc.returncode}"
+                )
+                return False
 
     def _resolve_manim_binary(self) -> str | None:
         configured = self.config.manim_path

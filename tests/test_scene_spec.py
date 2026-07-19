@@ -8,12 +8,18 @@ import pytest
 
 from docgen.scene_spec import (
     SceneSpecError,
+    auto_fit_row_widths,
     auto_paginate,
     coerce_legacy_wait_at_to_whisper_rows,
     compile_scene_class,
+    cluster_subject_beats,
+    count_spec_labels,
     layout_budget_violations,
+    layout_density_violations,
     layout_stack_budget,
     load_scene_spec,
+    narration_sentence_count,
+    narration_sentences,
     segment_index_for_whisper_time,
     sync_row_labels_to_whisper_words,
     validate_scene_spec,
@@ -379,6 +385,70 @@ def test_layout_stack_budget_decreases_with_larger_title_font() -> None:
     assert b_small > b_large
 
 
+def test_subject_beat_coverage_allows_dwell_rejects_missed_topics() -> None:
+    narr = (
+        "The bootstrap pipeline seeds the cluster. "
+        "That same bootstrap path also wires permissions. "
+        "Later the promote pipeline ships artifacts. "
+        "Promote then verifies the release."
+    )
+    assert narration_sentence_count(narr) == 4
+    beats = cluster_subject_beats(narration_sentences(narr))
+    # bootstrap elaborations merge; promote is a new subject (not 1 sentence = 1 beat)
+    assert 2 <= len(beats) <= 3
+
+    # One label per subject beat — fine even though there are 4 sentences.
+    covered = {
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "bootstrap pipeline",
+                        "color": "C_ORANGE",
+                        "width": 4.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    },
+                    {
+                        "label": "promote pipeline",
+                        "color": "C_BLUE",
+                        "width": 4.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    },
+                ],
+            }
+        ],
+    }
+    assert count_spec_labels(covered) == 2
+    assert layout_density_violations(covered, narration_text=narr) == []
+
+    # Blind high count with invented labels still fails coverage.
+    invented = {
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": f"Widget{i}",
+                        "color": "C_GREEN",
+                        "width": 2.5,
+                        "height": 0.8,
+                        "font_size": 16,
+                    }
+                    for i in range(6)
+                ],
+            }
+        ],
+    }
+    issues = layout_density_violations(invented, narration_text=narr)
+    assert issues
+    assert any("invented" in msg or "uncovered" in msg for msg in issues)
+
+
 def test_layout_budget_violations_flags_tall_single_page() -> None:
     spec = {
         "segment_id": "1",
@@ -454,6 +524,33 @@ def _row(label: str, h: float = 1.0, w: float = 3.0) -> dict:
             {"label": label, "color": "C_GREEN", "width": w, "height": h, "font_size": 22},
         ],
     }
+
+
+def test_auto_fit_row_widths_scales_overwide_row() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "layout": {"column_gap": 0.5, "row_gap": 0.5, "first_row_title_buff": 0.5},
+        "pages": [
+            {
+                "rows": [
+                    {
+                        "run_time": 1.0,
+                        "boxes": [
+                            {"label": "A", "color": "C_BLUE", "width": 3.0, "height": 0.8, "font_size": 16},
+                            {"label": "B", "color": "C_BLUE", "width": 3.0, "height": 0.8, "font_size": 16},
+                            {"label": "C", "color": "C_BLUE", "width": 3.0, "height": 0.8, "font_size": 16},
+                            {"label": "D", "color": "C_BLUE", "width": 3.0, "height": 0.8, "font_size": 16},
+                        ],
+                    }
+                ]
+            }
+        ],
+    }
+    assert layout_budget_violations(spec)
+    out = auto_fit_row_widths(spec)
+    assert layout_budget_violations(out) == []
 
 
 def test_auto_paginate_splits_rows_into_pages_within_budget() -> None:

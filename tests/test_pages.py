@@ -97,6 +97,23 @@ def test_index_html_explicit_pages_segments_override_discovery(tmp_path: Path) -
     assert "01 — Overview<" not in html
 
 
+def test_find_recording_prefers_segment_name_stem(tmp_path: Path) -> None:
+    """Leftover ``18-roadmap.mp4`` must not win over ``18-roadmap-forward.mp4``."""
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {"title": "Demos", "demos_subdir": "demos"},
+        segments_all=["18"],
+        segment_names={"18": "18-roadmap-forward"},
+    )
+    rec = tmp_path / "recordings"
+    rec.mkdir(parents=True)
+    (rec / "18-roadmap.mp4").write_bytes(b"old")
+    (rec / "18-roadmap-forward.mp4").write_bytes(b"new")
+    found = PagesGenerator(cfg)._find_recording("18")
+    assert found is not None
+    assert found.name == "18-roadmap-forward.mp4"
+
+
 def test_index_html_segment_titles_escape_user_strings(tmp_path: Path) -> None:
     cfg = _write_pages_cfg(
         tmp_path,

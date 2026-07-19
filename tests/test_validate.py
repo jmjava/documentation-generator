@@ -506,6 +506,103 @@ class Demo(Scene):
         assert check["passed"], check["details"]
 
 
+# ── Subject-beat coverage (declarative specs) ───────────────────────────
+
+class TestSubjectBeatCoverageValidate:
+    def test_validate_flags_uncovered_and_invented_labels(self, cfg_dir: Path) -> None:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("segment_names", {})["01"] = "01-test"
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "narration" / "01-test.md").write_text(
+            "The bootstrap pipeline seeds the cluster. "
+            "Later the promote pipeline ships artifacts.\n",
+            encoding="utf-8",
+        )
+        specs = cfg_dir / "animations" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-test.scene.yaml").write_text(
+            yaml.dump(
+                {
+                    "segment_id": "01",
+                    "class_name": "DemoScene",
+                    "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                    "rows": [
+                        {
+                            "run_time": 1.0,
+                            "boxes": [
+                                {
+                                    "label": "WidgetX",
+                                    "color": "C_ORANGE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = Config.from_yaml(cfg_dir / "docgen.yaml")
+        report = Validator(config).validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "subject_beat_coverage")
+        assert not check["passed"]
+        details = " ".join(check["details"])
+        assert "invented" in details or "uncovered" in details
+
+    def test_validate_passes_covered_beats(self, cfg_dir: Path) -> None:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("segment_names", {})["01"] = "01-test"
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "narration" / "01-test.md").write_text(
+            "The bootstrap pipeline seeds the cluster. "
+            "That same bootstrap path also wires permissions. "
+            "Later the promote pipeline ships artifacts. "
+            "Promote then verifies the release.\n",
+            encoding="utf-8",
+        )
+        specs = cfg_dir / "animations" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-test.scene.yaml").write_text(
+            yaml.dump(
+                {
+                    "segment_id": "01",
+                    "class_name": "DemoScene",
+                    "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                    "rows": [
+                        {
+                            "run_time": 1.0,
+                            "boxes": [
+                                {
+                                    "label": "bootstrap pipeline",
+                                    "color": "C_ORANGE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                },
+                                {
+                                    "label": "promote pipeline",
+                                    "color": "C_BLUE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = Config.from_yaml(cfg_dir / "docgen.yaml")
+        report = Validator(config).validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "subject_beat_coverage")
+        assert check["passed"], check["details"]
+
+
 # ── Helper to create silent audio ─────────────────────────────────────
 
 def _make_silent_audio(path: Path, duration_sec: float = 10.0) -> Path:

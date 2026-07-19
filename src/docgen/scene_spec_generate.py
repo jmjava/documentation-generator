@@ -29,11 +29,16 @@ from docgen.scene_spec import (
     FRAME_HEIGHT,
     FRAME_WIDTH,
     SceneSpecError,
+    auto_fit_row_widths,
     auto_paginate,
     coerce_legacy_wait_at_to_whisper_rows,
+    sanitize_pacing_conflicts,
     compile_scene_class,
+    cluster_subject_beats,
     layout_budget_violations,
+    layout_density_violations,
     layout_stack_budget,
+    narration_sentences,
     spec_rows_reference_whisper_waits,
     sync_row_labels_to_whisper_words,
     upgrade_wait_segments_to_wait_words,
@@ -102,8 +107,14 @@ Design goals:
 - **Frame:** dogfood Manim canvas is ~14.22 × 8 units; title + buffer eat the top — see user-message budget. Never stack so many tall rows that boxes would clip off the bottom.
 - **Do not** rely on shrinking: split into **pages** with fade between them.
 - **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
-- Mirror **narration beats**; each box appears when its label is spoken (toolchain sets ``wait_word`` from label → first match when you omit indices).
-- Keep labels concise; narration may be longer than on-screen text.
+- **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
+  **hold the board**. When the topic shifts, reveal a new spoken-phrase label for that beat.
+  Do **not** invent a box per sentence, and do **not** leave a new topic without a matching label.
+  The toolchain checks **coverage of subject beats** (and rejects invented unspoken labels),
+  not a blind label count.
+- Mirror **narration**; each box label must be a short phrase **copied from the spoken
+  narration** (toolchain sets ``wait_word`` from label → first transcript match when you omit indices).
+- Keep labels concise (2–5 words); do not invent diagram-only jargon that is not spoken.
 """
 
 
@@ -165,6 +176,7 @@ def build_scene_spec_user_message(
     extra_hints: list[str],
     reference_scenes: str,
     source_snippets: list[tuple[str, str]],
+    word_count: int = 0,
 ) -> str:
     """User message: narration + timing + hints; demand YAML spec."""
     parts: list[str] = []
@@ -180,6 +192,21 @@ def build_scene_spec_user_message(
     parts.append("--- NARRATION ---")
     parts.append(narration_text.strip() or "(empty)")
     parts.append("")
+    beats = cluster_subject_beats(narration_sentences(narration_text))
+    if beats:
+        wc_note = f" ({word_count} Whisper words)" if word_count > 0 else ""
+        parts.append(
+            f"**SUBJECT BEATS{wc_note} — cover each with ≥1 spoken-phrase label "
+            f"(hold the board inside a beat; change when the topic shifts):**"
+        )
+        for i, beat in enumerate(beats, start=1):
+            preview = beat if len(beat) <= 160 else beat[:157] + "..."
+            parts.append(f"  {i}. {preview}")
+        parts.append(
+            "scene-spec-generate **rejects** specs that leave beats uncovered or use "
+            "labels that are not spoken in the narration (not a blind label count)."
+        )
+        parts.append("")
     parts.append(timing_enrichment.strip())
 
     all_hints = list(hints) + list(extra_hints)
@@ -280,6 +307,7 @@ def linted_class_block_from_spec(
         merged["timing_key"] = cfg.resolve_segment_name(sid)
 
     # Engine-side layout planning + audio sync so authored YAML stays minimal.
+    merged = auto_fit_row_widths(merged)
     merged = auto_paginate(merged)
     tk = str(merged["timing_key"])
     segments = load_timing_for_scene(cfg, tk)
@@ -351,6 +379,75 @@ def _save_draft(cfg: Config, seg_id: str, content: str) -> Path:
     return path
 
 
+def _parse_and_harden_llm_spec(
+    cfg: Config,
+    *,
+    seg_id: str,
+    class_name: str,
+    seg_name: str,
+    narration_text: str,
+    word_count: int,
+    raw: str,
+    enforce_density: bool,
+    density_slack: int = 0,
+) -> dict[str, Any]:
+    """Parse YAML, auto-layout, validate schema/budget/(optional) density, compile-lint."""
+    body = strip_yaml_fences(raw)
+    try:
+        loaded = yaml.safe_load(body)
+    except yaml.YAMLError as exc:
+        draft = _save_draft(cfg, seg_id, raw)
+        raise SceneGenerationError(
+            f"segment {seg_id}: LLM output is not valid YAML ({exc}). Draft: {draft}"
+        ) from exc
+    if not isinstance(loaded, dict):
+        draft = _save_draft(cfg, seg_id, raw)
+        raise SceneGenerationError(
+            f"segment {seg_id}: LLM YAML root must be a mapping. Draft: {draft}"
+        )
+
+    merged_spec = normalize_spec_from_llm(loaded, seg_id=seg_id, class_name=class_name)
+    merged_spec = auto_fit_row_widths(merged_spec)
+    merged_spec = auto_paginate(merged_spec)
+    merged_spec = sanitize_pacing_conflicts(merged_spec)
+    try:
+        validate_scene_spec(merged_spec, path_label=f"segment {seg_id}")
+    except SceneSpecError as exc:
+        draft = _save_draft(cfg, seg_id, body)
+        raise SceneGenerationError(
+            f"segment {seg_id}: scene spec invalid: {exc}. Draft: {draft}"
+        ) from exc
+
+    budget_issues = layout_budget_violations(merged_spec)
+    if budget_issues:
+        draft = _save_draft(cfg, seg_id, body)
+        joined = "\n  ".join(budget_issues)
+        raise SceneGenerationError(
+            f"segment {seg_id}: scene spec exceeds frame budget:\n  {joined}\nDraft: {draft}"
+        )
+
+    if enforce_density and getattr(cfg, "subject_beat_coverage_enabled", True):
+        density_issues = layout_density_violations(
+            merged_spec,
+            narration_text=narration_text,
+            word_count=word_count,
+            slack=density_slack,
+        )
+        if density_issues:
+            draft = _save_draft(cfg, seg_id, body)
+            joined = "\n  ".join(density_issues)
+            raise SceneGenerationError(
+                f"segment {seg_id}: scene spec failed subject-beat coverage:\n  {joined}\nDraft: {draft}"
+            )
+
+    try:
+        _, _ = linted_class_block_from_spec(cfg, merged_spec, timing_key=seg_name)
+    except SceneGenerationError as exc:
+        draft = _save_draft(cfg, seg_id, body)
+        raise SceneGenerationError(f"{exc} Draft: {draft}") from exc
+    return merged_spec
+
+
 def generate_scene_spec(
     cfg: Config,
     seg_id: str,
@@ -374,6 +471,7 @@ def generate_scene_spec(
     from docgen.manim_scene_support import build_timing_enrichment_for_prompt
 
     timing_block = build_timing_enrichment_for_prompt(cfg, seg_id, seg_name, whisper_segments)
+    word_count = len(_load_timing_words(cfg, seg_name))
 
     scenes_path = cfg.animations_dir / "scenes.py"
     existing = scenes_path.read_text(encoding="utf-8") if scenes_path.exists() else ""
@@ -391,6 +489,7 @@ def generate_scene_spec(
         extra_hints=extra_hints,
         reference_scenes=reference_scenes,
         source_snippets=snippets,
+        word_count=word_count,
     )
 
     if dry_run:
@@ -411,56 +510,74 @@ def generate_scene_spec(
         else float(settings.temperature or DEFAULT_SCENE_SPEC_TEMPERATURE)
     )
     invoke = llm or _invoke_llm
-    try:
-        raw = invoke(
-            system_prompt=system_prompt,
-            user_message=user_message,
-            model=model,
-            temperature=temperature,
-        )
-    except RuntimeError as exc:
-        raise SceneGenerationError(
-            f"OpenAI/chat call failed ({exc}). "
-            "Check OPENAI_API_KEY, set DOCGEN_ENV_OVERRIDES=1 to load the bundle env_file, "
-            "or use --dry-run to inspect the prompt only."
-        ) from exc
-    body = strip_yaml_fences(raw)
-    try:
-        loaded = yaml.safe_load(body)
-    except yaml.YAMLError as exc:
-        draft = _save_draft(cfg, seg_id, raw)
-        raise SceneGenerationError(
-            f"segment {seg_id}: LLM output is not valid YAML ({exc}). Draft: {draft}"
-        ) from exc
-    if not isinstance(loaded, dict):
-        draft = _save_draft(cfg, seg_id, raw)
-        raise SceneGenerationError(
-            f"segment {seg_id}: LLM YAML root must be a mapping. Draft: {draft}"
-        )
-
-    merged_spec = normalize_spec_from_llm(loaded, seg_id=seg_id, class_name=class_name)
-    try:
-        validate_scene_spec(merged_spec, path_label=f"segment {seg_id}")
-    except SceneSpecError as exc:
-        draft = _save_draft(cfg, seg_id, body)
-        raise SceneGenerationError(
-            f"segment {seg_id}: scene spec invalid: {exc}. Draft: {draft}"
-        ) from exc
-
-    budget_issues = layout_budget_violations(merged_spec)
-    if budget_issues:
-        draft = _save_draft(cfg, seg_id, body)
-        joined = "\n  ".join(budget_issues)
-        raise SceneGenerationError(
-            f"segment {seg_id}: scene spec exceeds frame budget:\n  {joined}\nDraft: {draft}"
-        )
-
-    try:
-        _, _ = linted_class_block_from_spec(cfg, merged_spec, timing_key=seg_name)
-    except SceneGenerationError as exc:
-        draft = _save_draft(cfg, seg_id, body)
-        # linted_class_block_from_spec message already describes failure
-        raise SceneGenerationError(f"{exc} Draft: {draft}") from exc
+    n_beats = len(cluster_subject_beats(narration_sentences(narration_text)))
+    # Near-miss: allow a couple uncovered beats after retry, not a blind label quota.
+    near_miss_slack = max(1, n_beats // 8) if n_beats else 0
+    raw = ""
+    merged_spec: dict[str, Any] = {}
+    last_sparse: SceneGenerationError | None = None
+    for attempt in range(3):
+        msg = user_message
+        if attempt > 0 and last_sparse is not None:
+            msg = (
+                f"{user_message}\n\n--- RETRY: SUBJECT-BEAT COVERAGE FAILED ---\n"
+                f"{last_sparse}\n"
+                f"Cover each of the {n_beats} subject beats with a spoken-phrase label. "
+                "Hold the board across sentences in the same beat; add a new label only "
+                "when the topic shifts. Do not invent unspoken diagram terms."
+            )
+        try:
+            raw = invoke(
+                system_prompt=system_prompt,
+                user_message=msg,
+                model=model,
+                temperature=min(0.9, temperature + 0.15 * attempt),
+            )
+        except RuntimeError as exc:
+            raise SceneGenerationError(
+                f"OpenAI/chat call failed ({exc}). "
+                "Check OPENAI_API_KEY, set DOCGEN_ENV_OVERRIDES=1 to load the bundle env_file, "
+                "or use --dry-run to inspect the prompt only."
+            ) from exc
+        try:
+            merged_spec = _parse_and_harden_llm_spec(
+                cfg,
+                seg_id=seg_id,
+                class_name=class_name,
+                seg_name=seg_name,
+                narration_text=narration_text,
+                word_count=word_count,
+                raw=raw,
+                enforce_density=True,
+                density_slack=0,
+            )
+            last_sparse = None
+            break
+        except SceneGenerationError as exc:
+            if "subject-beat coverage" not in str(exc):
+                raise
+            # Near-miss: accept without another LLM call when close enough.
+            try:
+                merged_spec = _parse_and_harden_llm_spec(
+                    cfg,
+                    seg_id=seg_id,
+                    class_name=class_name,
+                    seg_name=seg_name,
+                    narration_text=narration_text,
+                    word_count=word_count,
+                    raw=raw,
+                    enforce_density=True,
+                    density_slack=near_miss_slack,
+                )
+                last_sparse = None
+                break
+            except SceneGenerationError as near:
+                if "subject-beat coverage" not in str(near) or attempt >= 2:
+                    raise
+                last_sparse = near
+                continue
+    if last_sparse is not None:
+        raise last_sparse
 
     yaml_text = spec_to_yaml_text(merged_spec)
     return SceneSpecGenerationResult(
@@ -469,6 +586,6 @@ def generate_scene_spec(
         class_name=class_name,
         spec=merged_spec,
         yaml_text=yaml_text,
-        prompt=user_message,
+        prompt=f"--- system ---\n{system_prompt}\n\n--- user ---\n{user_message}",
         raw_response=raw,
     )

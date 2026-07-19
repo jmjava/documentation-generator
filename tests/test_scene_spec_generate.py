@@ -50,19 +50,19 @@ title:
 rows:
   - run_time: 1.2
     boxes:
-      - label: "Box A"
+      - label: "Hello"
         color: C_ORANGE
         width: 4.0
         height: 1.0
         font_size: 20
   - run_time: 1.0
     boxes:
-      - label: "Left"
+      - label: "world"
         color: C_BLUE
         width: 3.0
         height: 1.0
         font_size: 18
-      - label: "Right"
+      - label: "Hello world"
         color: C_TEAL
         width: 3.0
         height: 1.0
@@ -93,7 +93,7 @@ def test_generate_scene_spec_normalizes_ids_and_compiles(tmp_path: Path) -> None
     assert result.class_name == "ExtrasScene"
     assert result.spec["segment_id"] == "08"
     assert result.spec["class_name"] == "ExtrasScene"
-    assert "Box A" in result.yaml_text
+    assert "Hello" in result.yaml_text
     assert "timing_key" not in result.spec
 
 
@@ -108,8 +108,71 @@ def test_generate_scene_spec_dry_run_no_llm(tmp_path: Path) -> None:
     )
     assert "Synthetic" not in result.prompt  # user message uses narration
     assert "Hello world" in result.prompt
+    assert "SUBJECT BEATS" in result.prompt
     assert "--- system ---" in result.prompt
     assert result.yaml_text == ""
+
+
+def test_generate_scene_spec_retries_when_sparse(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    # Distinct topics → multiple subject beats. MOCK labels (Box A/Left/Right) cover none.
+    (tmp_path / "narration" / "08-extras.md").write_text(
+        "# Demo\n\n"
+        "Alpha lands first on the runway. "
+        "Bravo follows with a separate cargo drop. "
+        "Charlie closes the triad with radio checks. "
+        "Delta keeps the convoy moving east. "
+        "Echo wraps the beat near the river. "
+        "Foxtrot continues onward past the ridge. "
+        "Golf arrives later at the hangar. "
+        "Hotel finishes the set after sunset.\n",
+        encoding="utf-8",
+    )
+    calls = {"n": 0}
+
+    def fake_llm(**_kwargs: object) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return MOCK_LLM_YAML  # invented labels; beats uncovered
+        return """```yaml
+segment_id: "08"
+class_name: ExtrasScene
+title:
+  text: "Dense"
+  font_size: 36
+  color: C_WHITE
+pages:
+  - rows:
+      - run_time: 0.8
+        boxes:
+          - {label: "Alpha lands", color: C_ORANGE, width: 4.0, height: 0.9, font_size: 18}
+          - {label: "Bravo follows", color: C_BLUE, width: 4.0, height: 0.9, font_size: 18}
+      - run_time: 0.8
+        boxes:
+          - {label: "Charlie closes", color: C_TEAL, width: 4.0, height: 0.9, font_size: 18}
+          - {label: "Delta keeps", color: C_GREEN, width: 4.0, height: 0.9, font_size: 18}
+  - rows:
+      - run_time: 0.8
+        boxes:
+          - {label: "Echo wraps", color: C_PURPLE, width: 4.0, height: 0.9, font_size: 18}
+          - {label: "Foxtrot continues", color: C_ORANGE, width: 4.0, height: 0.9, font_size: 18}
+      - run_time: 0.8
+        boxes:
+          - {label: "Golf arrives", color: C_BLUE, width: 4.0, height: 0.9, font_size: 18}
+          - {label: "Hotel finishes", color: C_TEAL, width: 4.0, height: 0.9, font_size: 18}
+```"""
+
+    result = generate_scene_spec(
+        cfg,
+        "08",
+        extra_paths=[],
+        extra_hints=[],
+        dry_run=False,
+        llm=fake_llm,
+    )
+    assert calls["n"] == 2
+    assert result.spec["segment_id"] == "08"
+    assert "Hotel finishes" in result.yaml_text
 
 
 def test_generate_scene_spec_fails_loud_when_narration_missing(tmp_path: Path) -> None:
