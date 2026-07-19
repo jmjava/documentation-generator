@@ -95,6 +95,19 @@ def _spec_pages_rows(spec: dict[str, Any]) -> list[list[dict[str, Any]]]:
     return []
 
 
+def iter_image_elements(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """All **image elements** (boxes with an ``image:`` key) across rows/pages, in order."""
+    out: list[dict[str, Any]] = []
+    for rows in _spec_pages_rows(spec):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for box in row.get("boxes") or []:
+                if _is_image_element(box):
+                    out.append(box)
+    return out
+
+
 def _row_height(row: dict[str, Any]) -> float:
     boxes = row.get("boxes")
     if not isinstance(boxes, list) or not boxes:
@@ -386,6 +399,10 @@ def sync_row_labels_to_whisper_words(
                 if not isinstance(box, dict):
                     continue
                 box.pop("wait_at", None)
+                if box.get("image") is not None and not str(box.get("label", "")).strip():
+                    # Unlabeled image element: no transcript anchor to re-derive from,
+                    # so keep any author-provided wait_word as-is.
+                    continue
                 if not overwrite and box.get("wait_word") is not None:
                     found = _find_label(str(box.get("label", "")), cursor)
                     if found is not None:
@@ -591,6 +608,39 @@ def load_scene_spec(path: Path) -> dict[str, Any]:
     return data
 
 
+def _is_image_element(box: Any) -> bool:
+    """True when a ``boxes`` entry is an **image element** (``image:`` key) instead of a labeled box."""
+    return isinstance(box, dict) and box.get("image") is not None
+
+
+def _validate_image_element(box: dict[str, Any], *, bp: str) -> None:
+    img = box.get("image")
+    if not isinstance(img, str) or not img.strip():
+        raise SceneSpecError(f"{bp}: image must be a non-empty bundle-relative path string")
+    p = Path(img.strip())
+    if p.is_absolute() or ".." in p.parts:
+        raise SceneSpecError(
+            f"{bp}: image path must be relative to the bundle directory (no absolute paths or '..')"
+        )
+    for fld in ("width", "height"):
+        if fld not in box:
+            raise SceneSpecError(f"{bp}: missing {fld}")
+        v = box[fld]
+        if not isinstance(v, (int, float)) or v <= 0:
+            raise SceneSpecError(f"{bp}: {fld} must be a positive number")
+    for fld in ("color", "font_size"):
+        if fld in box:
+            raise SceneSpecError(
+                f"{bp}: {fld} is not allowed on an image element (only label boxes take {fld})"
+            )
+    prompt = box.get("prompt")
+    if prompt is not None and (not isinstance(prompt, str) or not prompt.strip()):
+        raise SceneSpecError(f"{bp}: prompt must be a non-empty string if set")
+    lab = box.get("label")
+    if lab is not None and not isinstance(lab, str):
+        raise SceneSpecError(f"{bp}: label must be a string if set (used as timing anchor only)")
+
+
 def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None:
     for i, row in enumerate(rows):
         rp = f"{path_label}: {prefix}[{i}]"
@@ -637,6 +687,9 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                 raise SceneSpecError(f"{bp}: wait_word must be a non-negative int or null")
             if bww is not None:
                 box_pacing = True
+            if _is_image_element(box):
+                _validate_image_element(box, bp=bp)
+                continue
             for fld in ("label", "color", "width", "height", "font_size"):
                 if fld not in box:
                     raise SceneSpecError(f"{bp}: missing {fld}")
@@ -805,14 +858,25 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
 
     for p, page in enumerate(pages):
         rows = page["rows"]
+        page_has_image = any(
+            _is_image_element(box)
+            for row in rows
+            for box in (row.get("boxes") or [])
+        )
         for r, row in enumerate(rows):
             boxes_raw = row["boxes"]
             for b, box in enumerate(boxes_raw):
                 var = f"_bx_{p}_{r}_{b}"
-                lab = str(box["label"])
-                col = str(box["color"])
                 w = float(box["width"])
                 h = float(box["height"])
+                if _is_image_element(box):
+                    rel = str(box["image"]).strip()
+                    lines.append(
+                        f"        {var} = _image({rel!r}, {w}, {h})"
+                    )
+                    continue
+                lab = str(box["label"])
+                col = str(box["color"])
                 fs = int(box["font_size"])
                 lines.append(
                     f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs})"
@@ -822,18 +886,22 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
             boxes_raw = row["boxes"]
             box_names = [f"_bx_{p}_{r}_{b}" for b in range(len(boxes_raw))]
             row_var = f"_row_{p}_{r}"
+            # ImageMobject is not a VMobject, so any row (and its page stack)
+            # containing an image element must use Group instead of VGroup.
+            container = "Group" if page_has_image else "VGroup"
             if len(box_names) == 1:
-                lines.append(f"        {row_var} = VGroup({box_names[0]})")
+                lines.append(f"        {row_var} = {container}({box_names[0]})")
             else:
                 joined = ", ".join(box_names)
                 lines.append(
-                    f"        {row_var} = VGroup({joined}).arrange(RIGHT, buff={column_gap})"
+                    f"        {row_var} = {container}({joined}).arrange(RIGHT, buff={column_gap})"
                 )
 
         row_refs = ", ".join(f"_row_{p}_{r}" for r in range(len(rows)))
         stack_var = f"_p{p}_stack"
+        stack_container = "Group" if page_has_image else "VGroup"
         lines.append(
-            f"        {stack_var} = VGroup({row_refs}).arrange(DOWN, buff={row_gap}, center=True)"
+            f"        {stack_var} = {stack_container}({row_refs}).arrange(DOWN, buff={row_gap}, center=True)"
         )
         lines.append(
             f"        {stack_var}.next_to(title, DOWN, buff={first_row_title_buff})"

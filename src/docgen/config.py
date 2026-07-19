@@ -127,6 +127,40 @@ class Config:
             "You are narrating a technical demo video. Speak in a calm, professional tone.",
         )
 
+    # -- Timestamps ---------------------------------------------------------------
+
+    @property
+    def timestamps_config(self) -> dict[str, Any]:
+        """Engine + tuning for ``docgen timestamps``.
+
+        ``engine: local`` (default) aligns the known narration text against the
+        mp3 offline (ffmpeg silencedetect); ``engine: whisper`` transcribes via
+        OpenAI whisper-1 (network + API key).
+        """
+        defaults: dict[str, Any] = {
+            "engine": "local",
+            "silence_noise_db": -35.0,
+            "min_silence_sec": 0.3,
+        }
+        defaults.update(self.raw.get("timestamps", {}) or {})
+        return defaults
+
+    # -- Image generation (scene-spec image elements) ----------------------------
+
+    @property
+    def image_generation_config(self) -> dict[str, Any]:
+        """Settings for ``docgen image-generate`` (OpenAI Images API).
+
+        ``quality`` is passed through only when set (model-specific values,
+        e.g. ``low`` / ``medium`` / ``high`` for gpt-image-1).
+        """
+        defaults: dict[str, Any] = {
+            "model": "gpt-image-1",
+            "size": "1536x1024",
+        }
+        defaults.update(self.raw.get("image_generation", {}) or {})
+        return defaults
+
     # -- Manim -----------------------------------------------------------------
 
     @property
@@ -230,8 +264,27 @@ class Config:
             "enabled": True,
             "tolerance_sec": 3.0,
             "min_anchors_per_segment": 2,
+            # Only OCR-anchor these visual types (on-screen text expected).
+            "visual_types": ["manim"],
         }
         defaults.update(self.raw.get("validation", {}).get("av_sync", {}))
+        return defaults
+
+    @property
+    def timing_sync_config(self) -> dict[str, Any]:
+        """Audio ↔ timing.json consistency check (``docgen validate`` ``timing_sync``).
+
+        ``max_tail_gap_sec``: how much longer the mp3 may run past the last
+        transcribed word/segment end before timing.json is considered stale.
+        ``max_end_overrun_sec``: how far the transcript may extend past the mp3
+        duration (stale timing from a longer, older take).
+        """
+        defaults: dict[str, Any] = {
+            "enabled": True,
+            "max_tail_gap_sec": 3.0,
+            "max_end_overrun_sec": 1.0,
+        }
+        defaults.update(self.raw.get("validation", {}).get("timing_sync", {}))
         return defaults
 
     @property

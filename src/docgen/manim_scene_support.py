@@ -181,6 +181,26 @@ def _arrow(start, end, color="#cdd6f4"):
     return Arrow(start, end, color=color, stroke_width=2, buff=0.15, max_tip_length_to_length_ratio=0.12)
 
 
+def _image(relpath, w=3.0, h=2.0):
+    """ImageMobject for a bundle-relative asset, scaled to fit inside w x h.
+
+    ``relpath`` is relative to the bundle directory (parent of animations/),
+    e.g. ``images/architecture.png``. Assets are produced by
+    ``docgen image-generate`` from scene-spec prompts. Fails loud when the
+    file is missing so a scene never renders with a silent gap.
+    """
+    p = Path(__file__).resolve().parent.parent / relpath
+    if not p.is_file():
+        raise FileNotFoundError(
+            f"scene image asset missing: {p} - run `docgen image-generate` "
+            "(or add the file) before `docgen manim`."
+        )
+    img = ImageMobject(str(p))
+    scale = min(w / max(img.width, 1e-6), h / max(img.height, 1e-6))
+    img.scale(scale)
+    return img
+
+
 class _TimedScene(Scene):
     """Base with a clock that tracks elapsed scene time."""
 
@@ -1079,6 +1099,47 @@ def sync_audio_tail_waits_in_scenes(cfg: "Config") -> list[str]:
     if changes:
         scenes_path.write_text(text, encoding="utf-8")
     return changes
+
+
+def _bootstrap_helper_source(name: str) -> str:
+    """Extract one top-level helper definition from :data:`BOOTSTRAP_HEADER` by name."""
+    tree = ast.parse(BOOTSTRAP_HEADER)
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            segment = ast.get_source_segment(BOOTSTRAP_HEADER, node)
+            if segment:
+                return segment
+    raise SceneGenerationError(f"bootstrap helper {name!r} not found in BOOTSTRAP_HEADER")
+
+
+def ensure_image_helper(scenes_path: Path) -> bool:
+    """Append the canonical ``_image`` helper to an existing ``scenes.py`` when missing.
+
+    Bundles bootstrapped before image-element support lack ``_image``; compiled
+    scenes that reference image elements need it at module scope. Appending at
+    the end of the file is safe because the helper is only resolved when
+    ``construct`` runs. Returns True when the file was modified.
+    """
+    text = scenes_path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise SceneGenerationError(
+            f"{scenes_path} did not parse as Python ({exc.msg} at line {exc.lineno}); "
+            "fix the file before compiling image scenes."
+        ) from exc
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "_image":
+            return False
+    helper = _bootstrap_helper_source("_image")
+    if not text.endswith("\n"):
+        text += "\n"
+    text += (
+        "\n\n# docgen: canonical image helper (added for image scene elements)\n"
+        f"{helper}\n"
+    )
+    scenes_path.write_text(text, encoding="utf-8")
+    return True
 
 
 def ensure_scenes_bootstrap(scenes_path: Path) -> None:

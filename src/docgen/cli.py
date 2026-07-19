@@ -182,13 +182,26 @@ def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
 
 
 @main.command()
+@click.option(
+    "--engine",
+    default=None,
+    type=click.Choice(["local", "whisper"]),
+    help=(
+        "Timing engine (default: timestamps.engine in docgen.yaml, local). "
+        "local = offline narration-text alignment via ffmpeg silencedetect; "
+        "whisper = OpenAI whisper-1 transcription."
+    ),
+)
 @click.pass_context
-def timestamps(ctx: click.Context) -> None:
-    """Extract Whisper timestamps from TTS audio -> timing.json."""
+def timestamps(ctx: click.Context, engine: str | None) -> None:
+    """Extract word/segment timestamps from TTS audio -> timing.json."""
     from docgen.timestamps import TimestampExtractor
 
     cfg = ctx.obj["config"]
-    TimestampExtractor(cfg).extract_all()
+    try:
+        TimestampExtractor(cfg).extract_all(engine=engine)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
@@ -683,6 +696,115 @@ def scene_spec_generate_cmd(
             f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
             f"({result.class_name}, timing_key {result.seg_name!r})"
         )
+
+
+@main.command("image-generate")
+@click.option(
+    "--segment",
+    default=None,
+    help="Segment id (e.g. 01) — uses animations/specs/<stem>.scene.yaml. Mutually exclusive with --all/--spec.",
+)
+@click.option(
+    "--all",
+    "all_segments",
+    is_flag=True,
+    help="Process every animations/specs/*.scene.yaml in the bundle.",
+)
+@click.option(
+    "--spec",
+    "spec_path",
+    default=None,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Explicit path to one *.scene.yaml.",
+)
+@click.option("--force", is_flag=True, help="Regenerate assets that already exist.")
+@click.option("--dry-run", is_flag=True, help="List prompts and target paths; do not call OpenAI.")
+@click.option(
+    "--model",
+    default=None,
+    help="OpenAI image model override (default: image_generation.model in docgen.yaml, gpt-image-1).",
+)
+@click.option(
+    "--size",
+    default=None,
+    help="Image size override (default: image_generation.size in docgen.yaml, 1536x1024).",
+)
+@click.pass_context
+def image_generate_cmd(
+    ctx: click.Context,
+    segment: str | None,
+    all_segments: bool,
+    spec_path: Path | None,
+    force: bool,
+    dry_run: bool,
+    model: str | None,
+    size: str | None,
+) -> None:
+    """Generate scene-spec image assets via the OpenAI Images API.
+
+    Scene specs may declare **image elements** (``image:`` + ``prompt:`` on a
+    box). This command writes the referenced PNG under the bundle directory so
+    ``docgen manim`` can render them. Existing assets are kept unless --force.
+    """
+    if ctx.obj.get("config") is None:
+        raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    chosen = [bool(segment), all_segments, spec_path is not None]
+    if sum(chosen) != 1:
+        raise click.ClickException("provide exactly one of --segment, --all, or --spec")
+
+    from docgen.image_generate import (
+        ImageGenerationError,
+        generate_images_for_spec,
+        spec_files_for_bundle,
+    )
+    from docgen.scene_spec import SceneSpecError
+
+    cfg = ctx.obj["config"]
+
+    if spec_path is not None:
+        targets = [spec_path]
+    elif all_segments:
+        targets = spec_files_for_bundle(cfg)
+        if not targets:
+            click.echo("[image-generate] no *.scene.yaml specs found in animations/specs/")
+            return
+    else:
+        stem = cfg.resolve_segment_name(str(segment))
+        candidate = cfg.animations_dir / "specs" / f"{stem}.scene.yaml"
+        if not candidate.is_file():
+            raise click.ClickException(
+                f"spec not found: {candidate} — run `docgen scene-spec-generate --segment {segment}` "
+                "or author the spec by hand."
+            )
+        targets = [candidate]
+
+    total = 0
+    for target in targets:
+        try:
+            results = generate_images_for_spec(
+                cfg,
+                target,
+                force=force,
+                dry_run=dry_run,
+                model_override=model,
+                size_override=size,
+            )
+        except (ImageGenerationError, SceneSpecError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        if not results:
+            click.echo(f"[image-generate] {target.name}: no image elements")
+            continue
+        for res in results:
+            if res.status == "dry-run":
+                click.echo(f"[image-generate] {target.name}: would generate {res.relpath}")
+                click.echo(f"  prompt: {res.prompt}")
+            elif res.status == "exists":
+                click.echo(f"[image-generate] {target.name}: {res.relpath} exists (skip; use --force)")
+            else:
+                click.echo(f"[image-generate] {target.name}: wrote {res.path}")
+                total += 1
+    if not dry_run:
+        click.echo(f"[image-generate] generated {total} asset(s)")
 
 
 @main.command("yaml-generate")

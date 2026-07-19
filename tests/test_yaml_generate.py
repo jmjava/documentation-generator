@@ -8,12 +8,14 @@ import yaml
 
 from docgen.config import Config
 from docgen.yaml_generate import (
+    collect_hint_project_blocks,
     collect_hint_segment_declarations,
     collect_hint_wirings_by_segment,
     discover_visual_map,
     manim_scene_class_names_in_order,
     merge_defaults,
     merge_hint_declared_segments,
+    merge_hint_project,
     merge_hint_wiring,
     narration_not_in_segments,
     narration_segment_pairs,
@@ -402,6 +404,61 @@ def test_merge_hint_wiring_merges_visual_narration_manim(tmp_path: Path) -> None
     merged = cfg.raw["manim_scene_generation"]["segments"]["09"]
     assert merged["class_name"] == "WiredScene"
     assert merged["hints"] == ["keep palette"]
+
+
+def test_merge_hint_project_from_project_context(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "project-context.md").write_text(
+        "---\n"
+        "docgen:\n"
+        "  project:\n"
+        "    env_file: ../../.env\n"
+        "    discovery:\n"
+        "      auto_visual_map: false\n"
+        "    narration_from_source:\n"
+        "      hints:\n"
+        "        - Prefer milestone docs over stale narration.\n"
+        "      context:\n"
+        "        paths:\n"
+        "          - README.md\n"
+        "          - milestones/milestone-14.md\n"
+        "    concat:\n"
+        "      full-demo-complete:\n"
+        "        - \"01\"\n"
+        "        - \"19\"\n"
+        "---\n\n# Project context\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+            "hints": "hints",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "discovery": {"auto_visual_map": True},
+        "narration_from_source": {
+            "model": "gpt-4o-mini",
+            "hints": [],
+            "context": {"paths": ["README.md"], "globs": []},
+        },
+        "concat": {"full-demo-complete": ["01", "18"]},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    blocks = collect_hint_project_blocks(cfg.hints_dir)
+    assert blocks["env_file"] == "../../.env"
+    ch = merge_hint_project(cfg.raw, cfg)
+    assert any("env_file" in x for x in ch)
+    assert cfg.raw["env_file"] == "../../.env"
+    assert cfg.raw["discovery"]["auto_visual_map"] is False
+    assert "Prefer milestone docs" in cfg.raw["narration_from_source"]["hints"][0]
+    assert "milestones/milestone-14.md" in cfg.raw["narration_from_source"]["context"]["paths"]
+    assert cfg.raw["concat"]["full-demo-complete"] == ["01", "19"]
 
 
 def test_parse_hint_docgen_front_matter_returns_docgen_block(tmp_path: Path) -> None:

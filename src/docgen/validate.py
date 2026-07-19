@@ -291,9 +291,11 @@ class Validator:
             vmap = self.config.visual_map.get(seg_id, {})
             if vmap.get("type") == "manim":
                 report.checks.append(self._check_layout(rec))
+            report.checks.append(self._check_av_sync(seg_id, rec))
         else:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
+        report.checks.append(self._check_timing_sync(seg_id))
         report.checks.append(self._check_narration_lint(seg_id))
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
@@ -318,6 +320,8 @@ class Validator:
                             "ocr_scan",
                             "freeze_ratio",
                             "layout",
+                            # OCR keyword anchoring is heuristic; warn, don't block.
+                            "av_sync",
                         }
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
@@ -597,7 +601,185 @@ class Validator:
         except Exception as exc:
             return CheckResult("av_drift", False, [str(exc)])
 
+    # ── Audio ↔ timing.json sync ──────────────────────────────────────
+
+    def _check_timing_sync(self, seg_id: str) -> CheckResult:
+        """Detect stale ``timing.json`` relative to the TTS mp3 for this segment.
+
+        Scenes pace themselves from Whisper word timestamps, so a re-generated
+        mp3 with an old timing.json silently desyncs every reveal. Compares the
+        mp3 duration against the last transcribed word/segment ``end``.
+        """
+        ts_cfg = self.config.timing_sync_config
+        if not ts_cfg.get("enabled", True):
+            return CheckResult("timing_sync", True, ["validation.timing_sync disabled (skipped)"])
+
+        audio = self._find_audio(seg_id)
+        if not audio:
+            return CheckResult("timing_sync", True, [f"No audio for {seg_id} (skipped)"])
+        if _is_lfs_pointer(audio):
+            return CheckResult("timing_sync", True, ["Audio is an LFS pointer (skipped)"])
+
+        is_manim = self.config.visual_map.get(seg_id, {}).get("type") == "manim"
+        block = self._load_timing_block(seg_id)
+        if block is None:
+            if is_manim:
+                return CheckResult(
+                    "timing_sync",
+                    False,
+                    [
+                        f"audio/{audio.name} exists but timing.json has no entry for "
+                        f"{self.config.resolve_segment_name(seg_id)!r} — run `docgen timestamps`"
+                    ],
+                )
+            return CheckResult("timing_sync", True, ["No timing.json entry (skipped, non-manim)"])
+
+        last_end = self._timing_last_end(block)
+        if last_end is None:
+            if is_manim:
+                return CheckResult(
+                    "timing_sync",
+                    False,
+                    ["timing.json entry has no words/segments — re-run `docgen timestamps`"],
+                )
+            return CheckResult("timing_sync", True, ["Empty timing entry (skipped, non-manim)"])
+
+        audio_dur = self._probe_media_duration(audio)
+        if audio_dur is None:
+            return CheckResult("timing_sync", True, ["Cannot probe audio duration (skipped)"])
+
+        max_tail = float(ts_cfg.get("max_tail_gap_sec", 3.0))
+        max_overrun = float(ts_cfg.get("max_end_overrun_sec", 1.0))
+        detail = (
+            f"Audio={audio_dur:.2f}s transcript_end={last_end:.2f}s "
+            f"(max_tail_gap={max_tail}, max_end_overrun={max_overrun})"
+        )
+        if last_end > audio_dur + max_overrun:
+            return CheckResult(
+                "timing_sync",
+                False,
+                [
+                    detail,
+                    "timing.json extends past the audio — stale timestamps from a longer "
+                    "take; run `docgen timestamps` (then `docgen manim` + `docgen compose`).",
+                ],
+            )
+        if audio_dur - last_end > max_tail:
+            return CheckResult(
+                "timing_sync",
+                False,
+                [
+                    detail,
+                    "audio runs well past the last transcribed word — stale timestamps from "
+                    "a shorter take; run `docgen timestamps` (then `docgen manim` + `docgen compose`).",
+                ],
+            )
+        return CheckResult("timing_sync", True, [detail])
+
+    def _check_av_sync(self, seg_id: str, rec: Path) -> CheckResult:
+        """OCR anchor check: spoken keywords should be visible on screen near their spoken time.
+
+        Heuristic (soft in --pre-push). Uses ``timing.json`` — no network calls.
+        Skips when tesseract is unavailable, timing data is missing, or the
+        segment's visual type is not in ``validation.av_sync.visual_types``.
+        """
+        sync_cfg = self.config.av_sync_config
+        if not sync_cfg.get("enabled", True):
+            return CheckResult("av_sync", True, ["validation.av_sync disabled (skipped)"])
+
+        vt = str(self.config.visual_map.get(seg_id, {}).get("type", "")).strip().lower()
+        allowed = [str(t).strip().lower() for t in sync_cfg.get("visual_types", ["manim"])]
+        if allowed and vt not in allowed:
+            return CheckResult("av_sync", True, [f"visual type {vt!r} not checked (skipped)"])
+
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+        except Exception:
+            return CheckResult("av_sync", True, ["tesseract binary not installed (skipped)"])
+
+        block = self._load_timing_block(seg_id)
+        if block is None:
+            return CheckResult(
+                "av_sync", True, ["No timing.json entry (skipped) — run `docgen timestamps`"]
+            )
+
+        from docgen.av_sync import AVSyncValidator
+
+        report = AVSyncValidator(self.config).validate_segment_with_timing(seg_id, rec, block)
+        if report.passed:
+            details = [f"{len(report.anchors)} anchor keyword(s) visible near spoken time"]
+            return CheckResult("av_sync", True, details)
+        missing = [a for a in report.anchors if not a.visible]
+        details = [
+            f"'{a.keyword}' spoken at {a.spoken_at:.1f}s but not found on screen "
+            f"within ±{sync_cfg.get('tolerance_sec', 3.0)}s"
+            for a in missing[:5]
+        ]
+        return CheckResult("av_sync", False, details)
+
+    def _load_timing_block(self, seg_id: str) -> dict[str, Any] | None:
+        """One segment's block from ``animations/timing.json`` (keyed by narration stem)."""
+        timing_path = self.config.animations_dir / "timing.json"
+        if not timing_path.is_file():
+            return None
+        try:
+            data = json.loads(timing_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        stem = self.config.resolve_segment_name(seg_id)
+        block = data.get(stem)
+        if not isinstance(block, dict):
+            audio = self._find_audio(seg_id)
+            if audio is not None:
+                block = data.get(audio.stem)
+        return block if isinstance(block, dict) else None
+
+    @staticmethod
+    def _timing_last_end(block: dict[str, Any]) -> float | None:
+        """Latest ``end`` across words (preferred) then segments; None if neither exists."""
+        for key in ("words", "segments"):
+            entries = block.get(key)
+            if isinstance(entries, list) and entries:
+                ends: list[float] = []
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    try:
+                        ends.append(float(e.get("end", 0.0)))
+                    except (TypeError, ValueError):
+                        continue
+                if ends:
+                    return max(ends)
+        return None
+
+    @staticmethod
+    def _probe_media_duration(path: Path) -> float | None:
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "csv=p=0", str(path)],
+                capture_output=True, text=True, timeout=30,
+            )
+            return float(out.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+
     # ── Helpers ────────────────────────────────────────────────────────
+
+    def _find_audio(self, seg_id: str) -> Path | None:
+        d = self.config.audio_dir
+        if not d.exists():
+            return None
+        seg_name = self.config.resolve_segment_name(seg_id)
+        exact = d / f"{seg_name}.mp3"
+        if exact.exists():
+            return exact
+        for mp3 in d.glob(f"{seg_id}-*.mp3"):
+            return mp3
+        for mp3 in d.glob(f"*{seg_id}*.mp3"):
+            return mp3
+        return None
 
     def _find_narration(self, seg_id: str) -> Path | None:
         d = self.config.narration_dir

@@ -34,20 +34,36 @@ class AVSyncValidator:
     def validate_segment(
         self, seg_id: str, video_path: str | Path, audio_path: str | Path
     ) -> AVSyncReport:
+        """Transcribe ``audio_path`` via Whisper (network call), then anchor-check.
+
+        Prefer :meth:`validate_segment_with_timing` with data from the bundle's
+        ``timing.json`` so validation stays offline.
+        """
+        if not self.sync_cfg.get("enabled", True):
+            return AVSyncReport(segment=seg_id)
+
+        from docgen.timestamps import TimestampExtractor
+
+        extractor = TimestampExtractor(self.config)
+        ts_data = extractor.extract(str(audio_path))
+        return self.validate_segment_with_timing(seg_id, video_path, ts_data)
+
+    def validate_segment_with_timing(
+        self, seg_id: str, video_path: str | Path, ts_data: dict[str, Any]
+    ) -> AVSyncReport:
+        """OCR-check that spoken anchor keywords appear on screen near their spoken time.
+
+        ``ts_data`` is one segment's block from ``timing.json`` (``words`` list
+        with ``word``/``start``). No network calls.
+        """
         if not self.sync_cfg.get("enabled", True):
             return AVSyncReport(segment=seg_id)
 
         import cv2
         import pytesseract
 
-        from docgen.timestamps import TimestampExtractor
-
         report = AVSyncReport(segment=seg_id)
         tolerance = self.sync_cfg.get("tolerance_sec", 3.0)
-
-        # Get transcript with timestamps
-        extractor = TimestampExtractor(self.config)
-        ts_data = extractor.extract(str(audio_path))
 
         # Extract anchor keywords from configured or auto-detect
         anchors = self._get_anchors(seg_id, ts_data)

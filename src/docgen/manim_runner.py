@@ -124,12 +124,15 @@ class ManimRunner:
         return None
 
     def _quality_args(self) -> tuple[list[str], str]:
+        # Render-only flags: never pass -p (preview). Preview opens a GUI player
+        # and fails with "Unable to create a GL context" on headless servers/CI;
+        # compose reads the mp4 from animations/media/ directly.
         q = str(self.config.manim_quality).strip().lower()
         preset_map = {
-            "480p15": (["-pql"], "480p15 (-pql)"),
-            "720p30": (["-pqm"], "720p30 (-pqm)"),
-            "1080p60": (["-pqh"], "1080p60 (-pqh)"),
-            "2160p60": (["-pqp"], "2160p60 (-pqp)"),
+            "480p15": (["-ql"], "480p15 (-ql)"),
+            "720p30": (["-qm"], "720p30 (-qm)"),
+            "1080p60": (["-qh"], "1080p60 (-qh)"),
+            "2160p60": (["-qp"], "2160p60 (-qp)"),
         }
         if q in preset_map:
             return preset_map[q]
@@ -148,6 +151,6 @@ class ManimRunner:
 
         print(
             f"[manim] WARNING: quality '{self.config.manim_quality}' not recognized; "
-            "falling back to 720p30 (-pqm)."
+            "falling back to 720p30 (-qm)."
         )
-        return (["-pqm"], "720p30 (-pqm fallback)")
+        return (["-qm"], "720p30 (-qm fallback)")

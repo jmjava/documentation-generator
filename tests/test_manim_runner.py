@@ -34,7 +34,7 @@ def test_quality_720p30_uses_preset_flag(tmp_path: Path) -> None:
     cfg = _config_with_quality(tmp_path, "720p30")
     runner = ManimRunner(cfg)
     args, label = runner._quality_args()
-    assert args == ["-pqm"]
+    assert args == ["-qm"]
     assert "720p30" in label
 
 
@@ -42,7 +42,16 @@ def test_quality_unknown_falls_back(tmp_path: Path) -> None:
     cfg = _config_with_quality(tmp_path, "banana")
     runner = ManimRunner(cfg)
     args, _label = runner._quality_args()
-    assert args == ["-pqm"]
+    assert args == ["-qm"]
+
+
+def test_quality_args_never_include_preview_flag(tmp_path: Path) -> None:
+    """-p opens a GUI player; headless servers fail with 'Unable to create a GL context'."""
+    for quality in ("480p15", "720p30", "1080p60", "2160p60", "1080p30", "banana"):
+        cfg = _config_with_quality(tmp_path, quality)
+        args, _label = ManimRunner(cfg)._quality_args()
+        assert "-p" not in args
+        assert not any(a.startswith("-p") for a in args), (quality, args)
 
 
 def test_resolve_manim_binary_from_config_path(tmp_path: Path) -> None:

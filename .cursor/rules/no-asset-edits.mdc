@@ -29,6 +29,7 @@ C. **LLM/tool OUTPUTS in a consumer bundle — Cursor MUST NOT edit; only `docge
 - `<bundle>/animations/scenes.py`, `<bundle>/animations/timing.json` (owner: **`scene-compile`**, **`scene-spec-generate`**, **`timestamps`**, pipeline)
 - `<bundle>/animations/specs/*.scene.yaml` — declarative Manim scene specs
 - `<bundle>/audio/*.mp3` (owner: **`tts`**)
+- `<bundle>/images/*.png` scene image assets (owner: **`image-generate`** from scene-spec prompts)
 - `<bundle>/recordings/**` (owner: **`compose`**, **`generate-all`**, etc., per bundle policy)
 
 If a generator can't produce shippable output yet, **fix the generator** under

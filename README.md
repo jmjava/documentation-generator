@@ -32,8 +32,12 @@ If you still need the legacy behaviour, pin a pre-removal commit
 
 - **TTS narration** — generate MP3 audio from Markdown scripts via OpenAI
   `gpt-4o-mini-tts`.
-- **Whisper-aligned timestamps** — extract word-level timing from TTS audio so
-  visual cues can wait on real speech.
+- **Word-level timestamps without Whisper** — the default `local` engine aligns
+  the known narration text against the TTS mp3 offline (ffmpeg `silencedetect`
+  + proportional interpolation); no API call or transcription. OpenAI
+  `whisper-1` remains available via `timestamps.engine: whisper` /
+  `docgen timestamps --engine whisper`. Both engines write the same
+  `timing.json` shape.
 - **Manim animations** — primary visual surface. Use **`docgen scene-spec-generate`**
   + **`scene-compile`** (or hand-maintained **`animations/specs/*.scene.yaml`**)
   for deterministic diagram layout: rows are auto-paginated when they exceed the
@@ -41,10 +45,17 @@ If you still need the legacy behaviour, pin a pre-removal commit
   (when `timing.json` carries Whisper words) each row’s first label is mapped to
   a **`wait_word`** index. Hand-maintained custom Manim classes still live in
   `animations/scenes.py` outside the `BEGIN/END GENERATED SCENE` markers.
+- **OpenAI image assets in Manim scenes** — a scene-spec box may be an **image
+  element** (`image: images/<name>.png` + `prompt:`); `docgen image-generate`
+  renders the prompt via the OpenAI Images API (default `gpt-image-1`) and the
+  compiled scene shows it with the `_image` helper (`ImageMobject`, `Group`
+  rows). `generate-all` fills in missing assets automatically.
 - **ffmpeg composition** — combine narration audio and Manim video into final
   segments, with a freeze-tail guard.
 - **Validation** — A/V drift, freeze ratio, OCR error scan, layout, narration lint,
-  Manim scene lint.
+  Manim scene lint, **timing_sync** (stale `timing.json` vs regenerated mp3 —
+  hard fail), and **av_sync** (OCR check that spoken anchor keywords appear on
+  screen near their spoken time — soft warning).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
   `.gitignore`.
 - **Wizard** — local web GUI to bootstrap narration scripts from existing project
@@ -91,7 +102,8 @@ docgen validate --pre-push
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a new project: `docgen.yaml`, wrapper scripts, directories |
 | `docgen wizard [--port 8501]` | Launch narration setup wizard (local web GUI) |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
-| `docgen timestamps` | Extract Whisper timestamps from TTS audio → `timing.json` |
+| `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
+| `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
@@ -164,6 +176,24 @@ narration_from_source:
 validation:
   max_drift_sec: 2.75
   max_freeze_ratio: 0.25     # trailing-frame pad vs narration length (compose freeze guard + validate)
+  timing_sync:               # audio ↔ timing.json staleness (hard fail in --pre-push)
+    enabled: true
+    max_tail_gap_sec: 3.0    # mp3 may run this much past the last transcribed word
+    max_end_overrun_sec: 1.0 # transcript may extend this far past the mp3
+  av_sync:                   # OCR anchor check (soft warning in --pre-push)
+    enabled: true
+    tolerance_sec: 3.0
+    visual_types: [manim]    # only check types with on-screen text
+
+timestamps:
+  engine: local              # local (default, offline) or whisper (OpenAI whisper-1)
+  silence_noise_db: -35.0    # ffmpeg silencedetect threshold for the local engine
+  min_silence_sec: 0.3
+
+image_generation:            # scene-spec image elements (docgen image-generate)
+  model: gpt-image-1
+  size: 1536x1024
+  # quality: high            # optional, model-specific
 
 manim:
   quality: 1080p30           # supports 480p15, 720p30, 1080p30, 1080p60, 1440p30, 1440p60, 2160p60

@@ -75,6 +75,15 @@ Each row must have:
   - height: positive number (typical 0.65–1.1; **smaller when a page has many rows**)
   - font_size: int >= 14
 
+Optional **image elements** (only when project-owner hints ask for generated imagery): a ``boxes`` entry
+may instead be an image element with:
+  - image: bundle-relative asset path, e.g. ``images/<short-name>.png`` (no absolute paths, no "..")
+  - width / height: positive numbers (frame budget rules above apply; images count like boxes)
+  - prompt: string — a clear visual description; ``docgen image-generate`` renders it via the OpenAI Images API
+  - label: optional single word from the narration used as the timing anchor for the reveal
+Image elements must NOT carry ``color`` or ``font_size``. Prefer labeled boxes for diagrams; use images
+only for illustrative artwork the hints explicitly request.
+
 Optional per-box (**Whisper ``words`` only**); omit if unsure — compile fills from each box ``label`` → first transcript match:
 - wait_word: non-negative int — index into ``timing.json`` → ``words``; that box waits until that token's **start**, then fades in (**one box at a time** within each row).
 
@@ -314,11 +323,18 @@ def inject_class_block_into_scenes_py(
     class_name: str,
     class_block: str,
 ) -> Path:
-    from docgen.manim_scene_support import SceneGenerationError, ensure_scenes_bootstrap, inject_or_replace
+    from docgen.manim_scene_support import (
+        SceneGenerationError,
+        ensure_image_helper,
+        ensure_scenes_bootstrap,
+        inject_or_replace,
+    )
 
     scenes_path = cfg.animations_dir / "scenes.py"
     try:
         ensure_scenes_bootstrap(scenes_path)
+        if "_image(" in class_block:
+            ensure_image_helper(scenes_path)
     except SceneGenerationError as exc:
         raise SceneGenerationError(str(exc)) from exc
     text = scenes_path.read_text(encoding="utf-8")

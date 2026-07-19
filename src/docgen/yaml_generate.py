@@ -15,7 +15,11 @@ This does **not** replace an entire ``docgen.yaml`` in one shot. It:
    Optional ``docgen.wiring`` in the same front matter merges ``visual_map``, ``narration_from_source.segments``,
    and ``manim_scene_generation.segments`` after disk discovery (see ``merge_hint_wiring``) — **avoid hand-editing**
    those keys for hint-driven segments; run ``yaml-generate`` after editing hints.
-6. Optionally calls **OpenAI** to draft ``tts.instructions`` and ``wizard.system_prompt``.
+6. **Project-level hints** from ``hints/*.md`` front matter with ``docgen.project`` (typically
+   ``project-context.md``) merge ``env_file``, top-level ``narration_from_source`` /
+   ``manim_scene_generation`` blocks, optional ``concat``, and ``discovery`` (see
+   ``merge_hint_project``).
+7. Optionally calls **OpenAI** to draft ``tts.instructions`` and ``wizard.system_prompt``.
 
 Writing the file uses PyYAML: **YAML comments and key order in the original file are
 not preserved.** Prefer version control for review; keep hand-maintained prose in Git
@@ -140,6 +144,7 @@ def merge_defaults(
         changes.append("manim_scene_generation: added minimal skeleton")
 
     if merge_hint_segments:
+        changes.extend(merge_hint_project(raw, cfg))
         changes.extend(merge_hint_declared_segments(raw, cfg))
 
     changes.extend(discover_visual_map(raw, cfg))
@@ -218,6 +223,59 @@ def collect_hint_segment_declarations(hints_dir: Path) -> dict[str, str]:
         if sid not in out:
             out[sid] = stem
     return out
+
+
+def collect_hint_project_blocks(hints_dir: Path) -> dict[str, Any]:
+    """Merge ``docgen.project`` mappings from ``hints/*.md`` (sorted paths; later wins)."""
+    if not hints_dir.is_dir():
+        return {}
+    merged: dict[str, Any] = {}
+    for path in sorted(hints_dir.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        doc = parse_hint_docgen_front_matter(path)
+        if not doc:
+            continue
+        project = doc.get("project")
+        if not isinstance(project, dict) or not project:
+            continue
+        _deep_merge_yaml_mapping(merged, dict(project))
+    return merged
+
+
+def merge_hint_project(raw: dict[str, Any], cfg: "Config") -> list[str]:
+    """Apply ``docgen.project`` from hints (env_file, narration_from_source, concat, discovery)."""
+    disc = raw.get("discovery")
+    if isinstance(disc, dict) and disc.get("merge_hint_segments") is False:
+        return []
+    project = collect_hint_project_blocks(cfg.hints_dir)
+    if not project:
+        return []
+
+    changes: list[str] = []
+
+    env_file = project.get("env_file")
+    if isinstance(env_file, str) and env_file.strip():
+        if raw.get("env_file") != env_file.strip():
+            raw["env_file"] = env_file.strip()
+            changes.append("env_file: merged from hints/*.md (docgen.project)")
+
+    for key in ("narration_from_source", "manim_scene_generation", "discovery", "concat"):
+        block = project.get(key)
+        if not isinstance(block, dict) or not block:
+            continue
+        cur = raw.get(key)
+        if not isinstance(cur, dict):
+            raw[key] = dict(block)
+            changes.append(f"{key}: merged from hints/*.md (docgen.project)")
+            continue
+        before = yaml.safe_dump(cur, sort_keys=True)
+        _deep_merge_yaml_mapping(cur, dict(block))
+        after = yaml.safe_dump(cur, sort_keys=True)
+        if before != after:
+            changes.append(f"{key}: merged from hints/*.md (docgen.project)")
+
+    return sorted(set(changes))
 
 
 def _segment_lists_to_update(raw: dict[str, Any]) -> list[list[str]]:

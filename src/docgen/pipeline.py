@@ -34,6 +34,13 @@ class Pipeline:
         TimestampExtractor(self.config).extract_all()
 
         if not skip_manim:
+            from docgen.image_generate import generate_missing_images_for_bundle
+            image_msgs = generate_missing_images_for_bundle(self.config)
+            if image_msgs:
+                print("\n=== Stage: Image assets ===")
+                for msg in image_msgs:
+                    print(f"[image-generate] {msg}")
+
             scene_list = self.config.pipeline_manim_scene_names()
             if scene_list:
                 print("\n=== Stage: Manim ===")

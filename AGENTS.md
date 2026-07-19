@@ -15,7 +15,7 @@ Stable goals for this repository:
 
 `docgen` + OpenAI are the **only** path that produces category **C** outputs — see **`.cursor/rules/no-asset-edits.mdc`**. Summary (paths relative to a consumer bundle, typically `docs/demos/`):
 
-- **Outputs (do not hand-edit):** `<bundle>/docgen.yaml` (as emitted by **`yaml-generate`**); `<bundle>/narration/*.md` (except `README.md`); `<bundle>/animations/scenes.py`, `timing.json`, `animations/specs/*.scene.yaml` (scene pipeline); `<bundle>/audio/*.mp3`; `<bundle>/recordings/**` where applicable.
+- **Outputs (do not hand-edit):** `<bundle>/docgen.yaml` (as emitted by **`yaml-generate`**); `<bundle>/narration/*.md` (except `README.md`); `<bundle>/animations/scenes.py`, `timing.json`, `animations/specs/*.scene.yaml` (scene pipeline); `<bundle>/audio/*.mp3`; `<bundle>/images/*.png` (scene image assets from **`image-generate`**); `<bundle>/recordings/**` where applicable.
 - **Inputs (maintainer-owned):** `<bundle>/hints/**` with YAML front matter (`docgen.segment`, `docgen.wiring`); maintainer scripts under the bundle; `tests/**` fixtures inside this library; `<bundle>/narration/README.md`.
 
 `docgen` avoids hardcoding consumer segment ids in library code; tests may use concrete fixtures.
@@ -43,10 +43,11 @@ Commands registered on the **`docgen`** CLI include:
 - **`init`** — scaffold bundle layout and `docgen.yaml`.
 - **`wizard`** — local web UI for narration/bootstrap workflows.
 - **`tts`** — text-to-speech for segment files.
-- **`timestamps`** — align narration audio to Whisper-style word/segment timing (`timing.json`).
+- **`timestamps`** — word/segment timing (`timing.json`). Default engine **`local`** aligns the known narration text against the mp3 offline (ffmpeg silencedetect, no API); **`--engine whisper`** keeps OpenAI whisper-1 transcription. Both emit the same Whisper-shaped blocks.
+- **`image-generate`** — render scene-spec **image elements** (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle (also runs for missing assets inside `generate-all`).
 - **`manim`** — render Manim scenes declared in config.
 - **`compose`** — mux narration audio with visual sources via ffmpeg.
-- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, and related checks.
+- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`** (stale `timing.json` vs mp3 durations; hard fail), **`av_sync`** (OCR anchor keywords near spoken time; soft), and related checks.
 - **`lint`** — narration lint helper.
 - **`narration-generate`** — LLM-assisted narration from hints and repo context.
 - **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**.
