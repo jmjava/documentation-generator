@@ -7,6 +7,7 @@ import pytest
 from docgen.align import (
     build_local_timing,
     parse_silencedetect_output,
+    reconcile_intervals_to_sentences,
     split_sentences,
 )
 
@@ -102,3 +103,30 @@ class TestBuildLocalTiming:
             assert set(s.keys()) == {"start", "end", "text"}
         for w in timing["words"]:
             assert set(w.keys()) == {"start", "end", "word"}
+
+    def test_pause_aware_weights_give_punctuated_tokens_more_span(self) -> None:
+        # "Hello," should claim a larger share than "Hi" of equal letter length.
+        timing = build_local_timing("Hi Hello,", 4.0, [(0.0, 4.0)])
+        words = {w["word"]: w for w in timing["words"]}
+        hi_span = words["Hi"]["end"] - words["Hi"]["start"]
+        hello_span = words["Hello,"]["end"] - words["Hello,"]["start"]
+        assert hello_span > hi_span
+
+    def test_reconcile_merges_extra_intervals_toward_sentence_count(self) -> None:
+        # Three intervals for two sentences → merge shortest gap.
+        ivs = [(0.0, 1.0), (1.1, 2.0), (3.0, 5.0)]
+        out = reconcile_intervals_to_sentences(ivs, 2)
+        assert len(out) == 2
+        assert out[0] == (0.0, 2.0)
+        assert out[1] == (3.0, 5.0)
+
+    def test_build_local_timing_uses_reconcile_for_near_miss_counts(self) -> None:
+        text = "First sentence here. Second sentence follows."
+        # Three speech intervals for two sentences — should still 1:1 after merge.
+        timing = build_local_timing(
+            text, 6.0, [(0.0, 2.0), (2.1, 3.5), (4.0, 6.0)]
+        )
+        assert len(timing["segments"]) == 2
+        assert timing["segments"][0]["start"] == pytest.approx(0.0)
+        assert timing["segments"][0]["end"] == pytest.approx(3.5)
+        assert timing["segments"][1]["start"] == pytest.approx(4.0)

@@ -162,13 +162,19 @@ def _load_timing_words(segment_key: str) -> list[dict]:
 
 
 def _box(label, color, w=2.2, h=0.75, fs=18):
+    """Labeled rounded box — slightly stronger fill/stroke for readable diagram boards."""
     r = RoundedRectangle(
-        corner_radius=0.15, width=w, height=h,
-        stroke_color=color, fill_color=color, fill_opacity=0.2,
+        corner_radius=0.18, width=w, height=h,
+        stroke_color=color, stroke_width=2.5,
+        fill_color=color, fill_opacity=0.28,
     )
-    t = Text(str(label), font_size=fs, color=color)
-    inner_w = max(w - 0.25, 0.35)
-    inner_h = max(h - 0.2, 0.35)
+    t = Text(str(label), font_size=fs, color=C_WHITE)
+    # Prefer white label text for contrast; fall back to the accent color when
+    # the palette token is already near-white.
+    if str(color) in (C_WHITE, "C_WHITE", "#cdd6f4"):
+        t.set_color(color)
+    inner_w = max(w - 0.3, 0.35)
+    inner_h = max(h - 0.22, 0.35)
     if t.width > inner_w:
         t.scale(inner_w / t.width)
     if t.height > inner_h:
@@ -178,7 +184,16 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
 
 
 def _arrow(start, end, color="#cdd6f4"):
-    return Arrow(start, end, color=color, stroke_width=2, buff=0.15, max_tip_length_to_length_ratio=0.12)
+    """Connector between box centers (used by scene-spec ``edges``)."""
+    # Allow palette token names that compile_scene_class emits as bare identifiers.
+    return Arrow(
+        start,
+        end,
+        color=color,
+        stroke_width=3,
+        buff=0.2,
+        max_tip_length_to_length_ratio=0.15,
+    )
 
 
 def _image(relpath, w=3.0, h=2.0):

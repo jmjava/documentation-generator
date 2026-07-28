@@ -98,8 +98,14 @@ Optional per-row (legacy; first box only — prefer per-box above):
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
   for multi-page specs also page_transition: fade | none (default fade), page_transition_run_time (default 0.45, max 5).
+- edges: optional list of connectors for **single-page** ``rows`` specs (see below).
 
-Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|none }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
+Optional per-page (when using ``pages``):
+- edges: list of {{ from: <box label>, to: <box label>, color?: <palette token> }}
+  drawn as arrows between those boxes after layout. Labels must be unique on that page.
+  Prefer edges for pipeline / flow diagrams (A → B → C); omit when boxes are unrelated topics.
+
+Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|none, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
 
 Palette tokens (exact spelling): {", ".join(sorted(ALLOWED_COLORS))}
 
@@ -107,6 +113,8 @@ Design goals:
 - **Frame:** dogfood Manim canvas is ~14.22 × 8 units; title + buffer eat the top — see user-message budget. Never stack so many tall rows that boxes would clip off the bottom.
 - **Do not** rely on shrinking: split into **pages** with fade between them.
 - **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
+- **Edges / arrows:** when narration describes a flow or pipeline, add ``edges`` so the board shows
+  directed connections (not only isolated boxes). Keep edge endpoints as spoken labels.
 - **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
   **hold the board**. When the topic shifts, reveal a new spoken-phrase label for that beat.
   Do **not** invent a box per sentence, and do **not** leave a new topic without a matching label.

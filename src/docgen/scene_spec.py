@@ -322,6 +322,16 @@ def _normalize_word(s: str) -> str:
     return "".join(ch for ch in str(s).lower() if ch.isalnum())
 
 
+def _label_tokens(label: str) -> list[str]:
+    """Tokenize a diagram label for Whisper matching.
+
+    Splits on whitespace **and** hyphens/underscores so ``yaml-generate`` can
+    align to spoken ``yaml`` + ``generate`` (not only the glued ``yamlgenerate``).
+    """
+    parts = re.split(r"[\s\-_]+", str(label).strip())
+    return [t for t in (_normalize_word(p) for p in parts) if t]
+
+
 # Suffix list for cheap English stemming when matching scene labels to spoken words.
 # Order matters: longer / more specific suffixes are checked before generic ones (e.g. "ing"
 # before "s", "es" before "s", "tion" before "s") so "tracing" -> "trac" not "tracin".
@@ -361,6 +371,16 @@ def _tokens_match(label_token: str, word_token: str) -> bool:
     if len(label_token) < 4 or len(word_token) < 4:
         return False
     return _stem(label_token) == _stem(word_token)
+
+
+def _soft_token_match(a: str, b: str) -> bool:
+    """Cheap fuzzy match for long tokens (prefix / containment after length check)."""
+    if abs(len(a) - len(b)) > 3:
+        return False
+    if len(a) < 5 or len(b) < 5:
+        return False
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    return longer.startswith(shorter) or shorter in longer
 
 
 def segment_index_for_whisper_time(
@@ -455,7 +475,7 @@ def sync_row_labels_to_whisper_words(
 
     def _find_label(label: str, from_idx: int) -> tuple[int, int] | None:
         """Return (last matched stream index, original ``words`` index of phrase start)."""
-        tokens = [_normalize_word(t) for t in str(label).split() if _normalize_word(t)]
+        tokens = _label_tokens(label)
         if not tokens:
             return None
         n = len(word_stream)
@@ -470,6 +490,14 @@ def sync_row_labels_to_whisper_words(
             if ok:
                 return (i + m - 1, word_stream[i][2])
             i += 1
+        # Soft fallback: accept a single long label token that equals a spoken
+        # word after stripping a short edit distance (hyphen/TTS orthography).
+        if m == 1 and len(tokens[0]) >= 5:
+            target = tokens[0]
+            for j in range(from_idx, n):
+                w = word_stream[j][0]
+                if _tokens_match(target, w) or _soft_token_match(target, w):
+                    return (j, word_stream[j][2])
         return None
 
     def _process_rows(rows: list[Any]) -> None:
@@ -1048,6 +1076,61 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
             )
 
 
+def _page_box_labels(rows: list[Any]) -> dict[str, int]:
+    """Map box label → occurrence count on a page (labeled boxes only)."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for box in row.get("boxes") or []:
+            if not isinstance(box, dict) or _is_image_element(box):
+                continue
+            lab = str(box.get("label", "")).strip()
+            if lab:
+                counts[lab] = counts.get(lab, 0) + 1
+    return counts
+
+
+def _validate_edges(
+    edges: Any,
+    *,
+    labels: dict[str, int],
+    path_label: str,
+) -> None:
+    if edges is None:
+        return
+    if not isinstance(edges, list):
+        raise SceneSpecError(f"{path_label}: edges must be a list if set")
+    for i, edge in enumerate(edges):
+        ep = f"{path_label}: edges[{i}]"
+        if not isinstance(edge, dict):
+            raise SceneSpecError(f"{ep}: edge must be a mapping")
+        for fld in ("from", "to"):
+            if fld not in edge or not str(edge[fld]).strip():
+                raise SceneSpecError(f"{ep}: {fld} is required (box label on this page)")
+        src = str(edge["from"]).strip()
+        dst = str(edge["to"]).strip()
+        if src not in labels:
+            raise SceneSpecError(f"{ep}: from={src!r} is not a box label on this page")
+        if dst not in labels:
+            raise SceneSpecError(f"{ep}: to={dst!r} is not a box label on this page")
+        if labels[src] > 1:
+            raise SceneSpecError(
+                f"{ep}: from={src!r} is ambiguous (duplicate labels on this page)"
+            )
+        if labels[dst] > 1:
+            raise SceneSpecError(
+                f"{ep}: to={dst!r} is ambiguous (duplicate labels on this page)"
+            )
+        if src == dst:
+            raise SceneSpecError(f"{ep}: from and to must differ")
+        col = edge.get("color")
+        if col is not None and str(col) not in ALLOWED_COLORS:
+            raise SceneSpecError(
+                f"{ep}: color must be one of {sorted(ALLOWED_COLORS)} if set"
+            )
+
+
 def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
     for k in SPEC_REQUIRED_TOP:
         if k not in data:
@@ -1101,7 +1184,18 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         if not isinstance(rows, list) or not rows:
             raise SceneSpecError(f"{path_label}: rows must be a non-empty list")
         _validate_row_list(rows, path_label=path_label, prefix="rows")
+        _validate_edges(
+            data.get("edges"),
+            labels=_page_box_labels(rows),
+            path_label=path_label,
+        )
         return
+
+    if data.get("edges") is not None:
+        raise SceneSpecError(
+            f"{path_label}: top-level edges are only valid with rows; "
+            f"put edges on each page for multi-page specs"
+        )
 
     pages = data["pages"]
     if not isinstance(pages, list) or not pages:
@@ -1116,6 +1210,11 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         if not isinstance(pr, list) or not pr:
             raise SceneSpecError(f"{pp}: rows must be a non-empty list")
         _validate_row_list(pr, path_label=path_label, prefix=f"pages[{pi}].rows")
+        _validate_edges(
+            page.get("edges"),
+            labels=_page_box_labels(pr),
+            path_label=pp,
+        )
         if pi > 0:
             ptx = page.get("transition", pt)
             if str(ptx) not in ALLOWED_PAGE_TRANSITIONS:
@@ -1125,7 +1224,7 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
 
 
 def _normalized_pages(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return page dicts with keys rows, transition (None for first page only)."""
+    """Return page dicts with keys rows, transition, edges (None for first page transition)."""
     layout = spec.get("layout") or {}
     default_tr = str(layout.get("page_transition", "fade"))
     if spec.get("pages") is not None:
@@ -1134,9 +1233,29 @@ def _normalized_pages(spec: dict[str, Any]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for pi, page in enumerate(pages_raw):
             tr = None if pi == 0 else str(page.get("transition", default_tr))
-            out.append({"rows": page["rows"], "transition": tr})
+            edges = page.get("edges") if isinstance(page.get("edges"), list) else []
+            out.append({"rows": page["rows"], "transition": tr, "edges": edges})
         return out
-    return [{"rows": spec["rows"], "transition": None}]
+    edges = spec.get("edges") if isinstance(spec.get("edges"), list) else []
+    return [{"rows": spec["rows"], "transition": None, "edges": edges}]
+
+
+def _box_var_by_label(page_index: int, rows: list[Any]) -> dict[str, str]:
+    """Map unique box label → generated Python variable name for that page."""
+    out: dict[str, str] = {}
+    for r, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        boxes = row.get("boxes") or []
+        if not isinstance(boxes, list):
+            continue
+        for b, box in enumerate(boxes):
+            if not isinstance(box, dict) or _is_image_element(box):
+                continue
+            lab = str(box.get("label", "")).strip()
+            if lab:
+                out[lab] = f"_bx_{page_index}_{r}_{b}"
+    return out
 
 
 def _any_wait_segment_in_pages(pages: list[dict[str, Any]]) -> bool:
@@ -1194,6 +1313,10 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
         "",
     ]
 
+    # Map (page, later-box-var) → list of edge var names to GrowArrow with that box.
+    edges_with_target: dict[tuple[int, str], list[str]] = {}
+    page_edge_vars: dict[int, list[str]] = {}
+
     for p, page in enumerate(pages):
         rows = page["rows"]
         page_has_image = any(
@@ -1245,6 +1368,28 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
             f"        {stack_var}.next_to(title, DOWN, buff={first_row_title_buff})"
         )
 
+        # Build edge arrows after layout so endpoints use final positions.
+        label_vars = _box_var_by_label(p, rows)
+        for ei, edge in enumerate(page.get("edges") or []):
+            if not isinstance(edge, dict):
+                continue
+            src = str(edge["from"]).strip()
+            dst = str(edge["to"]).strip()
+            src_var = label_vars.get(src)
+            dst_var = label_vars.get(dst)
+            if not src_var or not dst_var:
+                continue
+            evar = f"_ar_{p}_{ei}"
+            ecol = str(edge.get("color") or "C_ACCENT")
+            lines.append(
+                f"        {evar} = _arrow({src_var}.get_center(), {dst_var}.get_center(), {ecol})"
+            )
+            page_edge_vars.setdefault(p, []).append(evar)
+            # Reveal with the later endpoint (second in box creation order).
+            order = {v: i for i, v in enumerate(label_vars.values())}
+            later = dst_var if order.get(dst_var, 0) >= order.get(src_var, 0) else src_var
+            edges_with_target.setdefault((p, later), []).append(evar)
+
     lines.append("")
 
     for p, page in enumerate(pages):
@@ -1266,18 +1411,31 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                     )
                 if p > 0 and r == 0 and b_idx == 0:
                     trans = page.get("transition")
+                    prev_stack = f"_p{p - 1}_stack"
+                    prev_edges = page_edge_vars.get(p - 1) or []
+                    fade_targets = [prev_stack] + prev_edges
+                    fade_args = ", ".join(f"FadeOut({t})" for t in fade_targets)
                     if trans == "fade":
-                        prev_stack = f"_p{p - 1}_stack"
                         lines.append(
-                            f"        self.timed_play(FadeOut({prev_stack}), run_time={page_tr_run})"
+                            f"        self.timed_play({fade_args}, run_time={page_tr_run})"
                         )
                     elif trans == "none":
-                        prev_stack = f"_p{p - 1}_stack"
-                        lines.append(f"        self.remove({prev_stack})")
+                        for t in fade_targets:
+                            lines.append(f"        self.remove({t})")
                         lines.append("        self.timed_wait(0.05)")
-                lines.append(
-                    f"        self.timed_play(FadeIn(_bx_{p}_{r}_{b_idx}), run_time={run_time})"
-                )
+                bx = f"_bx_{p}_{r}_{b_idx}"
+                edge_vars = edges_with_target.get((p, bx), [])
+                if edge_vars:
+                    anims = ", ".join(
+                        [f"FadeIn({bx})"] + [f"GrowArrow({ev})" for ev in edge_vars]
+                    )
+                    lines.append(
+                        f"        self.timed_play({anims}, run_time={run_time})"
+                    )
+                else:
+                    lines.append(
+                        f"        self.timed_play(FadeIn({bx}), run_time={run_time})"
+                    )
 
     lines.extend(
         [

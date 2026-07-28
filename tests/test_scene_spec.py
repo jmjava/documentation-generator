@@ -815,3 +815,83 @@ def test_sync_row_labels_overwrite_true_clears_unmatched_wait_word() -> None:
     words = [{"word": "hello", "start": 0.0, "end": 0.3}]
     out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
     assert out["rows"][0]["boxes"][0].get("wait_word") is None
+
+
+def test_sync_row_labels_hyphenated_label_matches_spoken_parts() -> None:
+    """``yaml-generate`` aligns to spoken ``yaml`` + ``generate``."""
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [_row("yaml-generate")],
+    }
+    words = [
+        {"word": "run", "start": 0.0, "end": 0.2},
+        {"word": "yaml", "start": 1.0, "end": 1.3},
+        {"word": "generate", "start": 1.4, "end": 1.9},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 1
+
+
+def test_compile_edges_emits_arrows_and_grow() -> None:
+    spec = {
+        "segment_id": "01",
+        "class_name": "FlowScene",
+        "timing_key": "01-flow",
+        "title": {"text": "Flow", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 0.8,
+                "boxes": [
+                    {
+                        "label": "Hints",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    },
+                    {
+                        "label": "YAML",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 2,
+                    },
+                ],
+            },
+        ],
+        "edges": [{"from": "Hints", "to": "YAML", "color": "C_ACCENT"}],
+    }
+    out = compile_scene_class(spec)
+    assert "_ar_0_0 = _arrow(_bx_0_0_0.get_center(), _bx_0_0_1.get_center(), C_ACCENT)" in out
+    assert "GrowArrow(_ar_0_0)" in out
+    assert "FadeIn(_bx_0_0_1)" in out
+
+
+def test_validate_edges_requires_known_labels() -> None:
+    with pytest.raises(SceneSpecError, match="not a box label"):
+        validate_scene_spec(
+            {
+                "segment_id": "1",
+                "class_name": "X",
+                "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                "rows": [
+                    {
+                        "run_time": 1.0,
+                        "boxes": [
+                            {
+                                "label": "A",
+                                "color": "C_GREEN",
+                                "width": 2.0,
+                                "height": 1.0,
+                                "font_size": 18,
+                            }
+                        ],
+                    }
+                ],
+                "edges": [{"from": "A", "to": "Missing"}],
+            }
+        )

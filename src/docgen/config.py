@@ -345,6 +345,24 @@ class Config:
                 "**/archive/**",
                 "**/__pycache__/**",
             ],
+            # Extensions offered in the wizard file tree for focus selection.
+            "scan_extensions": [
+                ".md",
+                ".py",
+                ".yaml",
+                ".yml",
+                ".toml",
+                ".json",
+                ".txt",
+                ".rst",
+                ".ts",
+                ".tsx",
+                ".js",
+                ".jsx",
+                ".go",
+                ".rs",
+                ".java",
+            ],
         }
         defaults.update(self.raw.get("wizard", {}))
         return defaults

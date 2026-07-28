@@ -100,7 +100,7 @@ docgen validate --pre-push
 | Command | Description |
 |---------|-------------|
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a new project: `docgen.yaml`, wrapper scripts, directories |
-| `docgen wizard [--port 8501]` | Launch narration setup wizard (local web GUI) |
+| `docgen wizard [--port 8501]` | Local web GUI: pick **focus files** per segment (persists to hint `context.paths` + `yaml-generate`), draft narration, review/approve, rerun TTS → timestamps → scene-spec → Manim → compose |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |

@@ -374,6 +374,164 @@ def collect_hint_wirings_by_segment(hints_dir: Path) -> dict[str, dict[str, Any]
     return out
 
 
+def find_hint_path_for_segment(hints_dir: Path, seg_id: str) -> Path | None:
+    """Return the maintainer hint file that declares ``docgen.segment.id == seg_id``."""
+    sid = str(seg_id).strip()
+    if sid.isdigit():
+        sid = sid.zfill(2)
+    if not hints_dir.is_dir():
+        return None
+    for path in sorted(hints_dir.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        decl = parse_hint_segment_declaration(path)
+        if decl and decl[0] == sid:
+            return path
+    return None
+
+
+def _context_paths_from_wiring(wiring: dict[str, Any] | None) -> list[str]:
+    if not isinstance(wiring, dict):
+        return []
+    seen: list[str] = []
+    for key in ("narration", "manim_scene"):
+        block = wiring.get(key)
+        if not isinstance(block, dict):
+            continue
+        ctx = block.get("context")
+        if not isinstance(ctx, dict):
+            continue
+        for p in ctx.get("paths") or []:
+            s = str(p).strip()
+            if s and s not in seen:
+                seen.append(s)
+    return seen
+
+
+def read_hint_focus_paths(hints_dir: Path, seg_id: str) -> list[str]:
+    """Union of narration + manim ``context.paths`` from the segment's hint wiring."""
+    path = find_hint_path_for_segment(hints_dir, seg_id)
+    if path is None:
+        return []
+    doc = parse_hint_docgen_front_matter(path)
+    if not doc:
+        return []
+    wiring = doc.get("wiring")
+    return _context_paths_from_wiring(wiring if isinstance(wiring, dict) else None)
+
+
+def _set_wiring_context_paths(wiring: dict[str, Any], paths: list[str], *, also_manim: bool) -> None:
+    clean = [str(p).strip() for p in paths if str(p).strip()]
+    nar = wiring.setdefault("narration", {})
+    if not isinstance(nar, dict):
+        nar = {}
+        wiring["narration"] = nar
+    ctx = nar.setdefault("context", {})
+    if not isinstance(ctx, dict):
+        ctx = {}
+        nar["context"] = ctx
+    ctx["paths"] = list(clean)
+    if also_manim:
+        ms = wiring.setdefault("manim_scene", {})
+        if not isinstance(ms, dict):
+            ms = {}
+            wiring["manim_scene"] = ms
+        mctx = ms.setdefault("context", {})
+        if not isinstance(mctx, dict):
+            mctx = {}
+            ms["context"] = mctx
+        mctx["paths"] = list(clean)
+
+
+def update_hint_focus_paths(
+    hint_path: Path,
+    paths: list[str],
+    *,
+    also_manim: bool = True,
+) -> list[str]:
+    """Write ``context.paths`` into an existing hint file's ``docgen.wiring`` front matter.
+
+    Returns the cleaned path list that was written. Preserves the Markdown body and
+    other front-matter keys (segment declaration, visual wiring, hints, etc.).
+    """
+    text = hint_path.read_text(encoding="utf-8")
+    m = _HINT_FRONT_MATTER_RE.match(text)
+    if not m:
+        raise ValueError(f"{hint_path}: missing YAML front matter")
+    try:
+        data = yaml.safe_load(m.group("body"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{hint_path}: invalid front matter YAML: {exc}") from exc
+    if not isinstance(data, dict):
+        raise TypeError(f"{hint_path}: front matter root must be a mapping")
+    doc = data.setdefault("docgen", {})
+    if not isinstance(doc, dict):
+        raise TypeError(f"{hint_path}: docgen must be a mapping")
+    wiring = doc.setdefault("wiring", {})
+    if not isinstance(wiring, dict):
+        wiring = {}
+        doc["wiring"] = wiring
+    _set_wiring_context_paths(wiring, paths, also_manim=also_manim)
+    clean = _context_paths_from_wiring(wiring)
+    new_fm = yaml.safe_dump(
+        data,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    ).rstrip() + "\n"
+    body = text[m.end() :]
+    if body and not body.startswith("\n"):
+        body = "\n" + body
+    hint_path.write_text(f"---\n{new_fm}---{body}", encoding="utf-8")
+    return clean
+
+
+def ensure_segment_hint_with_focus(
+    hints_dir: Path,
+    seg_id: str,
+    *,
+    stem: str,
+    paths: list[str],
+    also_manim: bool = True,
+) -> tuple[Path, list[str]]:
+    """Update or create ``hints/segment-<id>-topic.md`` with focus ``context.paths``.
+
+    Prefer an existing segment hint file when present. New files get a minimal
+    ``docgen.segment`` + ``docgen.wiring`` front matter (category B input).
+    """
+    sid = str(seg_id).strip()
+    if sid.isdigit():
+        sid = sid.zfill(2)
+    stem_s = str(stem).strip() or f"{sid}-topic"
+    hints_dir.mkdir(parents=True, exist_ok=True)
+    existing = find_hint_path_for_segment(hints_dir, sid)
+    if existing is not None:
+        clean = update_hint_focus_paths(existing, paths, also_manim=also_manim)
+        return existing, clean
+
+    target = hints_dir / f"segment-{sid}-topic.md"
+    clean = [str(p).strip() for p in paths if str(p).strip()]
+    data: dict[str, Any] = {
+        "docgen": {
+            "segment": {"create": True, "id": sid, "stem": stem_s},
+            "wiring": {
+                "narration": {"context": {"paths": list(clean)}},
+            },
+        }
+    }
+    if also_manim:
+        data["docgen"]["wiring"]["manim_scene"] = {"context": {"paths": list(clean)}}
+    fm = yaml.safe_dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    body = (
+        f"\n# Narration focus (segment {sid})\n\n"
+        "Focus files for this segment are listed in the front matter "
+        "(`docgen.wiring.*.context.paths`). Edit them via the wizard or by hand, "
+        "then run `docgen yaml-generate`.\n"
+    )
+    target.write_text(f"---\n{fm}---{body}", encoding="utf-8")
+    return target, clean
+
+
 def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
     """Apply ``visual`` overrides from hints, re-sync Manim lists, then merge narration / manim_scene blocks."""
     disc = raw.get("discovery")
