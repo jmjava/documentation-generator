@@ -10,7 +10,11 @@
   let segments = []; // setup segment slots
   let prodSegments = []; // production segment data
   let activeSegmentId = null;
+  let activeSetupSegId = null;
+  let prodFocusPaths = [];
   let appState = { segments: {} };
+  let scanExtensions = null;
+  let filterText = "";
 
   // ---- View switching ----
   document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -40,11 +44,39 @@
   // ================================================================
 
   async function loadFileTree() {
-    const res = await fetch("/api/scan");
+    const mdOnly = document.getElementById("md-only")?.checked;
+    const qs = mdOnly ? "?extensions=.md" : "";
+    const res = await fetch("/api/scan" + qs);
     const data = await res.json();
     fileTree = data.tree;
     flatFiles = data.files;
-    renderTree(fileTree, document.getElementById("file-tree"));
+    scanExtensions = data.extensions || [];
+    renderTreeFiltered();
+  }
+
+  function pathMatchesFilter(path) {
+    if (!filterText) return true;
+    return path.toLowerCase().includes(filterText.toLowerCase());
+  }
+
+  function filterTree(nodes) {
+    const out = [];
+    for (const node of nodes) {
+      if (node.type === "file") {
+        if (pathMatchesFilter(node.path)) out.push(node);
+      } else {
+        const children = filterTree(node.children || []);
+        if (children.length || pathMatchesFilter(node.path || node.name)) {
+          out.push({ ...node, children });
+        }
+      }
+    }
+    return out;
+  }
+
+  function renderTreeFiltered() {
+    const container = document.getElementById("file-tree");
+    renderTree(filterTree(fileTree), container);
   }
 
   function renderTree(nodes, container) {
@@ -54,7 +86,7 @@
         const dirEl = document.createElement("div");
         dirEl.className = "tree-item";
         const label = document.createElement("div");
-        label.className = "tree-dir";
+        label.className = "tree-dir open";
         label.textContent = node.name;
         label.addEventListener("click", () => {
           label.classList.toggle("open");
@@ -68,10 +100,15 @@
       } else {
         const fileEl = document.createElement("div");
         fileEl.className = "tree-item tree-file";
+        fileEl.draggable = true;
+        fileEl.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/plain", node.path);
+        });
         const lbl = document.createElement("label");
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.dataset.path = node.path;
+        cb.checked = selectedFiles.has(node.path);
         cb.addEventListener("change", () => {
           if (cb.checked) selectedFiles.add(node.path);
           else selectedFiles.delete(node.path);
@@ -93,8 +130,10 @@
   }
 
   function updateGenerateBtn() {
-    document.getElementById("btn-generate").disabled =
-      selectedFiles.size === 0 || segments.length === 0;
+    const hasSeg = segments.length > 0;
+    const hasFiles = selectedFiles.size > 0 || segments.some((s) => s.files.length > 0);
+    document.getElementById("btn-generate").disabled = !hasSeg || !hasFiles;
+    document.getElementById("btn-save-focus").disabled = !hasSeg;
   }
 
   // ---- Segment slots ----
@@ -102,8 +141,13 @@
 
   document.getElementById("btn-add-segment").addEventListener("click", () => {
     segCounter++;
-    const seg = { id: "seg-" + segCounter, name: String(segCounter).padStart(2, "0"), files: [] };
+    const seg = {
+      id: "seg-" + segCounter,
+      name: String(segCounter).padStart(2, "0"),
+      files: Array.from(selectedFiles),
+    };
     segments.push(seg);
+    activeSetupSegId = seg.id;
     renderSegmentSlots();
     updateGenerateBtn();
   });
@@ -120,7 +164,23 @@
     for (const [dir, files] of Object.entries(groups).sort()) {
       segCounter++;
       const name = dir.replace(/\//g, "-").replace(/[^a-zA-Z0-9-]/g, "") || "root";
-      segments.push({ id: "seg-" + segCounter, name: String(segCounter).padStart(2, "0") + "-" + name, files });
+      segments.push({
+        id: "seg-" + segCounter,
+        name: String(segCounter).padStart(2, "0") + "-" + name,
+        files,
+      });
+    }
+    activeSetupSegId = segments[0]?.id || null;
+    renderSegmentSlots();
+    updateGenerateBtn();
+  });
+
+  document.getElementById("btn-assign-selected").addEventListener("click", () => {
+    if (!activeSetupSegId || selectedFiles.size === 0) return;
+    const seg = segments.find((s) => s.id === activeSetupSegId);
+    if (!seg) return;
+    for (const p of selectedFiles) {
+      if (!seg.files.includes(p)) seg.files.push(p);
     }
     renderSegmentSlots();
     updateGenerateBtn();
@@ -131,8 +191,12 @@
     container.innerHTML = "";
     for (const seg of segments) {
       const slot = document.createElement("div");
-      slot.className = "segment-slot";
+      slot.className = "segment-slot" + (seg.id === activeSetupSegId ? " active" : "");
       slot.dataset.segId = seg.id;
+      slot.addEventListener("click", () => {
+        activeSetupSegId = seg.id;
+        renderSegmentSlots();
+      });
       slot.addEventListener("dragover", (e) => e.preventDefault());
       slot.addEventListener("drop", (e) => {
         e.preventDefault();
@@ -140,6 +204,7 @@
         if (path && !seg.files.includes(path)) {
           seg.files.push(path);
           renderSegmentSlots();
+          updateGenerateBtn();
         }
       });
       const header = document.createElement("div");
@@ -148,12 +213,15 @@
       inp.type = "text";
       inp.value = seg.name;
       inp.addEventListener("input", () => { seg.name = inp.value; });
+      inp.addEventListener("click", (e) => e.stopPropagation());
       header.appendChild(inp);
       const rmBtn = document.createElement("button");
       rmBtn.className = "btn-remove-seg";
       rmBtn.textContent = "×";
-      rmBtn.addEventListener("click", () => {
+      rmBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         segments = segments.filter((s) => s.id !== seg.id);
+        if (activeSetupSegId === seg.id) activeSetupSegId = segments[0]?.id || null;
         renderSegmentSlots();
         updateGenerateBtn();
       });
@@ -166,35 +234,82 @@
         tag.className = "seg-file-tag";
         tag.textContent = f.split("/").pop();
         tag.title = f;
-        tag.addEventListener("click", () => {
+        tag.addEventListener("click", (e) => {
+          e.stopPropagation();
           seg.files = seg.files.filter((x) => x !== f);
           renderSegmentSlots();
+          updateGenerateBtn();
         });
         filesDiv.appendChild(tag);
+      }
+      if (!seg.files.length) {
+        const empty = document.createElement("span");
+        empty.className = "hint";
+        empty.textContent = "Drop focus files here";
+        filesDiv.appendChild(empty);
       }
       slot.appendChild(filesDiv);
       container.appendChild(slot);
     }
   }
 
+  function segmentIdFromName(name) {
+    const m = String(name).match(/^(\d{2})/);
+    return m ? m[1] : name;
+  }
+
+  async function saveFocusForSegments() {
+    const status = document.getElementById("generate-status");
+    status.textContent = "Saving focus files…";
+    let ok = 0;
+    for (const seg of segments) {
+      const files = seg.files.length > 0 ? seg.files : Array.from(selectedFiles);
+      const sid = segmentIdFromName(seg.name);
+      const res = await fetch("/api/segments/" + encodeURIComponent(sid) + "/focus", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths: files, also_manim: true, yaml_generate: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        status.textContent = "Error saving " + sid + ": " + (data.error || res.status);
+        return;
+      }
+      ok++;
+    }
+    status.textContent = "Saved focus files for " + ok + " segment(s) → hints + yaml-generate.";
+  }
+
+  document.getElementById("btn-save-focus").addEventListener("click", () => {
+    saveFocusForSegments();
+  });
+
   // ---- Generate narration ----
   document.getElementById("btn-generate").addEventListener("click", async () => {
     const btn = document.getElementById("btn-generate");
     const status = document.getElementById("generate-status");
     btn.disabled = true;
-    status.textContent = "Generating...";
+    status.textContent = "Saving focus + generating…";
+
+    await saveFocusForSegments();
 
     const guidance = document.getElementById("guidance").value;
     const drafts = [];
 
     for (const seg of segments) {
       const files = seg.files.length > 0 ? seg.files : Array.from(selectedFiles);
+      const sid = segmentIdFromName(seg.name);
       status.textContent = "Generating " + seg.name + "...";
       try {
         const res = await fetch("/api/generate-narration", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source_paths: files, guidance, segment_name: seg.name }),
+          body: JSON.stringify({
+            source_paths: files,
+            guidance,
+            segment_name: seg.name,
+            segment_id: sid,
+          }),
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -239,6 +354,12 @@
     });
   }
 
+  document.getElementById("file-filter")?.addEventListener("input", (e) => {
+    filterText = e.target.value || "";
+    renderTreeFiltered();
+  });
+  document.getElementById("md-only")?.addEventListener("change", () => loadFileTree());
+
   // ================================================================
   // PRODUCTION VIEW
   // ================================================================
@@ -268,6 +389,12 @@
       badge.textContent = st;
       li.appendChild(badge);
       li.appendChild(document.createTextNode(" " + seg.id));
+      if (seg.focus_paths?.length) {
+        const fc = document.createElement("span");
+        fc.className = "focus-count";
+        fc.textContent = seg.focus_paths.length + " files";
+        li.appendChild(fc);
+      }
       li.addEventListener("click", () => loadSegment(seg.id));
       list.appendChild(li);
     }
@@ -275,6 +402,36 @@
     const pct = total > 0 ? (approved / total) * 100 : 0;
     document.getElementById("progress-bar").style.width = pct + "%";
     document.getElementById("progress-text").textContent = approved + " / " + total + " approved";
+  }
+
+  function renderFocusList() {
+    const list = document.getElementById("focus-path-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!prodFocusPaths.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No focus files yet — add paths below.";
+      list.appendChild(li);
+      return;
+    }
+    for (const p of prodFocusPaths) {
+      const li = document.createElement("li");
+      li.className = "focus-path-item";
+      const span = document.createElement("code");
+      span.textContent = p;
+      li.appendChild(span);
+      const rm = document.createElement("button");
+      rm.className = "btn-remove-seg";
+      rm.textContent = "×";
+      rm.title = "Remove";
+      rm.addEventListener("click", () => {
+        prodFocusPaths = prodFocusPaths.filter((x) => x !== p);
+        renderFocusList();
+      });
+      li.appendChild(rm);
+      list.appendChild(li);
+    }
   }
 
   async function loadSegment(segId) {
@@ -290,14 +447,22 @@
     badge.className = "badge badge-" + st.replace(/\s+/g, "-");
     badge.textContent = st;
 
-    // Load narration
     try {
       const res = await fetch("/api/narration/" + encodeURIComponent(segId));
       const data = await res.json();
       document.getElementById("narration-editor").value = data.text || "";
     } catch { document.getElementById("narration-editor").value = ""; }
 
-    // Audio
+    try {
+      const fres = await fetch("/api/segments/" + encodeURIComponent(segId) + "/focus");
+      const fdata = await fres.json();
+      prodFocusPaths = Array.isArray(fdata.paths) ? fdata.paths.slice() : (seg?.focus_paths || []).slice();
+    } catch {
+      prodFocusPaths = (seg?.focus_paths || []).slice();
+    }
+    renderFocusList();
+    document.getElementById("focus-save-status").textContent = "";
+
     const audioEl = document.getElementById("audio-player");
     const audioStatus = document.getElementById("audio-status");
     if (seg?.audio_path) {
@@ -309,7 +474,6 @@
       audioStatus.textContent = "No audio generated yet.";
     }
 
-    // Video
     const videoEl = document.getElementById("video-player");
     const videoStatus = document.getElementById("video-status");
     if (seg?.recording_path) {
@@ -322,6 +486,41 @@
 
     document.getElementById("validation-results").innerHTML = '<p class="hint">Run validate to see results.</p>';
   }
+
+  document.getElementById("btn-add-focus-path")?.addEventListener("click", () => {
+    const inp = document.getElementById("focus-path-input");
+    const p = (inp.value || "").trim();
+    if (!p) return;
+    if (!prodFocusPaths.includes(p)) prodFocusPaths.push(p);
+    inp.value = "";
+    renderFocusList();
+  });
+
+  document.getElementById("btn-save-prod-focus")?.addEventListener("click", async () => {
+    if (!activeSegmentId) return;
+    const status = document.getElementById("focus-save-status");
+    status.textContent = "Saving…";
+    const res = await fetch(
+      "/api/segments/" + encodeURIComponent(activeSegmentId) + "/focus",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paths: prodFocusPaths,
+          also_manim: true,
+          yaml_generate: true,
+        }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      status.textContent = "Error: " + (data.error || res.status);
+      return;
+    }
+    status.textContent = "Saved " + (data.paths?.length || 0) + " path(s)" +
+      (data.hint_path ? " → " + data.hint_path : "");
+    await loadProductionView();
+  });
 
   // ---- Narration save / regenerate ----
   document.getElementById("btn-save-narration").addEventListener("click", async () => {
@@ -347,13 +546,15 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source_paths: [],
+          source_paths: prodFocusPaths.length ? prodFocusPaths : (seg?.focus_paths || []),
           guidance,
-          segment_name: activeSegmentId,
+          segment_name: seg?.name || activeSegmentId,
+          segment_id: activeSegmentId,
           revision_notes: notes,
         }),
       });
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       if (data.narration) document.getElementById("narration-editor").value = data.narration;
     } catch (err) { alert("Error: " + err.message); }
     btn.textContent = "Regenerate narration";
@@ -371,6 +572,8 @@
   }
 
   document.getElementById("btn-redo-tts").addEventListener("click", () => runStep("tts"));
+  document.getElementById("btn-redo-timestamps")?.addEventListener("click", () => runStep("timestamps"));
+  document.getElementById("btn-redo-scene-spec")?.addEventListener("click", () => runStep("scene-spec"));
   document.getElementById("btn-redo-manim").addEventListener("click", () => runStep("manim"));
   document.getElementById("btn-redo-compose").addEventListener("click", () => runStep("compose"));
   document.getElementById("btn-run-validate").addEventListener("click", async () => {
@@ -383,7 +586,7 @@
 
   document.getElementById("btn-redo-all").addEventListener("click", async () => {
     if (!activeSegmentId) return;
-    for (const step of ["tts", "manim", "compose", "validate"]) {
+    for (const step of ["tts", "timestamps", "scene-spec", "manim", "compose", "validate"]) {
       await runStep(step);
     }
   });

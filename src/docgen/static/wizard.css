@@ -111,3 +111,16 @@ textarea:focus,input[type=text]:focus{outline:none;border-color:#4361ee;box-shad
 
 /* Placeholder */
 .placeholder{text-align:center;padding:4rem 2rem;color:#aaa;font-size:1rem}
+
+/* Focus file picker */
+.tree-toolbar{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap}
+.tree-toolbar input[type=text]{flex:1;min-width:140px}
+.ext-toggle{font-size:.78rem;color:#666;display:flex;align-items:center;gap:.3rem;white-space:nowrap}
+.segment-slot.active{border-color:#4361ee;background:#eef1ff;box-shadow:0 0 0 1px rgba(67,97,238,.25)}
+.focus-path-list{list-style:none;margin:.5rem 0 1rem;max-height:240px;overflow-y:auto}
+.focus-path-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:6px;margin-bottom:2px;background:#f8f9fc;font-size:.82rem}
+.focus-path-item code{flex:1;word-break:break-all}
+.focus-picker{display:flex;gap:.5rem;margin-bottom:.75rem}
+.focus-picker input{flex:1}
+.focus-count{margin-left:auto;font-size:.7rem;color:#888;background:#e8ecf4;padding:.1rem .4rem;border-radius:8px}
+#segment-list li{flex-wrap:wrap}

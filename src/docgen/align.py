@@ -142,16 +142,36 @@ def _speech_timeline_mapper(
     return total, to_wall
 
 
+def _token_weight(tok: str) -> float:
+    """Character weight with a pause bump for trailing punctuation (TTS breath).
+
+    Commas / semicolons / colons and sentence-final punctuation get a small
+    extra share of the span so word ``start`` times land slightly earlier —
+    closer to real TTS pacing than pure character-proportional splits.
+    """
+    base = float(max(len(tok), 1))
+    if tok.endswith(("...", "…")):
+        return base + 2.2
+    if tok.endswith((".", "!", "?")):
+        return base + 1.4
+    if tok.endswith((",", ";", ":")):
+        return base + 0.8
+    if tok.endswith(("-", "—", "–")):
+        return base + 0.5
+    return base
+
+
 def _words_for_span(sentence: str, start: float, end: float) -> list[dict[str, Any]]:
     toks = sentence.split()
     if not toks:
         return []
     span = max(0.0, end - start)
-    char_total = sum(len(t) for t in toks) or 1
+    weights = [_token_weight(t) for t in toks]
+    weight_total = sum(weights) or 1.0
     out: list[dict[str, Any]] = []
     cursor = start
-    for tok in toks:
-        w_span = span * len(tok) / char_total
+    for tok, w in zip(toks, weights):
+        w_span = span * w / weight_total
         out.append(
             {"start": round(cursor, 3), "end": round(cursor + w_span, 3), "word": tok}
         )
@@ -159,6 +179,51 @@ def _words_for_span(sentence: str, start: float, end: float) -> list[dict[str, A
     if out:
         out[-1]["end"] = round(end, 3)
     return out
+
+
+def _merge_nearest_intervals(
+    intervals: list[tuple[float, float]], target: int
+) -> list[tuple[float, float]]:
+    """Merge shortest gaps until ``len(intervals) == target`` (when over-segmented)."""
+    ivs = list(intervals)
+    if target < 1 or len(ivs) <= target:
+        return ivs
+    while len(ivs) > target:
+        # Merge the pair with the smallest inter-interval gap (silence between).
+        best_i = 0
+        best_gap = float("inf")
+        for i in range(len(ivs) - 1):
+            gap = ivs[i + 1][0] - ivs[i][1]
+            if gap < best_gap:
+                best_gap = gap
+                best_i = i
+        a0, _a1 = ivs[best_i]
+        _b0, b1 = ivs[best_i + 1]
+        ivs = ivs[:best_i] + [(a0, b1)] + ivs[best_i + 2 :]
+    return ivs
+
+
+def reconcile_intervals_to_sentences(
+    intervals: list[tuple[float, float]], n_sentences: int
+) -> list[tuple[float, float]]:
+    """Nudge speech-interval count toward sentence count for 1:1 mapping.
+
+    When silencedetect finds a few **extra** pauses vs punctuation, merge the
+    nearest gaps so we keep the high-accuracy 1:1 path. Under-segmented audio
+    (fewer intervals than sentences — including a single continuous interval)
+    stays on the proportional path, which uses pause-aware sentence weights.
+    """
+    if n_sentences < 1 or not intervals:
+        return intervals
+    ivs = list(intervals)
+    if len(ivs) == n_sentences:
+        return ivs
+    if len(ivs) > n_sentences:
+        # Only reconcile when close (small silence over-detection).
+        if len(ivs) - n_sentences <= max(2, n_sentences // 3):
+            return _merge_nearest_intervals(ivs, n_sentences)
+        return ivs
+    return ivs
 
 
 def build_local_timing(
@@ -172,6 +237,7 @@ def build_local_timing(
         return {"text": text, "segments": [], "words": []}
 
     intervals = [iv for iv in speech_intervals if iv[1] > iv[0]] or [(0.0, duration)]
+    intervals = reconcile_intervals_to_sentences(intervals, len(sentences))
 
     segments: list[dict[str, Any]] = []
     words: list[dict[str, Any]] = []
@@ -182,10 +248,10 @@ def build_local_timing(
             segments.append({"start": round(s0, 3), "end": round(s1, 3), "text": sent})
             words.extend(_words_for_span(sent, s0, s1))
     else:
-        # Proportional path: allocate each sentence a char-weighted slice of the
-        # concatenated speech timeline (silences are skipped by the mapper).
+        # Proportional path: allocate each sentence a pause-aware weighted slice
+        # of the concatenated speech timeline (silences are skipped by the mapper).
         total_speech, to_wall = _speech_timeline_mapper(intervals)
-        weights = [max(len(s), 1) for s in sentences]
+        weights = [sum(_token_weight(t) for t in s.split()) or 1.0 for s in sentences]
         total_w = sum(weights)
         cursor = 0.0
         for sent, w in zip(sentences, weights):

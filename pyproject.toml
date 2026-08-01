@@ -48,3 +48,8 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+# Pin the classic default rule set. Ruff 0.16+ enables a much broader default
+# selection that fails the existing codebase; keep CI on the historical E/F gate.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

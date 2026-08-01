@@ -20,8 +20,12 @@
 <div id="view-setup" class="view">
   <div class="setup-layout">
     <section class="panel tree-panel">
-      <h2>Project files</h2>
-      <p class="hint">Select .md files to use as narration source material.</p>
+      <h2>Focus files</h2>
+      <p class="hint">Select repo files to steer narration and scene generation. Markdown, Python, YAML, and other source types are included.</p>
+      <div class="tree-toolbar">
+        <input id="file-filter" type="text" placeholder="Filter paths…">
+        <label class="ext-toggle"><input type="checkbox" id="md-only" > Markdown only</label>
+      </div>
       <div id="file-tree" class="tree-container"></div>
     </section>
 
@@ -31,14 +35,16 @@
       <textarea id="guidance" rows="6" placeholder="e.g., Focus on the CI/CD pipeline and developer experience. Keep technical depth moderate."></textarea>
 
       <h2>Segment mapping</h2>
-      <p class="hint">Drag selected files into segments, or auto-group.</p>
+      <p class="hint">Assign focus files to segments (or auto-group). Saving writes durable hint wiring + runs yaml-generate.</p>
       <div id="segment-mapper">
         <div id="segment-slots"></div>
         <button id="btn-add-segment" class="btn btn-secondary">+ Add segment</button>
         <button id="btn-auto-group" class="btn btn-secondary">Auto-group by directory</button>
+        <button id="btn-assign-selected" class="btn btn-secondary">Assign selected → active segment</button>
       </div>
 
       <div class="action-bar">
+        <button id="btn-save-focus" class="btn btn-secondary" disabled>Save focus files</button>
         <button id="btn-generate" class="btn btn-primary" disabled>Generate narration</button>
         <span id="generate-status" class="status-text"></span>
       </div>
@@ -78,6 +84,7 @@
 
         <div class="tab-bar">
           <button class="tab-btn active" data-tab="narration">Narration</button>
+          <button class="tab-btn" data-tab="focus">Focus files</button>
           <button class="tab-btn" data-tab="audio">Audio</button>
           <button class="tab-btn" data-tab="video">Video</button>
         </div>
@@ -90,6 +97,19 @@
               <input id="revision-notes" type="text" placeholder="Revision notes for regeneration (optional)...">
               <button id="btn-regen-narration" class="btn btn-secondary">Regenerate narration</button>
             </div>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="focus">
+          <p class="hint">Repo files wired into this segment's hint front matter (<code>context.paths</code>). Changes persist via yaml-generate.</p>
+          <ul id="focus-path-list" class="focus-path-list"></ul>
+          <div class="focus-picker">
+            <input id="focus-path-input" type="text" placeholder="Add repo-root-relative path…">
+            <button id="btn-add-focus-path" class="btn btn-secondary">Add</button>
+          </div>
+          <div class="narration-actions">
+            <button id="btn-save-prod-focus" class="btn btn-primary">Save focus files</button>
+            <span id="focus-save-status" class="status-text"></span>
           </div>
         </div>
 
@@ -121,6 +141,8 @@
             </div>
           </div>
           <div class="video-actions">
+            <button id="btn-redo-timestamps" class="btn btn-secondary">Redo timestamps</button>
+            <button id="btn-redo-scene-spec" class="btn btn-secondary">Regen scene spec</button>
             <button id="btn-redo-manim" class="btn btn-secondary">Redo Manim</button>
             <button id="btn-redo-compose" class="btn btn-secondary">Redo compose</button>
             <button id="btn-run-validate" class="btn btn-secondary">Run validate</button>
