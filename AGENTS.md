@@ -70,3 +70,13 @@ Commands registered on the **`docgen`** CLI include:
 ## Testing (downstream relevance)
 
 Tests should cover **CLI-visible behavior** and contracts that adopters rely on: **`yaml-generate`**, **`scene-spec-generate`**, **`scene-compile`**, **`validate`**, **`compose`**, **`generate-all`**, **`pages`**, **`init`**, **config** loading (`repo_root`, `env_file`), and package exports. Use small in-tree fixtures; this library does not ship a dogfood bundle.
+
+## Cursor Cloud specific instructions
+
+- **Virtualenv:** the project is installed editable into **`/workspace/.venv`** (created by the startup update script). Shells do **not** auto-activate it — run `. /workspace/.venv/bin/activate` (or prefix the venv path) before `docgen`, `pytest`, or `ruff`. The `docgen` console script lives at `/workspace/.venv/bin/docgen`.
+- **System deps are pre-baked in the VM snapshot** (not the update script): `ffmpeg` + `tesseract-ocr` (validation/compose/OCR), plus `build-essential`, `python3-dev`, `libcairo2-dev`, `libpango1.0-dev`, `pkg-config` (needed to build the `manim` extra's `manimpango`/`pycairo` wheels). If a fresh VM ever lacks these, reinstall via apt before `pip install`.
+- **Standard commands** are in `README.md` / `pyproject.toml` / `.github/workflows/ci.yml`: lint `ruff check src/ tests/`; tests `pytest tests/ -v --tb=short`; the CI unit job also exports `PYTHONPATH=src` (not needed locally because of the editable install, but harmless).
+- **OpenAI-gated vs offline commands:** `tts`, `timestamps --engine whisper`, `image-generate`, `narration-generate`, `scene-spec-generate`, and `yaml-generate --llm` call OpenAI and need `OPENAI_API_KEY` (integration tests auto-skip without it). Fully offline: `init`, `scene-compile`, `manim`, `compose`, `validate`, `lint`, `pages`, `concat`, `yaml-generate` (no `--llm`), and `timestamps` (default `local` engine).
+- **`scene-compile` gotcha:** specs whose rows use `wait_segment`/`wait_word` require a `timing.json` for that stem first (`docgen timestamps`, which needs a TTS mp3 → OpenAI). For an offline Manim render, author rows without `wait_segment`/`wait_word`.
+- **No in-repo bundle:** exercise the pipeline against a scratch bundle outside the repo (`docgen init /tmp/<name> --defaults` in a throwaway git dir). `docs/demos/` is a protected consumer bundle — do not hand-edit its generated assets (see `.cursor/rules/no-asset-edits.mdc`).
+- **Wizard:** `docgen wizard --port 8501` is an optional local Flask dev server (long-lived); it must be run from inside a bundle directory that contains a `docgen.yaml`.
