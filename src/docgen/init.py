@@ -268,6 +268,8 @@ def generate_files(plan: InitPlan) -> list[str]:
         (plan.demo_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     created.append(_write_config(plan))
+    created.append(_write_requirements_docgen(plan))
+    created.append(_write_bundle_readme(plan))
 
     for path in _write_wrapper_scripts(plan):
         created.append(path)
@@ -446,6 +448,62 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
     return created
 
 
+def _write_requirements_docgen(plan: InitPlan) -> str:
+    """Write ``requirements-docgen.txt`` so consumers install docgen externally."""
+    from docgen.install_spec import requirements_docgen_txt
+
+    path = plan.demo_dir / "requirements-docgen.txt"
+    path.write_text(requirements_docgen_txt(), encoding="utf-8")
+    return str(path)
+
+
+def _write_bundle_readme(plan: InitPlan) -> str:
+    """Short bundle README: install docgen as a tool, keep only this bundle in-repo."""
+    content = textwrap.dedent(f"""\
+        # {plan.project_name} demos (docgen bundle)
+
+        This directory is a **docgen bundle** (`docgen.yaml` + narration/hints/assets).
+        The ``docgen`` CLI itself is an **external** package — do **not** vendor the
+        ``documentation-generator`` source tree into this repository.
+
+        ## Install the tool (once per machine / CI job)
+
+        ```bash
+        python3 -m venv ../../.venv   # or any project venv
+        source ../../.venv/bin/activate
+        pip install -r requirements-docgen.txt
+        # optional Manim:
+        # pip install 'docgen[manim] @ git+https://github.com/jmjava/documentation-generator.git'
+        ```
+
+        Isolated global install (no project venv):
+
+        ```bash
+        pipx install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
+        # or: uv tool install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
+        ```
+
+        Verify: ``docgen --version``
+
+        ## Run from this bundle
+
+        ```bash
+        cd {plan.demo_dir.name if plan.demo_dir.name else "."}
+        docgen wizard
+        docgen generate-all
+        docgen validate --pre-push
+        ```
+
+        Wrapper scripts (``generate-all.sh``, ``compose.sh``, …) activate a nearby
+        ``.venv`` when present, then call the ``docgen`` console script on ``PATH``.
+    """)
+    path = plan.demo_dir / "README.md"
+    if path.exists():
+        return str(path)
+    path.write_text(content, encoding="utf-8")
+    return str(path)
+
+
 def _write_narration_readme(plan: InitPlan) -> str:
     content = textwrap.dedent("""\
         # Narration scripts (TTS source)
@@ -544,10 +602,13 @@ def print_summary(plan: InitPlan, created: list[str]) -> None:
     click.echo()
     click.secho("  Next steps:", fg="cyan")
     click.echo(f"    cd {plan.demo_dir}")
+    click.echo("    pip install -r requirements-docgen.txt   # external tool — not vendored into src")
+    click.echo("    docgen --version")
     click.echo("    docgen wizard              # launch GUI to draft narrations")
     click.echo("    docgen tts --dry-run       # preview TTS text stripping")
     click.echo("    docgen validate            # check recordings")
     click.echo("    docgen generate-all        # full pipeline (see docgen generate-all --help)")
     click.echo()
     click.echo("  Run docgen yaml-generate next, then edit docgen.yaml for segments, visuals, and TTS as needed.")
+    click.echo("  Keep only this bundle in your repo — install docgen via pip/pipx, do not copy the library source.")
     click.echo()
