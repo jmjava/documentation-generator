@@ -1002,6 +1002,47 @@ def test_sync_row_labels_hyphenated_label_matches_spoken_parts() -> None:
     assert out["rows"][0]["boxes"][0]["wait_word"] == 1
 
 
+def test_compile_title_and_box_subtitles() -> None:
+    spec = {
+        "segment_id": "01",
+        "class_name": "SubScene",
+        "timing_key": "01-sub",
+        "title": {
+            "text": "Architecture",
+            "subtitle": "Four pipelines",
+            "font_size": 36,
+            "color": "C_WHITE",
+        },
+        "rows": [
+            {
+                "run_time": 0.8,
+                "boxes": [
+                    {
+                        "label": "Flask",
+                        "subtitle": "orchestrator",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    }
+                ],
+            }
+        ],
+    }
+    validate_scene_spec(spec)
+    out = compile_scene_class(spec)
+    assert "_title_main = Text('Architecture'" in out
+    assert "_title_sub = Text('Four pipelines'" in out
+    assert "subtitle='orchestrator'" in out
+    # Subtitle shrinks the vertical stack budget vs plain title.
+    with_sub = layout_stack_budget(spec["title"], {})
+    plain = layout_stack_budget(
+        {"text": "Architecture", "font_size": 36, "color": "C_WHITE"}, {}
+    )
+    assert with_sub < plain
+
+
 def test_compile_edges_emits_arrows_and_grow() -> None:
     spec = {
         "segment_id": "01",

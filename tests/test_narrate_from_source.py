@@ -118,6 +118,88 @@ def test_write_narration_markdown_creates_file(tmp_path: Path) -> None:
     assert p.read_text(encoding="utf-8").strip() == "Line."
 
 
+def test_generate_narration_markdown_revise_mode(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {
+                    "model": "gpt-4o-mini",
+                    "context": {"paths": ["lib.py"]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "lib.py").write_text("def f(): pass\n", encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    (narr / "01-demo.md").write_text("Original opening about pipelines.\n", encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+
+    with patch("docgen.wizard.generate_narration_via_llm") as m:
+        m.return_value = "Revised opening about Flask.\n"
+        out = generate_narration_markdown(
+            cfg,
+            "01",
+            extra_paths=[],
+            extra_hints=[],
+            revision_notes="Mention Flask",
+            mode="revise",
+        )
+        assert "Flask" in out
+        kw = m.call_args.kwargs
+        assert kw["mode"] == "revise"
+        assert "Original opening" in kw["current_narration"]
+        assert kw["revision_notes"] == "Mention Flask"
+
+
+def test_narration_generate_cli_revise(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {"context": {"paths": ["x.md"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "x.md").write_text("# src\nbody", encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    (narr / "01-demo.md").write_text("Old script.\n", encoding="utf-8")
+    runner = CliRunner()
+
+    with patch("docgen.wizard.generate_narration_via_llm") as m:
+        m.return_value = "New script.\n"
+        r = runner.invoke(
+            main,
+            [
+                "--config",
+                str(tmp_path / "docgen.yaml"),
+                "narration-generate",
+                "--segment",
+                "01",
+                "--revise",
+                "--revision-notes",
+                "Tighten the intro",
+            ],
+        )
+    assert r.exit_code == 0, r.output
+    assert m.call_args.kwargs["mode"] == "revise"
+    assert (narr / "01-demo.md").read_text(encoding="utf-8").startswith("New script.")
+
+
 def test_narration_generate_cli_dry_run(tmp_path: Path) -> None:
     from click.testing import CliRunner
 

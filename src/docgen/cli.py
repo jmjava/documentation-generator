@@ -348,6 +348,17 @@ def lint(ctx: click.Context, segment: str | None) -> None:
     is_flag=True,
     help="Overwrite an existing narration file for this segment.",
 )
+@click.option(
+    "--revise",
+    is_flag=True,
+    help="Edit existing narration.md in place (requires --revision-notes; implies --force).",
+)
+@click.option(
+    "--revision-notes",
+    default="",
+    show_default=False,
+    help="Feedback for --revise, or soft notes appended to a full generate.",
+)
 @click.pass_context
 def narration_generate(
     ctx: click.Context,
@@ -357,14 +368,19 @@ def narration_generate(
     extra_hints: tuple[str, ...],
     dry_run: bool,
     force: bool,
+    revise: bool,
+    revision_notes: str,
 ) -> None:
-    """Generate narration ``.md`` from repo sources + owner hints via OpenAI chat.
+    """Generate or revise narration ``.md`` from repo sources + owner hints via OpenAI chat.
 
     Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
     Requires ``OPENAI_API_KEY`` unless using a future offline stub.
 
     Use ``--segment <id>`` to drive a single segment, or ``--all`` to iterate
     every id in ``segments.all`` (used by full-reset orchestration).
+
+    ``--revise`` reads the current narration file and applies ``--revision-notes``
+    with minimal edits (same contract as the wizard Revise button).
     """
     if ctx.obj.get("config") is None:
         raise click.ClickException("No docgen.yaml found (use --config PATH).")
@@ -372,10 +388,36 @@ def narration_generate(
         raise click.ClickException("--all and --segment are mutually exclusive")
     if not all_segments and not segment:
         raise click.ClickException("provide --segment <id> or --all")
+    if revise and not str(revision_notes or "").strip():
+        raise click.ClickException("--revise requires --revision-notes")
 
     from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
 
     cfg = ctx.obj["config"]
+    mode = "revise" if revise else "generate"
+    # Revising always overwrites the existing script.
+    write_force = force or revise
+
+    def _one(seg_str: str) -> None:
+        try:
+            body = generate_narration_markdown(
+                cfg,
+                seg_str,
+                extra_paths=list(extra_paths),
+                extra_hints=list(extra_hints),
+                revision_notes=revision_notes,
+                mode=mode,
+            )
+        except ValueError as exc:
+            raise click.ClickException(f"segment {seg_str}: {exc}") from exc
+        if dry_run:
+            click.echo(body)
+            return
+        try:
+            out = write_narration_markdown(cfg, seg_str, body, force=write_force)
+        except FileExistsError as exc:
+            raise click.ClickException(f"segment {seg_str}: {exc} (use --force)") from exc
+        click.echo(f"  -> {out}" if all_segments else f"[narration-generate] wrote {out}")
 
     if all_segments:
         ids = list((cfg.raw.get("segments") or {}).get("all") or [])
@@ -384,45 +426,11 @@ def narration_generate(
         for seg_id in ids:
             seg_str = str(seg_id)
             click.echo(f"=== narration-generate --segment {seg_str} ===")
-            try:
-                body = generate_narration_markdown(
-                    cfg,
-                    seg_str,
-                    extra_paths=list(extra_paths),
-                    extra_hints=list(extra_hints),
-                )
-            except ValueError as exc:
-                raise click.ClickException(f"segment {seg_str}: {exc}") from exc
-            if dry_run:
-                click.echo(body)
-                continue
-            try:
-                out = write_narration_markdown(cfg, seg_str, body, force=force)
-            except FileExistsError as exc:
-                raise click.ClickException(f"segment {seg_str}: {exc} (use --force)") from exc
-            click.echo(f"  -> {out}")
+            _one(seg_str)
         return
 
     assert segment is not None  # for type-checker
-    try:
-        body = generate_narration_markdown(
-            cfg,
-            segment,
-            extra_paths=list(extra_paths),
-            extra_hints=list(extra_hints),
-        )
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    if dry_run:
-        click.echo(body)
-        return
-
-    try:
-        out = write_narration_markdown(cfg, segment, body, force=force)
-    except FileExistsError as exc:
-        raise click.ClickException(f"{exc} (use --force)") from exc
-    click.echo(f"[narration-generate] wrote {out}")
+    _one(segment)
 
 
 @main.command("scene-compile")

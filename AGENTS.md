@@ -49,7 +49,7 @@ Commands registered on the **`docgen`** CLI include:
 - **`compose`** — mux narration audio with visual sources via ffmpeg.
 - **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`**, **`story_end`** (last paced reveal vs audio end; hard fail), **`av_sync`** (soft; prefers scene-spec labels as OCR anchors), **`subject_beat_coverage`** (declarative specs vs narration topic beats; hard fail when enabled), and related checks.
 - **`lint`** — narration lint helper.
-- **`narration-generate`** — LLM-assisted narration from hints and repo context.
+- **`narration-generate`** — LLM-assisted narration from hints and repo context; optional **`--revise --revision-notes`** for in-place edits (same contract as the wizard Revise button).
 - **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**; enforces frame budget + **subject-beat coverage** (dwell OK; cover topic shifts; reject invented labels).
 - **`scene-compile`** — compile specs into **`scenes.py`** (generated regions only).
 - **`yaml-generate`** — merge defaults and hint wiring into **`docgen.yaml`**.

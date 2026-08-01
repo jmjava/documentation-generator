@@ -69,17 +69,19 @@ Output discipline:
 Required keys:
 - segment_id: string (echo the value from the user message exactly)
 - class_name: string (echo the value from the user message exactly)
-- title: mapping with text (string), font_size (int, >= 14), color (one of the palette tokens below)
+- title: mapping with text (string), font_size (int, >= 14), color (one of the palette tokens below);
+  optional subtitle (string ≤80 chars) for a second line under the title
 - **Exactly one of:** ``rows`` (non-empty list of row mappings, single page) **or** ``pages`` (non-empty list of page mappings; each page has ``rows`` as above, optionally ``transition``: fade | none for pages after the first)
 
 Each row must have:
 - run_time: positive number (seconds for timed_play FadeIn of **each** box in that row)
 - boxes: non-empty list of box mappings, each with:
-  - label: string
+  - label: string (spoken phrase — used for wait_word matching)
   - color: one of the palette tokens
   - width: positive number (typical 2.0–6.0; safe row total ≤ ~13 wide at dogfood resolution)
   - height: positive number (typical 0.65–1.1; **smaller when a page has many rows**)
   - font_size: int >= 14
+  - subtitle: optional second line ≤60 chars (decorative; not used for beat matching)
 
 Optional **image elements** (only when project-owner hints ask for generated imagery): a ``boxes`` entry
 may instead be an image element with:
