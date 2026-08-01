@@ -183,10 +183,14 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
     return VGroup(r, t)
 
 
-def _arrow(start, end, color="#cdd6f4"):
-    """Connector between box centers (used by scene-spec ``edges``)."""
+def _arrow(start, end, color="#cdd6f4", style="solid"):
+    """Connector between box centers (used by scene-spec ``edges``).
+
+    ``style`` is ``solid`` (default) or ``dashed``. Dashed edges should be
+    revealed with ``FadeIn`` (not ``GrowArrow``).
+    """
     # Allow palette token names that compile_scene_class emits as bare identifiers.
-    return Arrow(
+    arr = Arrow(
         start,
         end,
         color=color,
@@ -194,6 +198,9 @@ def _arrow(start, end, color="#cdd6f4"):
         buff=0.2,
         max_tip_length_to_length_ratio=0.15,
     )
+    if str(style).strip().lower() == "dashed":
+        return DashedVMobject(arr, num_dashes=18, dashed_ratio=0.55)
+    return arr
 
 
 def _image(relpath, w=3.0, h=2.0):

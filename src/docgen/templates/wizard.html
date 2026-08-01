@@ -94,8 +94,9 @@
           <div class="narration-actions">
             <button id="btn-save-narration" class="btn btn-secondary">Save</button>
             <div class="revision-row">
-              <input id="revision-notes" type="text" placeholder="Revision notes for regeneration (optional)...">
-              <button id="btn-regen-narration" class="btn btn-secondary">Regenerate narration</button>
+              <input id="revision-notes" type="text" placeholder="Revision notes (required for Revise)…">
+              <button id="btn-revise-narration" class="btn btn-primary" title="Edit the current script in place using revision notes">Revise narration</button>
+              <button id="btn-regen-narration" class="btn btn-secondary" title="Full rewrite from focus files + sources">Regenerate</button>
             </div>
           </div>
         </div>
@@ -140,17 +141,37 @@
               </div>
             </div>
           </div>
+          <div id="asset-graph" class="asset-graph" aria-live="polite">
+            <p class="hint">Pipeline freshness (mtime vs upstream). Stale/missing steps need a rebuild.</p>
+            <ul id="asset-step-list" class="asset-step-list"></ul>
+          </div>
           <div class="video-actions">
-            <button id="btn-redo-timestamps" class="btn btn-secondary">Redo timestamps</button>
-            <button id="btn-redo-scene-spec" class="btn btn-secondary">Regen scene spec</button>
-            <button id="btn-redo-manim" class="btn btn-secondary">Redo Manim</button>
-            <button id="btn-redo-compose" class="btn btn-secondary">Redo compose</button>
-            <button id="btn-run-validate" class="btn btn-secondary">Run validate</button>
+            <button id="btn-redo-tts-video" class="btn btn-secondary" data-step="tts">TTS</button>
+            <button id="btn-redo-timestamps" class="btn btn-secondary" data-step="timestamps">Timestamps</button>
+            <button id="btn-redo-scene-retime" class="btn btn-secondary" data-step="scene-retime" title="Offline retime existing scene specs against timing.json">Retime scenes</button>
+            <button id="btn-redo-scene-spec" class="btn btn-secondary" data-step="scene-spec" title="LLM regen of scene YAML (expensive)">Regen scene spec</button>
+            <button id="btn-redo-manim" class="btn btn-secondary" data-step="manim">Manim</button>
+            <button id="btn-redo-compose" class="btn btn-secondary" data-step="compose">Compose</button>
+            <button id="btn-run-validate" class="btn btn-secondary" data-step="validate">Validate</button>
+          </div>
+          <div class="rebuild-row">
+            <label for="rebuild-from-select">Rebuild from</label>
+            <select id="rebuild-from-select">
+              <option value="tts">TTS</option>
+              <option value="timestamps">Timestamps</option>
+              <option value="scene-retime" selected>Retime scenes</option>
+              <option value="scene-spec">Regen scene spec (LLM)</option>
+              <option value="manim">Manim</option>
+              <option value="compose">Compose</option>
+              <option value="validate">Validate</option>
+            </select>
+            <button id="btn-rebuild-from" class="btn btn-warning">Rebuild from here</button>
+            <span id="rebuild-status" class="status-text"></span>
           </div>
         </div>
 
         <div class="review-action-bar">
-          <button id="btn-redo-all" class="btn btn-warning">Redo all steps</button>
+          <button id="btn-redo-all" class="btn btn-warning" title="TTS → timestamps → scene-retime → manim → compose → validate">Rebuild all (retime)</button>
           <button id="btn-flag-rework" class="btn btn-secondary">Flag for rework</button>
           <button id="btn-approve" class="btn btn-primary">Mark approved</button>
           <div class="nav-btns">

@@ -41,7 +41,7 @@ The Playwright/VHS/demo-function/per-function/discover-tests/catalog surface are
 Commands registered on the **`docgen`** CLI include:
 
 - **`init`** — scaffold bundle layout and `docgen.yaml`.
-- **`wizard`** — local web UI for narration/bootstrap workflows.
+- **`wizard`** — local web UI for narration/bootstrap workflows (focus files, **in-place narration revise**, per-segment **asset freshness** + **rebuild-from-here**).
 - **`tts`** — text-to-speech for segment files.
 - **`timestamps`** — word/segment timing (`timing.json`). Default engine **`local`** aligns the known narration text against the mp3 offline (ffmpeg silencedetect, no API); **`--engine whisper`** keeps OpenAI whisper-1 transcription. Both emit the same Whisper-shaped blocks.
 - **`image-generate`** — render scene-spec **image elements** (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle (also runs for missing assets inside `generate-all`).

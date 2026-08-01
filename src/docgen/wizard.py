@@ -178,40 +178,104 @@ def generate_narration_via_llm(
     *,
     temperature: float = 0.7,
     topic_label: str | None = None,
+    current_narration: str = "",
+    mode: str = "generate",
 ) -> str:
-    """Call OpenAI to generate a narration draft from source docs + guidance.
+    """Call OpenAI to generate or revise a narration draft.
 
     ``guidance`` is **caller-supplied** (e.g. project-owner hints from ``docgen.yaml``), not
     text returned from a prior model call. ``topic_label`` is a human-facing focus
     line (e.g. ``Config.narration_topic_label``); when present it is what the model
     sees in the user prompt so spoken output never echoes file stems / segment ids.
+
+    ``mode="revise"`` (or auto when ``current_narration`` + ``revision_notes`` are
+    both non-empty) edits the existing script in place: address feedback, keep
+    structure/phrasing that still work, do not rewrite from scratch unless needed.
     """
     import openai
 
     focus = (topic_label or "").strip() or _strip_segment_prefix(segment_name)
-    user_parts = [
-        f"Write a narration script focused on: {focus}.",
-        "Do not mention segment numbers, file stems, ordinals, or any 'segment NN' phrasing.",
-        "",
-        "--- SOURCE DOCUMENTATION ---",
-        *source_texts,
-        "--- END SOURCE DOCUMENTATION ---",
-    ]
-    if guidance:
-        user_parts += ["", "--- PROJECT OWNER HINTS ---", guidance, "--- END PROJECT OWNER HINTS ---"]
-    if revision_notes:
+    notes = (revision_notes or "").strip()
+    current = (current_narration or "").strip()
+    mode_norm = str(mode or "generate").strip().lower()
+    if mode_norm not in ("generate", "revise"):
+        mode_norm = "generate"
+    # Auto-revise when the caller supplied both an existing script and notes.
+    if mode_norm == "generate" and current and notes:
+        mode_norm = "revise"
+
+    if mode_norm == "revise":
+        if not current:
+            raise ValueError("revise mode requires current_narration text")
+        if not notes:
+            raise ValueError("revise mode requires revision_notes")
+        user_parts = [
+            f"Revise the narration script focused on: {focus}.",
+            "Edit the CURRENT NARRATION in place: address the revision notes, "
+            "preserve structure and phrasing that still work, and do not rewrite "
+            "from scratch unless the notes require it.",
+            "Do not mention segment numbers, file stems, ordinals, or any 'segment NN' phrasing.",
+            "Return only the revised narration markdown (no preamble).",
+            "",
+            "--- CURRENT NARRATION ---",
+            current,
+            "--- END CURRENT NARRATION ---",
+        ]
+        if source_texts:
+            user_parts += [
+                "",
+                "--- SOURCE DOCUMENTATION (reference only) ---",
+                *source_texts,
+                "--- END SOURCE DOCUMENTATION ---",
+            ]
+        if guidance:
+            user_parts += [
+                "",
+                "--- PROJECT OWNER HINTS ---",
+                guidance,
+                "--- END PROJECT OWNER HINTS ---",
+            ]
         user_parts += [
             "",
             "--- REVISION NOTES (address these) ---",
-            revision_notes,
+            notes,
             "--- END REVISION NOTES ---",
         ]
+        sys_prompt = (
+            system_prompt
+            + "\nYou are revising an existing narration script. Prefer minimal edits "
+            "that satisfy the revision notes over a full rewrite."
+        )
+    else:
+        user_parts = [
+            f"Write a narration script focused on: {focus}.",
+            "Do not mention segment numbers, file stems, ordinals, or any 'segment NN' phrasing.",
+            "",
+            "--- SOURCE DOCUMENTATION ---",
+            *source_texts,
+            "--- END SOURCE DOCUMENTATION ---",
+        ]
+        if guidance:
+            user_parts += [
+                "",
+                "--- PROJECT OWNER HINTS ---",
+                guidance,
+                "--- END PROJECT OWNER HINTS ---",
+            ]
+        if notes:
+            user_parts += [
+                "",
+                "--- REVISION NOTES (address these) ---",
+                notes,
+                "--- END REVISION NOTES ---",
+            ]
+        sys_prompt = system_prompt
 
     client = openai.OpenAI()
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": sys_prompt},
             {"role": "user", "content": "\n".join(user_parts)},
         ],
         temperature=float(temperature),
@@ -313,6 +377,8 @@ def create_app(config: Any | None = None) -> Flask:
         guidance: str = data.get("guidance", "")
         segment_name: str = data.get("segment_name", "untitled")
         revision_notes: str = data.get("revision_notes", "")
+        current_narration: str = data.get("current_narration", "") or ""
+        mode: str = data.get("mode", "generate") or "generate"
         topic_label: str | None = data.get("topic_label") or None
         seg_id_hint: str | None = data.get("segment_id")
         if topic_label is None and cfg is not None and seg_id_hint:
@@ -359,7 +425,11 @@ def create_app(config: Any | None = None) -> Flask:
                 segment_name=segment_name,
                 revision_notes=revision_notes,
                 topic_label=topic_label,
+                current_narration=current_narration,
+                mode=mode,
             )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500
 
@@ -368,10 +438,17 @@ def create_app(config: Any | None = None) -> Flask:
         out = narration_dir / f"{segment_name}.md"
         out.write_text(narration + "\n", encoding="utf-8")
 
+        effective_mode = str(mode or "generate").strip().lower()
+        if effective_mode not in ("generate", "revise"):
+            effective_mode = "generate"
+        if effective_mode == "generate" and current_narration.strip() and revision_notes.strip():
+            effective_mode = "revise"
+
         return jsonify({
             "narration": narration,
             "path": str(out),
             "source_paths": source_paths,
+            "mode": effective_mode,
         })
 
     # -- API: segment state ----------------------------------------------------
@@ -416,6 +493,9 @@ def create_app(config: Any | None = None) -> Flask:
                 focus_paths = list(
                     merged_narration_from_source_settings(cfg, seg_id).context_paths
                 )
+            from docgen.asset_graph import segment_asset_report
+
+            assets = segment_asset_report(cfg, seg_id)
             result.append({
                 "id": seg_id,
                 "name": seg_name,
@@ -429,8 +509,19 @@ def create_app(config: Any | None = None) -> Flask:
                 "recording_path": str(rec_found.relative_to(base)) if rec_found else None,
                 "visual_map": cfg.visual_map.get(seg_id, {}),
                 "focus_paths": focus_paths,
+                "assets": assets,
             })
         return jsonify({"segments": result})
+
+    @app.route("/api/segments/<segment_id>/assets")
+    def api_segment_assets(segment_id: str):
+        """Return per-step freshness for rebuild-from-here UI."""
+        cfg = _cfg()
+        if not cfg:
+            return jsonify({"error": "no config"}), 400
+        from docgen.asset_graph import segment_asset_report
+
+        return jsonify(segment_asset_report(cfg, segment_id))
 
     @app.route("/api/segments/<segment_id>/focus")
     def api_get_focus(segment_id: str):
@@ -559,106 +650,177 @@ def create_app(config: Any | None = None) -> Flask:
 
     # -- API: run pipeline steps for a single segment --------------------------
 
+    def _run_segment_step(cfg: Any, step: str, segment_id: str) -> dict[str, Any]:
+        """Execute one pipeline step; raise on failure. Returns a result dict."""
+        if step == "tts":
+            from docgen.tts import TTSGenerator
+
+            TTSGenerator(cfg).generate(segment=segment_id)
+            return {"ok": True, "step": "tts", "segment": segment_id}
+
+        if step == "timestamps":
+            import json as _json
+
+            from docgen.timestamps import TimestampExtractor
+
+            seg_name = cfg.resolve_segment_name(segment_id)
+            mp3 = _find_asset(cfg.audio_dir, seg_name, segment_id, ".mp3")
+            if mp3 is None:
+                raise RuntimeError(
+                    f"no audio for segment {segment_id}; run TTS first"
+                )
+            ts = TimestampExtractor(cfg)
+            engine = ts.resolve_engine(None)
+            block = (
+                ts.extract(mp3) if engine == "whisper" else ts.extract_local(mp3)
+            )
+            out = cfg.animations_dir / "timing.json"
+            timing: dict = {}
+            if out.is_file():
+                try:
+                    timing = _json.loads(out.read_text(encoding="utf-8"))
+                except _json.JSONDecodeError:
+                    timing = {}
+            if not isinstance(timing, dict):
+                timing = {}
+            timing[mp3.stem] = block
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                _json.dumps(timing, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            from docgen.manim_scene_support import sync_audio_tail_waits_in_scenes
+
+            sync_audio_tail_waits_in_scenes(cfg)
+            return {"ok": True, "step": "timestamps", "segment": segment_id}
+
+        if step == "scene-retime":
+            from docgen.scene_retime import list_scene_spec_paths, retime_compile_spec
+
+            paths = list_scene_spec_paths(cfg, segment_id=segment_id)
+            if not paths:
+                raise RuntimeError(
+                    f"no scene spec for segment {segment_id}; "
+                    "run scene-spec (LLM) first or add animations/specs/*.scene.yaml"
+                )
+            results = [retime_compile_spec(cfg, p) for p in paths]
+            return {
+                "ok": True,
+                "step": "scene-retime",
+                "segment": segment_id,
+                "compiled": [str(r.get("path")) for r in results],
+            }
+
+        if step == "scene-spec":
+            from docgen.scene_spec_generate import (
+                generate_scene_spec,
+                inject_class_block_into_scenes_py,
+                linted_class_block_from_spec,
+            )
+
+            res = generate_scene_spec(
+                cfg, segment_id, extra_paths=[], extra_hints=[]
+            )
+            specs_dir = cfg.animations_dir / "specs"
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            wpath = specs_dir / f"{res.seg_name}.scene.yaml"
+            wpath.write_text(res.yaml_text, encoding="utf-8")
+            class_block, merged = linted_class_block_from_spec(
+                cfg, res.spec, timing_key=res.seg_name
+            )
+            inject_class_block_into_scenes_py(
+                cfg,
+                seg_id=merged["segment_id"],
+                class_name=merged["class_name"],
+                class_block=class_block,
+            )
+            return {"ok": True, "step": "scene-spec", "segment": segment_id}
+
+        if step == "manim":
+            from docgen.manim_runner import ManimRunner
+
+            runner = ManimRunner(cfg)
+            vmap = cfg.visual_map.get(segment_id, {})
+            scene = vmap.get("scene")
+            if scene:
+                runner.render(scene=scene)
+            return {"ok": True, "step": "manim", "segment": segment_id}
+
+        if step == "compose":
+            from docgen.compose import Composer
+
+            Composer(cfg).compose_segments([segment_id])
+            return {"ok": True, "step": "compose", "segment": segment_id}
+
+        if step == "validate":
+            from docgen.validate import Validator
+
+            report = Validator(cfg).validate_segment(segment_id)
+            return {
+                "ok": True,
+                "step": "validate",
+                "segment": segment_id,
+                "report": report,
+            }
+
+        raise ValueError(f"Unknown step: {step}")
+
     @app.route("/api/run/<step>/<segment_id>", methods=["POST"])
     def api_run_step(step: str, segment_id: str):
         """Run a single pipeline step for one segment. Returns result or error."""
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
-
         try:
-            if step == "tts":
-                from docgen.tts import TTSGenerator
-                gen = TTSGenerator(cfg)
-                gen.generate(segment=segment_id)
-                return jsonify({"ok": True, "step": "tts", "segment": segment_id})
-
-            elif step == "timestamps":
-                import json as _json
-
-                from docgen.timestamps import TimestampExtractor
-
-                seg_name = cfg.resolve_segment_name(segment_id)
-                mp3 = _find_asset(cfg.audio_dir, seg_name, segment_id, ".mp3")
-                if mp3 is None:
-                    raise RuntimeError(
-                        f"no audio for segment {segment_id}; run TTS first"
-                    )
-                ts = TimestampExtractor(cfg)
-                engine = ts.resolve_engine(None)
-                block = (
-                    ts.extract(mp3) if engine == "whisper" else ts.extract_local(mp3)
-                )
-                out = cfg.animations_dir / "timing.json"
-                timing: dict = {}
-                if out.is_file():
-                    try:
-                        timing = _json.loads(out.read_text(encoding="utf-8"))
-                    except _json.JSONDecodeError:
-                        timing = {}
-                if not isinstance(timing, dict):
-                    timing = {}
-                timing[mp3.stem] = block
-                out.parent.mkdir(parents=True, exist_ok=True)
-                out.write_text(
-                    _json.dumps(timing, indent=2, ensure_ascii=False) + "\n",
-                    encoding="utf-8",
-                )
-                from docgen.manim_scene_support import sync_audio_tail_waits_in_scenes
-                sync_audio_tail_waits_in_scenes(cfg)
-                return jsonify({"ok": True, "step": "timestamps", "segment": segment_id})
-
-            elif step == "scene-spec":
-                from docgen.scene_spec_generate import (
-                    generate_scene_spec,
-                    inject_class_block_into_scenes_py,
-                    linted_class_block_from_spec,
-                )
-
-                res = generate_scene_spec(
-                    cfg, segment_id, extra_paths=[], extra_hints=[]
-                )
-                specs_dir = cfg.animations_dir / "specs"
-                specs_dir.mkdir(parents=True, exist_ok=True)
-                wpath = specs_dir / f"{res.seg_name}.scene.yaml"
-                wpath.write_text(res.yaml_text, encoding="utf-8")
-                class_block, merged = linted_class_block_from_spec(
-                    cfg, res.spec, timing_key=res.seg_name
-                )
-                inject_class_block_into_scenes_py(
-                    cfg,
-                    seg_id=merged["segment_id"],
-                    class_name=merged["class_name"],
-                    class_block=class_block,
-                )
-                return jsonify({"ok": True, "step": "scene-spec", "segment": segment_id})
-
-            elif step == "manim":
-                from docgen.manim_runner import ManimRunner
-                runner = ManimRunner(cfg)
-                vmap = cfg.visual_map.get(segment_id, {})
-                scene = vmap.get("scene")
-                if scene:
-                    runner.render(scene=scene)
-                return jsonify({"ok": True, "step": "manim", "segment": segment_id})
-
-            elif step == "compose":
-                from docgen.compose import Composer
-                comp = Composer(cfg)
-                comp.compose_segments([segment_id])
-                return jsonify({"ok": True, "step": "compose", "segment": segment_id})
-
-            elif step == "validate":
-                from docgen.validate import Validator
-                v = Validator(cfg)
-                report = v.validate_segment(segment_id)
-                return jsonify({"ok": True, "step": "validate", "segment": segment_id, "report": report})
-
-            else:
-                return jsonify({"error": f"Unknown step: {step}"}), 400
-
+            return jsonify(_run_segment_step(cfg, step, segment_id))
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "step": step, "segment": segment_id}), 400
         except Exception as exc:
             return jsonify({"error": str(exc), "step": step, "segment": segment_id}), 500
+
+    @app.route("/api/run-from/<step>/<segment_id>", methods=["POST"])
+    def api_run_from(step: str, segment_id: str):
+        """Run ``step`` and all downstream cascade steps (rebuild-from-here).
+
+        Body (optional): ``{"llm_scene_spec": false}`` — when true, the cascade
+        uses LLM ``scene-spec`` instead of offline ``scene-retime``.
+        """
+        cfg = _cfg()
+        if not cfg:
+            return jsonify({"error": "no config"}), 400
+        data = request.json or {}
+        llm_scene = bool(data.get("llm_scene_spec", False))
+        from docgen.asset_graph import cascade_steps
+
+        try:
+            steps = cascade_steps(step, llm_scene_spec=llm_scene)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        ran: list[dict[str, Any]] = []
+        for s in steps:
+            try:
+                result = _run_segment_step(cfg, s, segment_id)
+            except Exception as exc:
+                return jsonify({
+                    "ok": False,
+                    "error": str(exc),
+                    "failed_step": s,
+                    "ran": ran,
+                    "planned": steps,
+                    "segment": segment_id,
+                }), 500
+            ran.append({"step": s, "ok": True})
+            # Attach validate report on the final payload if present.
+            if s == "validate" and "report" in result:
+                ran[-1]["report"] = result["report"]
+        return jsonify({
+            "ok": True,
+            "segment": segment_id,
+            "from_step": step,
+            "planned": steps,
+            "ran": ran,
+        })
 
     # -- API: serve media files ------------------------------------------------
 

@@ -960,9 +960,60 @@ def test_compile_edges_emits_arrows_and_grow() -> None:
         "edges": [{"from": "Hints", "to": "YAML", "color": "C_ACCENT"}],
     }
     out = compile_scene_class(spec)
-    assert "_ar_0_0 = _arrow(_bx_0_0_0.get_center(), _bx_0_0_1.get_center(), C_ACCENT)" in out
+    assert (
+        "_ar_0_0 = _arrow(_bx_0_0_0.get_center(), _bx_0_0_1.get_center(), "
+        "C_ACCENT, style='solid')"
+    ) in out
     assert "GrowArrow(_ar_0_0)" in out
     assert "FadeIn(_bx_0_0_1)" in out
+
+
+def test_compile_edges_dashed_label_uses_fadein() -> None:
+    spec = {
+        "segment_id": "01",
+        "class_name": "FlowScene",
+        "timing_key": "01-flow",
+        "title": {"text": "Flow", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 0.8,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    },
+                    {
+                        "label": "B",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 1,
+                    },
+                ],
+            },
+        ],
+        "edges": [
+            {
+                "from": "A",
+                "to": "B",
+                "color": "C_ORANGE",
+                "style": "dashed",
+                "label": "optional",
+            }
+        ],
+    }
+    validate_scene_spec(spec)
+    out = compile_scene_class(spec)
+    assert "style='dashed'" in out
+    assert "_ar_0_0_lbl = Text('optional'" in out
+    assert "FadeIn(_ar_0_0)" in out
+    assert "FadeIn(_ar_0_0_lbl)" in out
+    assert "GrowArrow(_ar_0_0)" not in out
 
 
 def test_validate_edges_requires_known_labels() -> None:
