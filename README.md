@@ -91,7 +91,7 @@ CI installs `ffmpeg` and `tesseract` via apt — see `.github/workflows/ci.yml`.
 ```bash
 cd your-project/docs/demos
 docgen wizard              # optional: bootstrap narration from project docs
-docgen generate-all        # TTS → timestamps → Manim → compose → validate → concat
+docgen generate-all        # TTS → timestamps → scene retime → Manim → compose → validate
 docgen validate --pre-push
 ```
 
@@ -110,12 +110,12 @@ docgen validate --pre-push
 | `docgen lint [--segment 01]` | Narration lint only |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate `index.html`, `pages.yml`, `.gitattributes`, `.gitignore` |
-| `docgen generate-all [--skip-tts] [--skip-manim] [--retry-manim]` | Full pipeline |
-| `docgen rebuild-after-audio` | Recompose + validate + concat (skips TTS) |
+| `docgen generate-all [--skip-tts] [--skip-manim] [--retry-manim] [--regen-scene-specs]` | Full pipeline: TTS → timestamps → **scene retime** (existing specs) → Manim → compose → validate. `--regen-scene-specs` also runs OpenAI scene-spec-generate |
+| `docgen rebuild-after-audio [--regen-scene-specs]` | Timestamps → scene retime → Manim → compose → validate (skips TTS) |
 | `docgen clean-bundle [-y] [--delete-config] [--keep-narration]` | Remove regenerable outputs under the bundle |
 | `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force]` | Generate narration `.md` from repo sources + owner hints (OpenAI); see `narration_from_source` in YAML |
 | `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into `docgen.yaml`; optional OpenAI refresh of `tts.instructions` / `wizard.system_prompt` (rewrites the file — review in Git) |
-| `docgen scene-compile SPEC.scene.yaml [--dry-run]` | Compile a declarative scene spec (YAML) into a `_TimedScene` class and inject it into `animations/scenes.py` — deterministic layout (rows of `_box`); applies auto-pagination + Whisper `wait_word` |
+| `docgen scene-compile [SPEC.scene.yaml \| --all] [--retime] [--dry-run]` | Compile declarative scene YAML into `animations/scenes.py`. **`--all --retime`** re-derives `wait_word` from current `timing.json` with no OpenAI; unmatched labels fail closed (or set `pace: none`) |
 | `docgen scene-spec-generate [--segment 01 \| --all] [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit YAML only (same schema as `scene-compile`); rejects frame-budget overflow and **subject-beat coverage** failures (hold board on same topic; cover topic shifts; no invented labels — not a blind count); auto-paginate + word-alignment; optionally writes `animations/specs/<stem>.scene.yaml` and `--compile`s into `scenes.py` |
 
 ## Configuration

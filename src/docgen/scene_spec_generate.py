@@ -40,6 +40,7 @@ from docgen.scene_spec import (
     layout_stack_budget,
     narration_sentences,
     spec_rows_reference_whisper_waits,
+    pacing_violations,
     sync_row_labels_to_whisper_words,
     upgrade_wait_segments_to_wait_words,
     validate_scene_spec,
@@ -91,9 +92,12 @@ only for illustrative artwork the hints explicitly request.
 
 Optional per-box (**Whisper ``words`` only**); omit if unsure — compile fills from each box ``label`` → first transcript match:
 - wait_word: non-negative int — index into ``timing.json`` → ``words``; that box waits until that token's **start**, then fades in (**one box at a time** within each row).
+- pace: optional ``none`` — opt out of beat sync for that box (rare; decorative only). When timing
+  words exist, every other labeled box **must** match a spoken phrase or compile fails.
 
 Optional per-row (legacy; first box only — prefer per-box above):
 - wait_word: non-negative int — if set, and boxes omit ``wait_word``, only the **first** box in the row uses this index.
+- pace: optional ``none`` — opt out for every box in the row.
 
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
@@ -326,13 +330,23 @@ def linted_class_block_from_spec(
     if words:
         # LLM-authored wait_word values are often wrong (duplicates / guesses). Compile
         # always re-derives indices from each box label + transcript order so multi-box
-        # rows reveal one box at a time.
+        # rows reveal one box at a time. Fail-closed: unmatched labels clear wait_word
+        # and are rejected below (no leftover LLM indices, no fuzzy false positives).
         merged = sync_row_labels_to_whisper_words(merged, words, overwrite=True)
 
     if spec_rows_reference_whisper_waits(merged) and not words:
         raise SceneGenerationError(
             f"timing.json has no word-level `words` for stem {tk!r}; run `docgen timestamps` "
             "before compiling scenes that use wait_word or wait_segment."
+        )
+
+    pace_issues = pacing_violations(merged, words_present=bool(words))
+    if pace_issues:
+        shown = "\n  ".join(pace_issues[:12])
+        more = f"\n  (+{len(pace_issues) - 12} more)" if len(pace_issues) > 12 else ""
+        raise SceneGenerationError(
+            f"scene pacing failed for timing_key {tk!r} — every story box needs a "
+            f"spoken label matched in timing.json words (or pace: none):\n  {shown}{more}"
         )
 
     try:

@@ -428,7 +428,24 @@ def narration_generate(
 @main.command("scene-compile")
 @click.argument(
     "spec_path",
+    required=False,
+    default=None,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
+)
+@click.option(
+    "--all",
+    "all_specs",
+    is_flag=True,
+    help="Compile every animations/specs/*.scene.yaml (mutually exclusive with SPEC_PATH).",
+)
+@click.option(
+    "--retime",
+    is_flag=True,
+    help=(
+        "Re-derive wait_word indices from current timing.json (no OpenAI) and fail if "
+        "labels do not match spoken words. Implied by --all when timing exists; safe to "
+        "pass explicitly after `docgen timestamps`."
+    ),
 )
 @click.option(
     "--dry-run",
@@ -436,39 +453,68 @@ def narration_generate(
     help="Print generated Python only; do not write animations/scenes.py.",
 )
 @click.pass_context
-def scene_compile(ctx: click.Context, spec_path: Path, dry_run: bool) -> None:
+def scene_compile(
+    ctx: click.Context,
+    spec_path: Path | None,
+    all_specs: bool,
+    retime: bool,
+    dry_run: bool,
+) -> None:
     """Compile a declarative ``*.scene.yaml`` into ``animations/scenes.py``.
 
     Deterministic layout (rows of ``_box`` mobjects) — use for reliable diagrams
     or after an LLM emits **only** YAML. Schema: :mod:`docgen.scene_spec`.
     ``timing_key`` defaults from ``segment_names`` in docgen.yaml when omitted.
+
+    After TTS/timestamps, prefer ``docgen scene-compile --all --retime`` (or
+    ``generate-all``, which retimes existing specs automatically) so beat sync
+    uses fresh ``timing.json`` without calling OpenAI.
     """
     if ctx.obj.get("config") is None:
         raise click.ClickException("No docgen.yaml found (use --config PATH).")
+    if all_specs and spec_path is not None:
+        raise click.ClickException("Pass SPEC_PATH or --all, not both.")
+    if not all_specs and spec_path is None:
+        raise click.ClickException("Pass SPEC_PATH or --all.")
+
     from docgen.manim_scene_support import SceneGenerationError
-    from docgen.scene_spec import load_scene_spec
-    from docgen.scene_spec_generate import inject_class_block_into_scenes_py, linted_class_block_from_spec
+    from docgen.scene_retime import list_scene_spec_paths, retime_compile_spec
+    from docgen.scene_spec import SceneSpecError
 
     cfg = ctx.obj["config"]
-    raw = load_scene_spec(spec_path)
-    try:
-        class_block, merged = linted_class_block_from_spec(cfg, dict(raw))
-    except SceneGenerationError as exc:
-        raise click.ClickException(str(exc)) from exc
+    # --retime is the same compile path (label sync + pacing gate); the flag
+    # documents intent and is the recommended post-timestamps invocation.
+    _ = retime
 
-    if dry_run:
-        click.echo(class_block, nl=False)
-        return
+    paths = list_scene_spec_paths(cfg) if all_specs else [spec_path]
+    if not paths:
+        raise click.ClickException("No animations/specs/*.scene.yaml files found.")
 
-    sid = str(merged["segment_id"]).strip()
-    class_name = str(merged["class_name"]).strip()
-    scenes_path = inject_class_block_into_scenes_py(
-        cfg, seg_id=sid, class_name=class_name, class_block=class_block
-    )
-    click.echo(
-        f"[scene-compile] wrote {class_name} to {scenes_path} "
-        f"(segment {sid} → timing_key {merged['timing_key']!r})"
-    )
+    failures: list[str] = []
+    for path in paths:
+        assert path is not None
+        try:
+            result = retime_compile_spec(cfg, path, dry_run=dry_run)
+        except (SceneGenerationError, SceneSpecError) as exc:
+            if all_specs:
+                click.echo(f"[scene-compile] FAIL {path.name}: {exc}", err=True)
+                failures.append(path.name)
+                continue
+            raise click.ClickException(str(exc)) from exc
+        if dry_run:
+            click.echo(result["class_block"], nl=False)
+            if all_specs:
+                click.echo(f"\n--- end {path.name} ---\n")
+            continue
+        click.echo(
+            f"[scene-compile] wrote {result['class_name']} to {result['scenes_path']} "
+            f"(segment {result['segment_id']} → timing_key {result['timing_key']!r}"
+            f"{', retime' if retime or all_specs else ''})"
+        )
+    if failures:
+        raise click.ClickException(
+            f"scene-compile --all: {len(failures)} failed: " + ", ".join(failures)
+        )
 
 
 @main.command("scene-spec-generate")
@@ -1009,14 +1055,34 @@ def pages(ctx: click.Context, force: bool) -> None:
     is_flag=True,
     help="If compose hits FREEZE GUARD, clear Manim cache and retry Manim + compose once.",
 )
+@click.option(
+    "--regen-scene-specs",
+    is_flag=True,
+    help=(
+        "After timestamps, run OpenAI scene-spec-generate for every manim segment "
+        "(expensive). Default only retime-compiles existing animations/specs/*.scene.yaml."
+    ),
+)
+@click.option(
+    "--skip-scene-retime",
+    is_flag=True,
+    help="Skip the post-timestamps scene retime / scene-spec stage.",
+)
 @click.pass_context
 def generate_all(
     ctx: click.Context,
     skip_tts: bool,
     skip_manim: bool,
     retry_manim: bool,
+    regen_scene_specs: bool,
+    skip_scene_retime: bool,
 ) -> None:
-    """Run full pipeline: TTS -> Manim -> compose -> validate -> concat -> pages."""
+    """Run full pipeline: TTS → timestamps → scene retime → Manim → compose → validate.
+
+    Order matters for beat sync: timestamps must land before scene compile so
+    ``wait_word`` indices match the current mp3. Existing declarative specs are
+    retime-compiled offline; pass ``--regen-scene-specs`` to call OpenAI first.
+    """
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
@@ -1025,16 +1091,23 @@ def generate_all(
         skip_tts=skip_tts,
         skip_manim=skip_manim,
         retry_manim_on_freeze=retry_manim,
+        regen_scene_specs=regen_scene_specs,
+        skip_scene_retime=skip_scene_retime,
     )
 
 
 @main.command("rebuild-after-audio")
+@click.option(
+    "--regen-scene-specs",
+    is_flag=True,
+    help="Also regenerate scene specs via OpenAI before retime-compile.",
+)
 @click.pass_context
-def rebuild_after_audio(ctx: click.Context) -> None:
-    """Rebuild everything after new audio: Manim -> compose -> validate -> concat."""
+def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
+    """Rebuild after new audio: timestamps → scene retime → Manim → compose → validate."""
     from docgen.pipeline import Pipeline
 
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
-    pipeline.run(skip_tts=True)
+    pipeline.run(skip_tts=True, regen_scene_specs=regen_scene_specs)
 
