@@ -121,7 +121,7 @@ docgen validate --pre-push
 |---------|-------------|
 | `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
-| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration in place**, asset freshness chips, **rebuild-from-here** (default cascade: TTS → timestamps → scene-retime → Manim → compose → validate; LLM scene-spec is explicit) |
+| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
