@@ -296,6 +296,7 @@ class Validator:
             report.checks.append(CheckResult("recording_exists", False, [f"No recording for {seg_id}"]))
 
         report.checks.append(self._check_timing_sync(seg_id))
+        report.checks.append(self._check_story_end(seg_id))
         report.checks.append(self._check_narration_lint(seg_id))
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
@@ -738,6 +739,94 @@ class Validator:
                 ],
             )
         return CheckResult("timing_sync", True, [detail])
+
+    def _check_story_end(self, seg_id: str) -> CheckResult:
+        """Fail when the paced visual story finishes long before the narration ends.
+
+        Muxed recordings can still match mp3 length (compose freezes the last frame)
+        while the diagram finished early. Uses scene-spec label→``wait_word`` starts
+        vs audio/transcript end. Hard fail in ``--pre-push`` (not soft like ``av_sync``).
+        """
+        se_cfg = self.config.story_end_config
+        if not se_cfg.get("enabled", True):
+            return CheckResult("story_end", True, ["validation.story_end disabled (skipped)"])
+
+        is_manim = self.config.visual_map.get(seg_id, {}).get("type") == "manim"
+        if not is_manim:
+            return CheckResult("story_end", True, ["non-manim (skipped)"])
+
+        from docgen.scene_retime import list_scene_spec_paths
+        from docgen.scene_spec import last_paced_reveal_time, load_scene_spec
+
+        paths = list_scene_spec_paths(self.config, segment_id=seg_id)
+        if not paths:
+            return CheckResult(
+                "story_end", True, ["No animations/specs/*.scene.yaml (skipped)"]
+            )
+
+        block = self._load_timing_block(seg_id)
+        if block is None:
+            return CheckResult(
+                "story_end",
+                True,
+                ["No timing.json entry (skipped) — run `docgen timestamps`"],
+            )
+        words = block.get("words")
+        if not isinstance(words, list) or not words:
+            return CheckResult(
+                "story_end", True, ["No timing words (skipped)"]
+            )
+
+        last_reveal: float | None = None
+        for path in paths:
+            try:
+                spec = load_scene_spec(path)
+            except Exception as exc:
+                return CheckResult(
+                    "story_end",
+                    False,
+                    [f"Cannot load scene spec {path.name}: {exc}"],
+                )
+            t = last_paced_reveal_time(spec, words)
+            if t is not None and (last_reveal is None or t > last_reveal):
+                last_reveal = t
+
+        if last_reveal is None:
+            return CheckResult(
+                "story_end",
+                True,
+                ["No paced reveals in scene spec (skipped)"],
+            )
+
+        audio = self._find_audio(seg_id)
+        audio_end = self._probe_media_duration(audio) if audio and not _is_lfs_pointer(audio) else None
+        transcript_end = self._timing_last_end(block)
+        # Prefer audio duration; fall back to transcript end when probe fails.
+        end_t = audio_end if audio_end is not None else transcript_end
+        if end_t is None or end_t <= 0:
+            return CheckResult("story_end", True, ["Cannot determine audio/transcript end (skipped)"])
+
+        early_idle = end_t - last_reveal
+        max_early_sec = float(se_cfg.get("max_early_sec", 40.0))
+        max_early_ratio = float(se_cfg.get("max_early_ratio", 0.45))
+        early_ratio = early_idle / end_t if end_t > 0 else 0.0
+        detail = (
+            f"last_paced_reveal={last_reveal:.2f}s audio_end={end_t:.2f}s "
+            f"early_idle={early_idle:.2f}s ({early_ratio:.0%}) "
+            f"(max_early_sec={max_early_sec}, max_early_ratio={max_early_ratio})"
+        )
+        if early_idle > max_early_sec and early_ratio > max_early_ratio:
+            return CheckResult(
+                "story_end",
+                False,
+                [
+                    detail,
+                    "Visual story finishes long before narration ends — boxes race then freeze. "
+                    "Add paced labels for later narration beats, or run "
+                    "`docgen scene-spec-generate` / `scene-compile --retime` after timestamps.",
+                ],
+            )
+        return CheckResult("story_end", True, [detail])
 
     def _check_av_sync(self, seg_id: str, rec: Path) -> CheckResult:
         """OCR anchor check: spoken keywords should be visible on screen near their spoken time.

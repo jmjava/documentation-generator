@@ -275,6 +275,9 @@ class Config:
             "enabled": True,
             "tolerance_sec": 3.0,
             "min_anchors_per_segment": 2,
+            "max_anchors_per_segment": 8,
+            # Prefer scene-spec box labels as OCR anchors when specs exist.
+            "prefer_scene_spec_labels": True,
             # Only OCR-anchor these visual types (on-screen text expected).
             "visual_types": ["manim"],
         }
@@ -296,6 +299,23 @@ class Config:
             "max_end_overrun_sec": 1.0,
         }
         defaults.update(self.raw.get("validation", {}).get("timing_sync", {}))
+        return defaults
+
+    @property
+    def story_end_config(self) -> dict[str, Any]:
+        """Visual story finished early vs narration (``docgen validate`` ``story_end``).
+
+        Compares the last paced scene-spec reveal (label→``wait_word`` start) to
+        the audio/transcript end. Fails when idle time after the last reveal
+        exceeds **both** ``max_early_sec`` and ``max_early_ratio`` × audio end
+        (hard fail in ``--pre-push``, like ``timing_sync``).
+        """
+        defaults: dict[str, Any] = {
+            "enabled": True,
+            "max_early_sec": 40.0,
+            "max_early_ratio": 0.45,
+        }
+        defaults.update(self.raw.get("validation", {}).get("story_end", {}))
         return defaults
 
     @property

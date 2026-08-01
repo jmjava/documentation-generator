@@ -54,7 +54,8 @@ If you still need the legacy behaviour, pin a pre-removal commit
   segments, with a freeze-tail guard.
 - **Validation** — A/V drift, freeze ratio, OCR error scan, layout, narration lint,
   Manim scene lint, **timing_sync** (stale `timing.json` vs regenerated mp3 —
-  hard fail), and **av_sync** (OCR check that spoken anchor keywords appear on
+  hard fail), **story_end** (paced visual story finishes long before narration —
+  hard fail), and **av_sync** (OCR check that scene-spec label anchors appear on
   screen near their spoken time — soft warning).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
   `.gitignore`.
@@ -180,9 +181,14 @@ validation:
     enabled: true
     max_tail_gap_sec: 3.0    # mp3 may run this much past the last transcribed word
     max_end_overrun_sec: 1.0 # transcript may extend this far past the mp3
+  story_end:                 # last paced reveal vs audio end (hard fail in --pre-push)
+    enabled: true
+    max_early_sec: 40.0      # idle after last paced box
+    max_early_ratio: 0.45    # and idle / audio_end (both must exceed to fail)
   av_sync:                   # OCR anchor check (soft warning in --pre-push)
     enabled: true
     tolerance_sec: 3.0
+    prefer_scene_spec_labels: true  # OCR anchors from paced box labels when specs exist
     visual_types: [manim]    # only check types with on-screen text
 
 timestamps:

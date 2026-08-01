@@ -9,7 +9,9 @@ import yaml
 
 from docgen.config import Config
 from docgen.manim_scene_support import BOOTSTRAP_HEADER, SceneGenerationError
+from docgen.scene_spec import layout_stack_budget
 from docgen.scene_spec_generate import (
+    build_scene_spec_user_message,
     generate_scene_spec,
     inject_class_block_into_scenes_py,
     linted_class_block_from_spec,
@@ -261,3 +263,27 @@ def test_generate_scene_spec_extra_hints_run_full_pipeline_with_stub_llm(tmp_pat
     assert result.class_name == "ExtrasScene"
     assert result.spec["rows"]
     assert len(result.spec["rows"]) == 2
+
+
+def test_user_message_includes_computed_layout_stack_budgets() -> None:
+    budget_default = layout_stack_budget(
+        {"font_size": 36}, {"first_row_title_buff": 0.5}
+    )
+    budget_compact = layout_stack_budget(
+        {"font_size": 32}, {"first_row_title_buff": 0.45}
+    )
+    msg = build_scene_spec_user_message(
+        seg_id="01",
+        seg_name="01-x",
+        class_name="XScene",
+        narration_text="Hello world.",
+        timing_enrichment="(no timing)",
+        hints=[],
+        extra_hints=[],
+        reference_scenes="",
+        source_snippets=[],
+    )
+    assert "FRAME / LAYOUT BUDGET" in msg
+    assert f"{budget_default:.2f}" in msg
+    assert f"{budget_compact:.2f}" in msg
+    assert "13.22" in msg  # horizontal safe width (FRAME_WIDTH - 1.0)
