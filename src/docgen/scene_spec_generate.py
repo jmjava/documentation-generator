@@ -105,8 +105,9 @@ Optional top-level:
 - edges: optional list of connectors for **single-page** ``rows`` specs (see below).
 
 Optional per-page (when using ``pages``):
-- edges: list of {{ from: <box label>, to: <box label>, color?: <palette token> }}
-  drawn as arrows between those boxes after layout. Labels must be unique on that page.
+- edges: list of {{ from: <box label>, to: <box label>, color?: <palette token>,
+  style?: solid|dashed, label?: short edge caption ≤40 chars }}
+  drawn as arrows between those boxes after layout. Box labels must be unique on that page.
   Prefer edges for pipeline / flow diagrams (A → B → C); omit when boxes are unrelated topics.
 
 Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|none, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
@@ -119,6 +120,8 @@ Design goals:
 - **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
 - **Edges / arrows:** when narration describes a flow or pipeline, add ``edges`` so the board shows
   directed connections (not only isolated boxes). Keep edge endpoints as spoken labels.
+  Use ``style: dashed`` for optional/secondary paths and a short ``label`` on the arrow when
+  the narration names the relationship (keep edge captions terse).
 - **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
   **hold the board**. When the topic shifts, reveal a new spoken-phrase label for that beat.
   Do **not** invent a box per sentence, and do **not** leave a new topic without a matching label.

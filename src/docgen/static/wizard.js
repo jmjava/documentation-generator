@@ -485,6 +485,45 @@
     }
 
     document.getElementById("validation-results").innerHTML = '<p class="hint">Run validate to see results.</p>';
+    renderAssetGraph(seg?.assets);
+  }
+
+  function renderAssetGraph(assets) {
+    const list = document.getElementById("asset-step-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const steps = assets?.steps || [];
+    if (!steps.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No asset status yet.";
+      list.appendChild(li);
+      return;
+    }
+    // Prefer one chip per logical stage (skip duplicate scene-spec when showing retime).
+    const prefer = new Set(["tts", "timestamps", "scene-retime", "manim", "compose", "validate"]);
+    for (const s of steps) {
+      if (!prefer.has(s.step) && s.step !== "scene-spec") continue;
+      if (s.step === "scene-spec") continue; // shown via retime chip; LLM is explicit button
+      const li = document.createElement("li");
+      const st = s.status === "n/a" ? "na" : s.status;
+      li.className = "asset-chip " + st;
+      li.title = s.detail || "";
+      li.textContent = s.step + ": " + s.status;
+      list.appendChild(li);
+    }
+    // Highlight redo buttons by data-step
+    const byStep = Object.fromEntries(steps.map((s) => [s.step, s]));
+    document.querySelectorAll(".video-actions [data-step]").forEach((btn) => {
+      const step = btn.getAttribute("data-step");
+      const info = byStep[step];
+      btn.classList.remove("step-stale", "step-missing", "step-fresh");
+      if (!info) return;
+      if (info.status === "stale") btn.classList.add("step-stale");
+      else if (info.status === "missing") btn.classList.add("step-missing");
+      else if (info.status === "fresh") btn.classList.add("step-fresh");
+      btn.title = (btn.title ? btn.title + " — " : "") + (info.detail || info.status);
+    });
   }
 
   document.getElementById("btn-add-focus-path")?.addEventListener("click", () => {
@@ -533,33 +572,54 @@
     });
   });
 
-  document.getElementById("btn-regen-narration").addEventListener("click", async () => {
+  async function generateOrReviseNarration(mode) {
     if (!activeSegmentId) return;
     const notes = document.getElementById("revision-notes").value;
     const guidance = document.getElementById("guidance")?.value || "";
+    const current = document.getElementById("narration-editor").value || "";
     const seg = prodSegments.find((s) => s.id === activeSegmentId);
-    const btn = document.getElementById("btn-regen-narration");
-    btn.textContent = "Regenerating...";
-    btn.disabled = true;
+    const regenBtn = document.getElementById("btn-regen-narration");
+    const reviseBtn = document.getElementById("btn-revise-narration");
+    const activeBtn = mode === "revise" ? reviseBtn : regenBtn;
+    const idleLabel = mode === "revise" ? "Revise narration" : "Regenerate";
+    if (mode === "revise" && !notes.trim()) {
+      alert("Revision notes are required to revise in place.");
+      return;
+    }
+    if (mode === "revise" && !current.trim()) {
+      alert("Editor is empty — use Regenerate for a full draft, or paste a script first.");
+      return;
+    }
+    activeBtn.textContent = mode === "revise" ? "Revising..." : "Regenerating...";
+    regenBtn.disabled = true;
+    reviseBtn.disabled = true;
     try {
+      const body = {
+        source_paths: prodFocusPaths.length ? prodFocusPaths : (seg?.focus_paths || []),
+        guidance,
+        segment_name: seg?.name || activeSegmentId,
+        segment_id: activeSegmentId,
+        revision_notes: notes,
+        mode,
+      };
+      if (mode === "revise") body.current_narration = current;
       const res = await fetch("/api/generate-narration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source_paths: prodFocusPaths.length ? prodFocusPaths : (seg?.focus_paths || []),
-          guidance,
-          segment_name: seg?.name || activeSegmentId,
-          segment_id: activeSegmentId,
-          revision_notes: notes,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       if (data.narration) document.getElementById("narration-editor").value = data.narration;
     } catch (err) { alert("Error: " + err.message); }
-    btn.textContent = "Regenerate narration";
-    btn.disabled = false;
-  });
+    regenBtn.textContent = "Regenerate";
+    reviseBtn.textContent = "Revise narration";
+    regenBtn.disabled = false;
+    reviseBtn.disabled = false;
+  }
+
+  document.getElementById("btn-regen-narration").addEventListener("click", () => generateOrReviseNarration("generate"));
+  document.getElementById("btn-revise-narration")?.addEventListener("click", () => generateOrReviseNarration("revise"));
 
   // ---- Pipeline step buttons ----
   async function runStep(step) {
@@ -571,8 +631,39 @@
     return data;
   }
 
-  document.getElementById("btn-redo-tts").addEventListener("click", () => runStep("tts"));
+  async function runFrom(step) {
+    if (!activeSegmentId) return null;
+    const status = document.getElementById("rebuild-status");
+    if (status) status.textContent = "Running from " + step + "…";
+    const llm = step === "scene-spec";
+    const res = await fetch(
+      "/api/run-from/" + encodeURIComponent(step) + "/" + encodeURIComponent(activeSegmentId),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llm_scene_spec: llm }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      if (status) status.textContent = "Failed at " + (data.failed_step || step);
+      alert((data.failed_step || step) + " error: " + (data.error || res.status));
+    } else {
+      if (status) status.textContent = "Done (" + (data.ran || []).length + " steps)";
+      const validateRun = (data.ran || []).find((r) => r.step === "validate" && r.report);
+      if (validateRun?.report) {
+        document.getElementById("validation-results").innerHTML =
+          "<pre>" + escHtml(JSON.stringify(validateRun.report, null, 2)) + "</pre>";
+      }
+      await loadProductionView();
+    }
+    return data;
+  }
+
+  document.getElementById("btn-redo-tts")?.addEventListener("click", () => runStep("tts"));
+  document.getElementById("btn-redo-tts-video")?.addEventListener("click", () => runStep("tts"));
   document.getElementById("btn-redo-timestamps")?.addEventListener("click", () => runStep("timestamps"));
+  document.getElementById("btn-redo-scene-retime")?.addEventListener("click", () => runStep("scene-retime"));
   document.getElementById("btn-redo-scene-spec")?.addEventListener("click", () => runStep("scene-spec"));
   document.getElementById("btn-redo-manim").addEventListener("click", () => runStep("manim"));
   document.getElementById("btn-redo-compose").addEventListener("click", () => runStep("compose"));
@@ -584,11 +675,15 @@
     }
   });
 
+  document.getElementById("btn-rebuild-from")?.addEventListener("click", async () => {
+    const sel = document.getElementById("rebuild-from-select");
+    const step = sel?.value || "scene-retime";
+    await runFrom(step);
+  });
+
   document.getElementById("btn-redo-all").addEventListener("click", async () => {
     if (!activeSegmentId) return;
-    for (const step of ["tts", "timestamps", "scene-spec", "manim", "compose", "validate"]) {
-      await runStep(step);
-    }
+    await runFrom("tts");
   });
 
   // ---- Status buttons ----

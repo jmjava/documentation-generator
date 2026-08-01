@@ -55,6 +55,7 @@ ALLOWED_COLORS = frozenset(
 )
 
 ALLOWED_PAGE_TRANSITIONS = frozenset({"fade", "none"})
+ALLOWED_EDGE_STYLES = frozenset({"solid", "dashed"})
 
 SPEC_REQUIRED_TOP = ("segment_id", "class_name", "title")
 
@@ -1164,6 +1165,17 @@ def _validate_edges(
             raise SceneSpecError(
                 f"{ep}: color must be one of {sorted(ALLOWED_COLORS)} if set"
             )
+        style = edge.get("style")
+        if style is not None and str(style).strip().lower() not in ALLOWED_EDGE_STYLES:
+            raise SceneSpecError(
+                f"{ep}: style must be one of {sorted(ALLOWED_EDGE_STYLES)} if set"
+            )
+        label = edge.get("label")
+        if label is not None:
+            if not isinstance(label, str):
+                raise SceneSpecError(f"{ep}: label must be a string if set")
+            if len(label.strip()) > 40:
+                raise SceneSpecError(f"{ep}: label must be at most 40 characters")
 
 
 def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
@@ -1348,8 +1360,8 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
         "",
     ]
 
-    # Map (page, later-box-var) → list of edge var names to GrowArrow with that box.
-    edges_with_target: dict[tuple[int, str], list[str]] = {}
+    # Map (page, later-box-var) → list of (edge_var, anim) where anim is grow|fade.
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]] = {}
     page_edge_vars: dict[int, list[str]] = {}
 
     for p, page in enumerate(pages):
@@ -1416,14 +1428,29 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                 continue
             evar = f"_ar_{p}_{ei}"
             ecol = str(edge.get("color") or "C_ACCENT")
+            estyle = str(edge.get("style") or "solid").strip().lower() or "solid"
+            elabel = str(edge.get("label") or "").strip()
             lines.append(
-                f"        {evar} = _arrow({src_var}.get_center(), {dst_var}.get_center(), {ecol})"
+                f"        {evar} = _arrow({src_var}.get_center(), {dst_var}.get_center(), "
+                f"{ecol}, style={estyle!r})"
             )
             page_edge_vars.setdefault(p, []).append(evar)
             # Reveal with the later endpoint (second in box creation order).
             order = {v: i for i, v in enumerate(label_vars.values())}
             later = dst_var if order.get(dst_var, 0) >= order.get(src_var, 0) else src_var
-            edges_with_target.setdefault((p, later), []).append(evar)
+            # GrowArrow only works on solid Arrow; dashed / labeled edges FadeIn.
+            anim = "grow" if estyle == "solid" and not elabel else "fade"
+            edges_with_target.setdefault((p, later), []).append((evar, anim))
+            if elabel:
+                lvar = f"{evar}_lbl"
+                lines.append(
+                    f"        {lvar} = Text({elabel!r}, font_size=16, color={ecol})"
+                )
+                lines.append(
+                    f"        {lvar}.move_to({evar}.get_center()).shift(UP * 0.22)"
+                )
+                page_edge_vars.setdefault(p, []).append(lvar)
+                edges_with_target.setdefault((p, later), []).append((lvar, "fade"))
 
     lines.append("")
 
@@ -1459,11 +1486,15 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                             lines.append(f"        self.remove({t})")
                         lines.append("        self.timed_wait(0.05)")
                 bx = f"_bx_{p}_{r}_{b_idx}"
-                edge_vars = edges_with_target.get((p, bx), [])
-                if edge_vars:
-                    anims = ", ".join(
-                        [f"FadeIn({bx})"] + [f"GrowArrow({ev})" for ev in edge_vars]
-                    )
+                edge_anims = edges_with_target.get((p, bx), [])
+                if edge_anims:
+                    parts = [f"FadeIn({bx})"]
+                    for ev, kind in edge_anims:
+                        if kind == "grow":
+                            parts.append(f"GrowArrow({ev})")
+                        else:
+                            parts.append(f"FadeIn({ev})")
+                    anims = ", ".join(parts)
                     lines.append(
                         f"        self.timed_play({anims}, run_time={run_time})"
                     )

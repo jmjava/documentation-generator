@@ -47,6 +47,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 .btn-primary:disabled{background:#a0b0e0;cursor:not-allowed}
 .btn-secondary{background:#e8ecf4;color:#333}.btn-secondary:hover{background:#d0d8ea}
 .btn-warning{background:#f59e0b;color:#fff}.btn-warning:hover{background:#d97706}
+.video-actions .step-stale{box-shadow:inset 0 0 0 1px #f59e0b}
+.video-actions .step-missing{box-shadow:inset 0 0 0 1px #ef4444}
+.video-actions .step-fresh{opacity:.92}
 .action-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
 .status-text{font-size:.82rem;color:#666}
 
@@ -104,6 +107,16 @@ textarea:focus,input[type=text]:focus{outline:none;border-color:#4361ee;box-shad
 .validation-card h3{font-size:.88rem;margin-bottom:.4rem}
 .validation-card pre{font-size:.78rem;white-space:pre-wrap;max-height:200px;overflow-y:auto;background:#f8f9fc;padding:.5rem;border-radius:4px}
 .video-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}
+.asset-graph{margin-top:.75rem;padding:.75rem;border:1px solid #e8ecf4;border-radius:8px;background:#fafbff}
+.asset-step-list{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0 0}
+.asset-chip{font-size:.72rem;padding:.2rem .55rem;border-radius:999px;font-weight:600;letter-spacing:.02em;border:1px solid transparent}
+.asset-chip.fresh{background:#d1fae5;color:#065f46;border-color:#a7f3d0}
+.asset-chip.stale{background:#fef3c7;color:#92400e;border-color:#fde68a}
+.asset-chip.missing{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+.asset-chip.na{background:#e8ecf4;color:#666;border-color:#d0d8ea}
+.rebuild-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.75rem}
+.rebuild-row label{font-size:.82rem;color:#666}
+.rebuild-row select{border:1px solid #ddd;border-radius:6px;padding:.35rem .5rem;font-size:.85rem;background:#fff}
 
 /* Review action bar */
 .review-action-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e8ecf4}
