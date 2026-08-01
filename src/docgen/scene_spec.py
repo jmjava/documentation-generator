@@ -593,6 +593,65 @@ def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]
     return issues
 
 
+def iter_paced_label_anchors(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+) -> list[tuple[str, float]]:
+    """Return ``(label, spoken_start)`` for paced boxes after fail-closed sync.
+
+    Used by validate ``story_end`` and ``av_sync`` OCR anchoring.
+    """
+    if not isinstance(words, list) or not words:
+        return []
+    synced = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    out: list[tuple[str, float]] = []
+    for rows in _spec_pages_rows(synced):
+        for row in rows:
+            if not isinstance(row, dict) or _pace_none(row):
+                continue
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            for box in boxes:
+                if not isinstance(box, dict) or _pace_none(box):
+                    continue
+                label = str(box.get("label", "")).strip()
+                ww = box.get("wait_word")
+                if not label or ww is None:
+                    continue
+                try:
+                    wi = int(ww)
+                except (TypeError, ValueError):
+                    continue
+                if wi < 0 or wi >= len(words):
+                    continue
+                w = words[wi]
+                if not isinstance(w, dict):
+                    continue
+                try:
+                    t = float(w.get("start", 0.0))
+                except (TypeError, ValueError):
+                    continue
+                out.append((label, t))
+    return out
+
+
+def last_paced_reveal_time(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+) -> float | None:
+    """Wall-clock ``start`` of the latest paced box reveal, or ``None`` if none.
+
+    Re-derives ``wait_word`` from labels (fail-closed sync) then takes the maximum
+    word ``start`` among boxes that are not ``pace: none``. Used by validate
+    ``story_end`` to detect boards that finish long before the narration ends.
+    """
+    anchors = iter_paced_label_anchors(spec, words)
+    if not anchors:
+        return None
+    return max(t for _, t in anchors)
+
+
 def upgrade_wait_segments_to_wait_words(
     spec: dict[str, Any],
     words: list[dict[str, Any]],

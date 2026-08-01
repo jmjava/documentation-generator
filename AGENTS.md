@@ -47,7 +47,7 @@ Commands registered on the **`docgen`** CLI include:
 - **`image-generate`** — render scene-spec **image elements** (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle (also runs for missing assets inside `generate-all`).
 - **`manim`** — render Manim scenes declared in config.
 - **`compose`** — mux narration audio with visual sources via ffmpeg.
-- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`**, **`av_sync`** (soft), **`subject_beat_coverage`** (declarative specs vs narration topic beats; hard fail when enabled), and related checks.
+- **`validate`** / **`validate --pre-push`** — drift, narration lint, Manim hints, **`timing_sync`**, **`story_end`** (last paced reveal vs audio end; hard fail), **`av_sync`** (soft; prefers scene-spec labels as OCR anchors), **`subject_beat_coverage`** (declarative specs vs narration topic beats; hard fail when enabled), and related checks.
 - **`lint`** — narration lint helper.
 - **`narration-generate`** — LLM-assisted narration from hints and repo context.
 - **`scene-spec-generate`** — LLM emits declarative **`*.scene.yaml`**; enforces frame budget + **subject-beat coverage** (dwell OK; cover topic shifts; reject invented labels).

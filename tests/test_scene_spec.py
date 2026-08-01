@@ -14,6 +14,8 @@ from docgen.scene_spec import (
     compile_scene_class,
     cluster_subject_beats,
     count_spec_labels,
+    iter_paced_label_anchors,
+    last_paced_reveal_time,
     layout_budget_violations,
     layout_density_violations,
     layout_stack_budget,
@@ -850,6 +852,78 @@ def test_sync_row_labels_never_keeps_legacy_row_wait_word_for_unmatched() -> Non
     assert out["rows"][0]["boxes"][0].get("wait_word") is None
     # Soft/fuzzy containment must not map Originator → operator either.
     assert pacing_violations(out, words_present=True)
+
+
+def test_last_paced_reveal_time_uses_latest_matched_label() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Alpha",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    },
+                    {
+                        "label": "Omega",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    },
+                ],
+            }
+        ],
+    }
+    words = [
+        {"word": "Alpha", "start": 2.0, "end": 2.4},
+        {"word": "then", "start": 10.0, "end": 10.2},
+        {"word": "Omega", "start": 55.0, "end": 55.5},
+    ]
+    anchors = iter_paced_label_anchors(spec, words)
+    assert [a[0] for a in anchors] == ["Alpha", "Omega"]
+    assert last_paced_reveal_time(spec, words) == pytest.approx(55.0)
+
+
+def test_last_paced_reveal_time_ignores_pace_none() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Early",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    },
+                    {
+                        "label": "Late",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "pace": "none",
+                    },
+                ],
+            }
+        ],
+    }
+    words = [
+        {"word": "Early", "start": 5.0, "end": 5.3},
+        {"word": "Late", "start": 90.0, "end": 90.4},
+    ]
+    assert last_paced_reveal_time(spec, words) == pytest.approx(5.0)
 
 
 def test_pacing_violations_allow_pace_none_opt_out() -> None:

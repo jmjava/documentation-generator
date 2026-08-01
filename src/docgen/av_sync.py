@@ -26,6 +26,15 @@ class AVSyncReport:
     passed: bool = True
 
 
+def _ocr_keyword_from_label(label: str) -> str | None:
+    """Pick a distinctive token from a scene-spec label for OCR substring match."""
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", label or "")
+    if not tokens:
+        return None
+    # Prefer longer tokens (OCR noise is worse on short words).
+    return max(tokens, key=len)
+
+
 class AVSyncValidator:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -116,13 +125,23 @@ class AVSyncValidator:
                 for a in configured
             ]
 
-        # Auto-extract: nouns from transcript words that are >5 chars
         words = ts_data.get("words", [])
+        if not isinstance(words, list):
+            words = []
+
+        if self.sync_cfg.get("prefer_scene_spec_labels", True):
+            from_spec = self._anchors_from_scene_specs(seg_id, words)
+            if from_spec:
+                return from_spec
+
+        # Fallback: nouns from transcript words that are >5 chars
         seen: set[str] = set()
         anchors: list[SyncAnchor] = []
-        min_anchors = self.sync_cfg.get("min_anchors_per_segment", 2)
+        min_anchors = int(self.sync_cfg.get("min_anchors_per_segment", 2))
 
         for w in words:
+            if not isinstance(w, dict):
+                continue
             word = re.sub(r"[^a-zA-Z]", "", w.get("word", ""))
             if len(word) > 5 and word.lower() not in seen:
                 seen.add(word.lower())
@@ -130,4 +149,41 @@ class AVSyncValidator:
                 if len(anchors) >= min_anchors * 2:
                     break
 
-        return anchors[:max(min_anchors, 3)]
+        return anchors[: max(min_anchors, 3)]
+
+    def _anchors_from_scene_specs(
+        self, seg_id: str, words: list[Any]
+    ) -> list[SyncAnchor]:
+        """Build OCR anchors from paced scene-spec labels (on-screen text)."""
+        if not words:
+            return []
+
+        from docgen.scene_retime import list_scene_spec_paths
+        from docgen.scene_spec import iter_paced_label_anchors, load_scene_spec
+
+        paths = list_scene_spec_paths(self.config, segment_id=seg_id)
+        if not paths:
+            return []
+
+        min_anchors = int(self.sync_cfg.get("min_anchors_per_segment", 2))
+        max_anchors = int(self.sync_cfg.get("max_anchors_per_segment", 8))
+        max_anchors = max(min_anchors, max_anchors)
+
+        seen: set[str] = set()
+        anchors: list[SyncAnchor] = []
+        word_dicts = [w for w in words if isinstance(w, dict)]
+
+        for path in paths:
+            try:
+                spec = load_scene_spec(path)
+            except Exception:
+                continue
+            for label, spoken_at in iter_paced_label_anchors(spec, word_dicts):
+                keyword = _ocr_keyword_from_label(label)
+                if not keyword or keyword.lower() in seen:
+                    continue
+                seen.add(keyword.lower())
+                anchors.append(SyncAnchor(keyword=keyword, spoken_at=spoken_at))
+                if len(anchors) >= max_anchors:
+                    return anchors
+        return anchors

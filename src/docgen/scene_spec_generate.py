@@ -241,17 +241,27 @@ def build_scene_spec_user_message(
 
     parts.append("")
     parts.append("--- FRAME / LAYOUT BUDGET (plan every page; scene-spec-generate rejects overflow) ---")
-    parts.append(
-        f"Dogfood Manim frame ≈ {FRAME_WIDTH} × {FRAME_HEIGHT} Manim units. "
-        "Per page vertical cost = sum over rows of max(box height in row) + (n_rows - 1) * row_gap. "
-        "That total must stay at or below the budget implied by your title.font_size and layout.first_row_title_buff. "
-        "Per row horizontal cost = sum(box widths) + (n_boxes - 1) * column_gap; keep ≤ ~13."
+    horiz_safe = FRAME_WIDTH - 1.0
+    budget_default = layout_stack_budget(
+        {"font_size": 36}, {"first_row_title_buff": 0.5}
+    )
+    budget_compact = layout_stack_budget(
+        {"font_size": 32}, {"first_row_title_buff": 0.45}
     )
     parts.append(
-        f"Reference max stack heights: "
-        f"title 36 + first_row_title_buff 0.5 → ≈ {layout_stack_budget({'font_size': 36}, {'first_row_title_buff': 0.5}):.2f} u; "
-        f"title 32 + buff 0.45 → ≈ {layout_stack_budget({'font_size': 32}, {'first_row_title_buff': 0.45}):.2f} u. "
-        "Recompute if you change those fields."
+        f"Frame ≈ {FRAME_WIDTH:.2f} × {FRAME_HEIGHT:.2f} Manim units. "
+        f"Horizontal safe width ≈ {horiz_safe:.2f} u "
+        "(sum of box widths + (n_boxes-1)*column_gap per row must stay ≤ this)."
+    )
+    parts.append(
+        "**Vertical stack budgets** (use these numbers unless you change "
+        "title.font_size / layout.first_row_title_buff):\n"
+        f"  • Default font_size=36, first_row_title_buff=0.5 → "
+        f"max stack height ≈ {budget_default:.2f} u\n"
+        f"  • Compact font_size=32, first_row_title_buff=0.45 → "
+        f"max stack height ≈ {budget_compact:.2f} u\n"
+        "Per page: sum(max box height per row) + (n_rows-1)*row_gap ≤ that budget. "
+        "When you would exceed it, spill to another page (do not shrink/cram)."
     )
     return "\n".join(parts)
 
