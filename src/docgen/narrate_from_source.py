@@ -199,23 +199,50 @@ def build_owner_hints_guidance(
     return "\n".join(f"- {h}" for h in lines if h.strip())
 
 
+def _existing_narration_text(cfg: "Config", seg_id: str) -> str:
+    """Return current ``narration/<stem>.md`` text, or empty if missing."""
+    seg_name = cfg.resolve_segment_name(seg_id)
+    path = cfg.narration_dir / f"{seg_name}.md"
+    if not path.is_file():
+        # Match wizard asset discovery for NN-*.md fallbacks.
+        if cfg.narration_dir.is_dir():
+            for cand in cfg.narration_dir.glob(f"{seg_id}-*.md"):
+                return cand.read_text(encoding="utf-8")
+            for cand in cfg.narration_dir.glob(f"{seg_id}*.md"):
+                return cand.read_text(encoding="utf-8")
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
 def generate_narration_markdown(
     cfg: "Config",
     seg_id: str,
     *,
     extra_paths: list[str],
     extra_hints: list[str],
+    revision_notes: str = "",
+    mode: str = "generate",
 ) -> str:
     """Call OpenAI and return markdown body (does not write files).
 
     Owner hints from YAML and ``extra_hints`` from the caller are sent as guidance only;
     the returned markdown is model-generated.
+
+    ``mode="revise"`` edits the existing narration file in place using
+    ``revision_notes`` (requires both an on-disk script and non-empty notes).
     """
     from docgen.wizard import generate_narration_via_llm
 
+    mode_norm = str(mode or "generate").strip().lower()
+    if mode_norm not in ("generate", "revise"):
+        mode_norm = "generate"
+    notes = (revision_notes or "").strip()
+
     settings = merged_narration_from_source_settings(cfg, seg_id)
     snippets = collect_source_snippets(cfg, settings, extra_paths=extra_paths)
-    if not snippets:
+    # Revise can proceed with empty sources (current script + notes are enough);
+    # full generate still requires context files.
+    if not snippets and mode_norm != "revise":
         raise ValueError(
             "No source files collected. Add narration_from_source.context.paths/globs "
             "to docgen.yaml or pass extra paths on the CLI."
@@ -224,15 +251,27 @@ def generate_narration_markdown(
     guidance = build_owner_hints_guidance(settings, extra_hints)
     seg_name = cfg.resolve_segment_name(seg_id)
     topic = cfg.narration_topic_label(seg_id)
+    current = ""
+    if mode_norm == "revise":
+        current = _existing_narration_text(cfg, seg_id)
+        if not current.strip():
+            raise ValueError(
+                f"no existing narration for segment {seg_id!r} to revise — "
+                "run a full generate first, or drop --revise"
+            )
+        if not notes:
+            raise ValueError("--revise requires --revision-notes")
     return generate_narration_via_llm(
         source_texts=source_texts,
         guidance=guidance,
         system_prompt=settings.system_prompt,
         model=settings.model,
         segment_name=seg_name,
-        revision_notes="",
+        revision_notes=notes,
         temperature=settings.temperature,
         topic_label=topic,
+        current_narration=current,
+        mode=mode_norm,
     )
 
 

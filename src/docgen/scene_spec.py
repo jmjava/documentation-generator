@@ -67,10 +67,13 @@ _LAYOUT_HORIZONTAL_SAFE = FRAME_WIDTH - 1.0
 _LAYOUT_BOTTOM_MARGIN = 0.55
 
 
-def _title_band_estimate(font_size: int) -> float:
+def _title_band_estimate(font_size: int, *, has_subtitle: bool = False) -> float:
     """Rough vertical space from top of frame through title and first gap."""
     fs = max(14, int(font_size))
-    return 0.78 + (fs / 36.0) * 0.52
+    band = 0.78 + (fs / 36.0) * 0.52
+    if has_subtitle:
+        band += 0.38
+    return band
 
 
 def layout_stack_budget(title: dict[str, Any], layout: dict[str, Any] | None) -> float:
@@ -80,7 +83,8 @@ def layout_stack_budget(title: dict[str, Any], layout: dict[str, Any] | None) ->
     fs = title.get("font_size")
     if not isinstance(fs, (int, float)):
         fs = 36
-    band = _title_band_estimate(int(fs))
+    has_sub = bool(str(title.get("subtitle") or "").strip())
+    band = _title_band_estimate(int(fs), has_subtitle=has_sub)
     return FRAME_HEIGHT - band - buff - _LAYOUT_BOTTOM_MARGIN
 
 
@@ -1162,6 +1166,12 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                 v = box[num_f]
                 if not isinstance(v, (int, float)) or v <= 0:
                     raise SceneSpecError(f"{bp}: {num_f} must be a positive number")
+            bsub = box.get("subtitle")
+            if bsub is not None:
+                if not isinstance(bsub, str):
+                    raise SceneSpecError(f"{bp}: subtitle must be a string if set")
+                if len(bsub.strip()) > 60:
+                    raise SceneSpecError(f"{bp}: subtitle must be at most 60 characters")
 
         has_row_pacing = row.get("wait_word") is not None or row.get("wait_segment") is not None
         if has_row_pacing and box_pacing:
@@ -1262,6 +1272,12 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         raise SceneSpecError(
             f"{path_label}: title.color must be one of {sorted(ALLOWED_COLORS)}"
         )
+    tsub = title.get("subtitle")
+    if tsub is not None:
+        if not isinstance(tsub, str):
+            raise SceneSpecError(f"{path_label}: title.subtitle must be a string if set")
+        if len(tsub.strip()) > 80:
+            raise SceneSpecError(f"{path_label}: title.subtitle must be at most 80 characters")
 
     has_pages = data.get("pages") is not None
     has_rows = data.get("rows") is not None
@@ -1393,6 +1409,7 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
     title_text: str = str(title["text"])
     title_fs = int(title["font_size"])
     title_color = str(title["color"])
+    title_subtitle = str(title.get("subtitle") or "").strip()
 
     layout = spec.get("layout") or {}
     first_row_title_buff = float(layout.get("first_row_title_buff", 0.5))
@@ -1414,10 +1431,27 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
         "        self.camera.background_color = C_BG",
         f"        timing_words = _load_timing_words({timing_key!r})",
         "",
-        f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}).to_edge(UP)",
-        "        self.timed_play(Write(title), run_time=2.0)",
-        "",
     ]
+    if title_subtitle:
+        sub_fs = max(14, title_fs - 10)
+        lines.extend(
+            [
+                f"        _title_main = Text({title_text!r}, font_size={title_fs}, color={title_color})",
+                f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color})",
+                "        _title_sub.set_opacity(0.85)",
+                "        title = VGroup(_title_main, _title_sub).arrange(DOWN, buff=0.12).to_edge(UP)",
+                "        self.timed_play(Write(title), run_time=2.0)",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}).to_edge(UP)",
+                "        self.timed_play(Write(title), run_time=2.0)",
+                "",
+            ]
+        )
 
     # Map (page, later-box-var) → list of (edge_var, anim) where anim is grow|fade.
     edges_with_target: dict[tuple[int, str], list[tuple[str, str]]] = {}
@@ -1445,9 +1479,15 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                 lab = str(box["label"])
                 col = str(box["color"])
                 fs = int(box["font_size"])
-                lines.append(
-                    f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs})"
-                )
+                bsub = str(box.get("subtitle") or "").strip()
+                if bsub:
+                    lines.append(
+                        f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs}, subtitle={bsub!r})"
+                    )
+                else:
+                    lines.append(
+                        f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs})"
+                    )
 
         for r, row in enumerate(rows):
             boxes_raw = row["boxes"]

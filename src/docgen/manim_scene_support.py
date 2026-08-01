@@ -161,8 +161,12 @@ def _load_timing_words(segment_key: str) -> list[dict]:
     return list(words) if isinstance(words, list) else []
 
 
-def _box(label, color, w=2.2, h=0.75, fs=18):
-    """Labeled rounded box — slightly stronger fill/stroke for readable diagram boards."""
+def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=""):
+    """Labeled rounded box — slightly stronger fill/stroke for readable diagram boards.
+
+    Optional ``subtitle`` is a second, smaller line under the primary label
+    (decorative; not used for wait_word beat matching).
+    """
     r = RoundedRectangle(
         corner_radius=0.18, width=w, height=h,
         stroke_color=color, stroke_width=2.5,
@@ -173,14 +177,24 @@ def _box(label, color, w=2.2, h=0.75, fs=18):
     # the palette token is already near-white.
     if str(color) in (C_WHITE, "C_WHITE", "#cdd6f4"):
         t.set_color(color)
+    sub = str(subtitle or "").strip()
+    if sub:
+        sub_fs = max(10, int(fs * 0.72))
+        s = Text(sub, font_size=sub_fs, color=C_WHITE)
+        if str(color) in (C_WHITE, "C_WHITE", "#cdd6f4"):
+            s.set_color(color)
+        s.set_opacity(0.85)
+        text = VGroup(t, s).arrange(DOWN, buff=0.06)
+    else:
+        text = t
     inner_w = max(w - 0.3, 0.35)
     inner_h = max(h - 0.22, 0.35)
-    if t.width > inner_w:
-        t.scale(inner_w / t.width)
-    if t.height > inner_h:
-        t.scale(inner_h / t.height)
-    t.move_to(r.get_center())
-    return VGroup(r, t)
+    if text.width > inner_w:
+        text.scale(inner_w / text.width)
+    if text.height > inner_h:
+        text.scale(inner_h / text.height)
+    text.move_to(r.get_center())
+    return VGroup(r, text)
 
 
 def _arrow(start, end, color="#cdd6f4", style="solid"):
