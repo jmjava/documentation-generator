@@ -20,6 +20,7 @@ from docgen.scene_spec import (
     load_scene_spec,
     narration_sentence_count,
     narration_sentences,
+    pacing_violations,
     segment_index_for_whisper_time,
     sync_row_labels_to_whisper_words,
     validate_scene_spec,
@@ -815,6 +816,99 @@ def test_sync_row_labels_overwrite_true_clears_unmatched_wait_word() -> None:
     words = [{"word": "hello", "start": 0.0, "end": 0.3}]
     out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
     assert out["rows"][0]["boxes"][0].get("wait_word") is None
+
+
+def test_sync_row_labels_never_keeps_legacy_row_wait_word_for_unmatched() -> None:
+    """Issue #56: leftover LLM wait_word must not bind Originator → unrelated token."""
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_word": 146,
+                "boxes": [
+                    {
+                        "label": "Originator",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    }
+                ],
+            }
+        ],
+    }
+    words = [
+        {"word": "the", "start": 0.0, "end": 0.2},
+        {"word": "operator", "start": 64.0, "end": 64.4},
+        {"word": "path", "start": 65.0, "end": 65.3},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    assert out["rows"][0].get("wait_word") is None
+    assert out["rows"][0]["boxes"][0].get("wait_word") is None
+    # Soft/fuzzy containment must not map Originator → operator either.
+    assert pacing_violations(out, words_present=True)
+
+
+def test_pacing_violations_allow_pace_none_opt_out() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Spoken",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    },
+                    {
+                        "label": "Decor",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "pace": "none",
+                    },
+                ],
+            }
+        ],
+    }
+    assert pacing_violations(spec, words_present=True) == []
+    assert pacing_violations(spec, words_present=False) == []
+
+
+def test_validate_pace_none_rejects_unknown_values() -> None:
+    with pytest.raises(SceneSpecError, match="pace"):
+        validate_scene_spec(
+            {
+                "segment_id": "1",
+                "class_name": "X",
+                "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                "rows": [
+                    {
+                        "run_time": 1.0,
+                        "boxes": [
+                            {
+                                "label": "A",
+                                "color": "C_GREEN",
+                                "width": 2.0,
+                                "height": 1.0,
+                                "font_size": 18,
+                                "pace": "auto",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
 
 
 def test_sync_row_labels_hyphenated_label_matches_spoken_parts() -> None:

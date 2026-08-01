@@ -56,12 +56,13 @@ Commands registered on the **`docgen`** CLI include:
 - **`clean-bundle`** — remove regenerable outputs per policy.
 - **`concat`** — stitch segment videos.
 - **`pages`** — emit static HTML for demo assets.
-- **`generate-all`** — orchestrated pipeline for a bundle.
-- **`rebuild-after-audio`** — rerun steps that depend on fresh audio/timing.
+- **`generate-all`** — orchestrated pipeline: TTS → timestamps → **scene retime** (compile existing `*.scene.yaml` against fresh timing) → images → Manim → compose → validate → concat → pages. Optional `--regen-scene-specs` for LLM scene YAML first.
+- **`rebuild-after-audio`** — same as generate-all with TTS skipped (still retimes scenes after timestamps).
 
 ## Implications for changes here
 
-- **Manim / `scenes.py` (marker blocks):** Fix generators under `src/docgen/**` (`manim_scene_support.py`, `scene_spec.py`, `scene_spec_generate.py`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside a consumer's **`animations/scenes.py`** between **`BEGIN/END GENERATED SCENE`** markers; re-run **`scene-spec-generate`** / **`scene-compile`** and **`manim`** instead.
+- **Manim / `scenes.py` (marker blocks):** Fix generators under `src/docgen/**` (`manim_scene_support.py`, `scene_spec.py`, `scene_spec_generate.py`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside a consumer's **`animations/scenes.py`** between **`BEGIN/END GENERATED SCENE`** markers; re-run **`scene-spec-generate`** / **`scene-compile --retime`** and **`manim`** instead. Preferred consumer order: narration → TTS → timestamps → scene-spec/compile → Manim → compose.
+- **Beat sync (fail-closed):** when `timing.json` has words, every story box label must match a spoken phrase (`wait_word`); unmatched labels and leftover LLM indices are rejected. Opt out with ``pace: none``. Fuzzy containment matching is not used.
 - **Subject-beat coverage:** implemented in `scene_spec.layout_density_violations` / `cluster_subject_beats`; enforced by **`scene-spec-generate`** and **`validate`** (`validation.subject_beat_coverage.enabled`, default true). Not a blind label count.
 - Prefer **stable CLI / library contracts** and **documented exit codes** so CI can depend on them.
 - **`narration_from_source`:** hints in config + **`docgen narration-generate`** — owner-supplied context paths, not opaque bulk edits to outputs.

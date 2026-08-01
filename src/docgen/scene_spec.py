@@ -373,16 +373,6 @@ def _tokens_match(label_token: str, word_token: str) -> bool:
     return _stem(label_token) == _stem(word_token)
 
 
-def _soft_token_match(a: str, b: str) -> bool:
-    """Cheap fuzzy match for long tokens (prefix / containment after length check)."""
-    if abs(len(a) - len(b)) > 3:
-        return False
-    if len(a) < 5 or len(b) < 5:
-        return False
-    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-    return longer.startswith(shorter) or shorter in longer
-
-
 def segment_index_for_whisper_time(
     segments: list[dict[str, Any]], wall_time: float
 ) -> int:
@@ -447,10 +437,10 @@ def sync_row_labels_to_whisper_words(
 ) -> dict[str, Any]:
     """Set ``wait_word`` on each **box** from its ``label`` → first spoken match (in order).
 
-    Uses the same label/word token rules as before. Each matched box waits at **word**
-    ``start``, not segment boundary. Row-level ``wait_word`` / ``wait_segment`` are cleared
-    when ``overwrite=True`` (compile path); legacy row ``wait_word`` is seeded onto the first
-    box only if that box has no label match.
+    Matching is **fail-closed**: exact/stem token equality only (plus hyphen splits).
+    No fuzzy containment and no leftover LLM ``wait_word`` when the label is absent
+    from the transcript. Each matched box waits at word ``start``. Row-level
+    ``wait_word`` / ``wait_segment`` are cleared when ``overwrite=True``.
     """
     if not isinstance(words, list) or not words:
         return spec
@@ -490,14 +480,6 @@ def sync_row_labels_to_whisper_words(
             if ok:
                 return (i + m - 1, word_stream[i][2])
             i += 1
-        # Soft fallback: accept a single long label token that equals a spoken
-        # word after stripping a short edit distance (hyphen/TTS orthography).
-        if m == 1 and len(tokens[0]) >= 5:
-            target = tokens[0]
-            for j in range(from_idx, n):
-                w = word_stream[j][0]
-                if _tokens_match(target, w) or _soft_token_match(target, w):
-                    return (j, word_stream[j][2])
         return None
 
     def _process_rows(rows: list[Any]) -> None:
@@ -520,11 +502,11 @@ def sync_row_labels_to_whisper_words(
                         cursor = found[0] + 1
                 continue
 
-            legacy_rw = row.pop("wait_word", None) if overwrite else None
             if overwrite:
+                row.pop("wait_word", None)
                 row.pop("wait_segment", None)
 
-            for bi, box in enumerate(boxes):
+            for box in boxes:
                 if not isinstance(box, dict):
                     continue
                 box.pop("wait_at", None)
@@ -545,9 +527,9 @@ def sync_row_labels_to_whisper_words(
                     box["wait_word"] = int(first_word_i)
                     box.pop("wait_segment", None)
                     cursor = last_stream_i + 1
-                elif overwrite and bi == 0 and legacy_rw is not None:
-                    box["wait_word"] = int(legacy_rw)
                 elif overwrite:
+                    # Fail-closed: never keep a leftover LLM / legacy index for an
+                    # unmatched spoken label — callers must reject or set pace: none.
                     box.pop("wait_word", None)
                     box.pop("wait_segment", None)
 
@@ -565,6 +547,49 @@ def sync_row_labels_to_whisper_words(
         new_spec["rows"] = [dict(r) if isinstance(r, dict) else r for r in new_spec["rows"]]
         _process_rows(new_spec["rows"])
     return new_spec
+
+
+def _pace_none(obj: dict[str, Any]) -> bool:
+    return str(obj.get("pace", "")).strip().lower() == "none"
+
+
+def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]:
+    """Return issues when timing words exist but story boxes lack ``wait_word``.
+
+    Unpaced cascading ``timed_play`` finishes the board early and freezes through
+    the rest of the narration. Opt out per box/row with ``pace: none``.
+    Unlabeled image elements are exempt (no spoken anchor).
+    """
+    if not words_present:
+        return []
+    issues: list[str] = []
+    pages = _spec_pages_rows(spec)
+    for pi, rows in enumerate(pages):
+        for ri, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            row_opt_out = _pace_none(row)
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            prefix = f"pages[{pi}].rows[{ri}]" if spec.get("pages") is not None else f"rows[{ri}]"
+            for bi, box in enumerate(boxes):
+                if not isinstance(box, dict):
+                    continue
+                if row_opt_out or _pace_none(box):
+                    continue
+                if _is_image_element(box) and not str(box.get("label", "")).strip():
+                    continue
+                label = str(box.get("label", "")).strip()
+                if not label:
+                    continue
+                if box.get("wait_word") is None:
+                    issues.append(
+                        f"{prefix}.boxes[{bi}]: label {label!r} has no wait_word match in "
+                        "timing.json words — use a spoken phrase from the narration, or set "
+                        "pace: none to opt out of beat sync"
+                    )
+    return issues
 
 
 def upgrade_wait_segments_to_wait_words(
@@ -1007,6 +1032,14 @@ def _validate_image_element(box: dict[str, Any], *, bp: str) -> None:
         raise SceneSpecError(f"{bp}: label must be a string if set (used as timing anchor only)")
 
 
+def _validate_pace_field(obj: dict[str, Any], *, path: str) -> None:
+    if "pace" not in obj or obj.get("pace") is None:
+        return
+    val = str(obj.get("pace")).strip().lower()
+    if val != "none":
+        raise SceneSpecError(f"{path}: pace must be 'none' if set (opt out of beat sync)")
+
+
 def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None:
     for i, row in enumerate(rows):
         rp = f"{path_label}: {prefix}[{i}]"
@@ -1022,6 +1055,7 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
         rt = row["run_time"]
         if not isinstance(rt, (int, float)) or rt <= 0:
             raise SceneSpecError(f"{rp}: run_time must be a positive number")
+        _validate_pace_field(row, path=rp)
         ws = row.get("wait_segment")
         if ws is not None and (not isinstance(ws, int) or ws < 0):
             raise SceneSpecError(f"{rp}: wait_segment must be a non-negative int or null")
@@ -1043,6 +1077,7 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
             bp = f"{rp}: boxes[{j}]"
             if not isinstance(box, dict):
                 raise SceneSpecError(f"{bp}: box must be a mapping")
+            _validate_pace_field(box, path=bp)
             if box.get("wait_segment") is not None:
                 raise SceneSpecError(
                     f"{bp}: wait_segment on a box is not supported — use ``wait_word`` on the box, "
