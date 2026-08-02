@@ -24,8 +24,111 @@
       document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
       document.getElementById("view-" + btn.dataset.view).classList.remove("hidden");
       if (btn.dataset.view === "production") loadProductionView();
+      if (btn.dataset.view === "tool") loadToolView();
     });
   });
+
+  // ---- Tool (external install / upgrade) ----
+  async function loadToolView() {
+    const badge = document.getElementById("tool-version-badge");
+    const status = document.getElementById("tool-update-status");
+    try {
+      const res = await fetch("/api/tool");
+      const data = await res.json();
+      if (badge) badge.textContent = "v" + (data.version || "?");
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val == null || val === "" ? "—" : String(val);
+      };
+      set("tool-info-version", data.version);
+      set("tool-info-python", data.python);
+      set("tool-info-location", data.location);
+      set("tool-info-editable", data.editable ? "yes (source / editable install)" : "no (package install)");
+      set(
+        "tool-info-pin",
+        data.requirements_pin
+          ? data.requirements_pin + (data.requirements_path ? " (" + data.requirements_path + ")" : "")
+          : data.requirements_path
+            ? "unpinned (" + data.requirements_path + ")"
+            : "no requirements-docgen.txt in bundle"
+      );
+      if (data.requirements_pin && document.getElementById("tool-ref-input")) {
+        const inp = document.getElementById("tool-ref-input");
+        if (!inp.dataset.touched) inp.value = data.requirements_pin;
+      }
+    } catch (err) {
+      if (status) status.textContent = "Could not load tool info";
+      if (badge) badge.textContent = "v?";
+    }
+  }
+
+  document.getElementById("tool-ref-input")?.addEventListener("input", (e) => {
+    e.target.dataset.touched = "1";
+  });
+
+  document.getElementById("btn-tool-refresh")?.addEventListener("click", () => loadToolView());
+
+  document.getElementById("btn-tool-update")?.addEventListener("click", async () => {
+    const btn = document.getElementById("btn-tool-update");
+    const status = document.getElementById("tool-update-status");
+    const logEl = document.getElementById("tool-update-log");
+    const ref = (document.getElementById("tool-ref-input")?.value || "main").trim();
+    const withManim = !!document.getElementById("tool-with-manim")?.checked;
+    const updateReq = !!document.getElementById("tool-update-requirements")?.checked;
+    if (!ref) {
+      alert("Enter a git ref (main, tag, or commit SHA).");
+      return;
+    }
+    if (!confirm(
+      "Update docgen to ref “" + ref + "” in this Python environment?\n\n" +
+      "You must restart the wizard afterward for the new code to load."
+    )) {
+      return;
+    }
+    btn.disabled = true;
+    if (status) status.textContent = "Updating… (pip install)";
+    if (logEl) {
+      logEl.classList.remove("hidden");
+      logEl.textContent = "Running pip install…\n";
+    }
+    try {
+      const res = await fetch("/api/tool/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ref,
+          with_manim: withManim,
+          update_requirements: updateReq,
+        }),
+      });
+      const data = await res.json();
+      if (logEl) logEl.textContent = data.log || JSON.stringify(data, null, 2);
+      if (!res.ok || data.ok === false) {
+        if (status) status.textContent = "Update failed";
+        alert("Update failed: " + (data.error || res.status));
+      } else {
+        if (status) {
+          status.textContent =
+            "Updated " + (data.version_before || "?") + " → " + (data.version_after || "?") +
+            " — restart the wizard";
+        }
+        await loadToolView();
+        alert(
+          "docgen updated to ref “" + data.ref + "”.\n" +
+          "Version: " + (data.version_before || "?") + " → " + (data.version_after || "?") + "\n\n" +
+          (data.requirements_updated ? "requirements-docgen.txt rewritten.\n\n" : "") +
+          "Restart the wizard (Ctrl+C, then `docgen wizard`) to load the new code."
+        );
+      }
+    } catch (err) {
+      if (status) status.textContent = "Error";
+      alert("Update error: " + err.message);
+    }
+    btn.disabled = false;
+  });
+
+  // Prefetch version badge on load
+  loadToolView();
 
   // ---- Tab switching ----
   document.addEventListener("click", (e) => {

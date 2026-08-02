@@ -66,13 +66,31 @@ If you still need the legacy behaviour, pin a pre-removal commit
 OpenAI where a command calls the API). The wizard is a local Flask app, not a
 plugin tied to one editor.
 
-## Install
+## Install (external tool — do not vendor into project `src/`)
+
+`docgen` is a **pip-installable CLI/library**. Consumer projects keep only a
+**bundle** (`docs/demos/docgen.yaml`, hints, narration, …). They should **not**
+copy or submodule this repository into application source.
 
 ```bash
-pip install docgen @ git+https://github.com/jmjava/documentation-generator.git
+# Project / CI venv
+pip install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
+# Prefer a SHA pin in CI:
+# pip install 'docgen @ git+https://github.com/jmjava/documentation-generator.git@<sha>'
+
+# Optional Manim extra
+pip install 'docgen[manim] @ git+https://github.com/jmjava/documentation-generator.git'
+
+# Isolated global CLI (no project venv)
+pipx install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
+# or: uv tool install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
+
+docgen --version
 ```
 
-## Development setup
+`docgen init` writes `requirements-docgen.txt` + a bundle `README.md` with the same guidance.
+
+## Development setup (this library)
 
 ```bash
 git clone https://github.com/jmjava/documentation-generator.git
@@ -87,10 +105,11 @@ CI installs `ffmpeg` and `tesseract` via apt — see `.github/workflows/ci.yml`.
 
 **Roadmap:** [milestones/README.md](milestones/README.md).
 
-## Quick start
+## Quick start (in a consumer repo)
 
 ```bash
-cd your-project/docs/demos
+cd your-project/docs/demos          # bundle only — library is on PATH via pip
+pip install -r requirements-docgen.txt   # after docgen init, or use the pip line above
 docgen wizard              # optional: bootstrap narration from project docs
 docgen generate-all        # TTS → timestamps → scene retime → Manim → compose → validate
 docgen validate --pre-push
@@ -100,8 +119,9 @@ docgen validate --pre-push
 
 | Command | Description |
 |---------|-------------|
-| `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a new project: `docgen.yaml`, wrapper scripts, directories |
-| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration in place**, asset freshness chips, **rebuild-from-here** (default cascade: TTS → timestamps → scene-retime → Manim → compose → validate; LLM scene-spec is explicit) |
+| `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
+| `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
+| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |

@@ -12,6 +12,8 @@
   <span class="brand">docgen wizard</span>
   <button class="nav-btn active" data-view="setup">Setup</button>
   <button class="nav-btn" data-view="production">Production</button>
+  <button class="nav-btn" data-view="tool">Tool</button>
+  <span id="tool-version-badge" class="tool-version-badge" title="Installed docgen version">…</span>
 </nav>
 
 <!-- ================================================================== -->
@@ -53,6 +55,51 @@
         <h2>Generated drafts</h2>
         <div id="drafts-container"></div>
       </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- VIEW: TOOL (external install / upgrade)                            -->
+<!-- ================================================================== -->
+<div id="view-tool" class="view hidden">
+  <div class="tool-layout">
+    <section class="panel">
+      <h2>docgen tool</h2>
+      <p class="hint">
+        The CLI/library is installed into this Python environment (pip/pipx) —
+        not vendored into your project source. Update here to pull a new git ref,
+        then <strong>restart the wizard</strong> so the new code loads.
+      </p>
+      <dl id="tool-info" class="tool-info">
+        <div><dt>Version</dt><dd id="tool-info-version">…</dd></div>
+        <div><dt>Python</dt><dd id="tool-info-python" class="mono">…</dd></div>
+        <div><dt>Location</dt><dd id="tool-info-location" class="mono">…</dd></div>
+        <div><dt>Editable</dt><dd id="tool-info-editable">…</dd></div>
+        <div><dt>Bundle pin</dt><dd id="tool-info-pin" class="mono">…</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2>Update docgen</h2>
+      <p class="hint">Installs from the canonical GitHub repo only. Prefer a commit SHA in CI.</p>
+      <div class="tool-update-form">
+        <label for="tool-ref-input">Git ref (branch, tag, or SHA)</label>
+        <input id="tool-ref-input" type="text" value="main" placeholder="main or commit SHA">
+        <label class="ext-toggle">
+          <input type="checkbox" id="tool-with-manim"> Include <code>docgen[manim]</code> extra
+        </label>
+        <label class="ext-toggle">
+          <input type="checkbox" id="tool-update-requirements" checked>
+          Rewrite bundle <code>requirements-docgen.txt</code> to this pin
+        </label>
+        <div class="action-bar">
+          <button id="btn-tool-update" class="btn btn-primary">Update docgen</button>
+          <button id="btn-tool-refresh" class="btn btn-secondary">Refresh info</button>
+          <span id="tool-update-status" class="status-text"></span>
+        </div>
+      </div>
+      <pre id="tool-update-log" class="tool-log hidden"></pre>
     </section>
   </div>
 </div>

@@ -329,6 +329,47 @@ def create_app(config: Any | None = None) -> Flask:
     def index():
         return render_template("wizard.html")
 
+    # -- API: tool version / upgrade (external install) ------------------------
+
+    @app.route("/api/tool")
+    def api_tool_info():
+        """Return installed docgen version and bundle requirements pin."""
+        from docgen.install_spec import tool_info
+
+        cfg = _cfg()
+        bundle = cfg.base_dir if cfg else None
+        info = tool_info(bundle)
+        return jsonify(info.to_dict())
+
+    @app.route("/api/tool/update", methods=["POST"])
+    def api_tool_update():
+        """Upgrade docgen in this interpreter via pip; optionally rewrite requirements pin.
+
+        Body: ``{"ref": "main", "with_manim": false, "update_requirements": true}``
+
+        Only the canonical GitHub repo URL is allowed. Restart the wizard after
+        a successful update so the new code is loaded.
+        """
+        from docgen.install_spec import update_docgen_install
+
+        cfg = _cfg()
+        data = request.json or {}
+        ref = str(data.get("ref") or "main")
+        with_manim = bool(data.get("with_manim", False))
+        update_req = bool(data.get("update_requirements", True))
+        bundle = cfg.base_dir if cfg else None
+        try:
+            result = update_docgen_install(
+                ref=ref,
+                with_manim=with_manim,
+                bundle_dir=bundle,
+                update_requirements=update_req,
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        status = 200 if result.ok else 500
+        return jsonify(result.to_dict()), status
+
     # -- API: scan files -------------------------------------------------------
 
     @app.route("/api/scan")

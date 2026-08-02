@@ -4,7 +4,7 @@
 
 Stable goals for this repository:
 
-1. **Embeddable generator** — **`pip install docgen`** (or editable install from source), a `docgen.yaml`, and shell/CI are enough to build and maintain narrated demos. **No IDE assistant is required**; optional **`docgen wizard`** is a local web app only.
+1. **Embeddable generator** — **`pip install docgen`** (git URL or editable install from this repo), a consumer **bundle** (`docgen.yaml` + hints/narration), and shell/CI are enough to build and maintain narrated demos. **Do not vendor** this library into a product repo’s `src/`; pin via `requirements-docgen.txt` / `pipx` / `uv tool`. **No IDE assistant is required**; optional **`docgen wizard`** is a local web app only.
 2. **Hybrid config and prose** — **`docgen.yaml`** should stay maintainable: deterministic merges (**`yaml-generate`**, gap checks) plus **optional OpenAI** where it adds value (narration hints, declarative scene YAML). Prefer **Git-reviewed** changes over opaque single-shot generation.
 3. **Video stack** — Long-form demos pair **Markdown narration**, **OpenAI TTS**, **Whisper-style timestamps**, **Manim** visuals, **`compose`** (ffmpeg), **`concat`**, and **`validate`** (sync and narration lint). The CLI also supports **`pages`** for static preview sites.
 4. **Stable contracts** — CLI, exit codes, and reusable workflows should stay predictable for downstream repos and automation.
@@ -41,7 +41,7 @@ The Playwright/VHS/demo-function/per-function/discover-tests/catalog surface are
 Commands registered on the **`docgen`** CLI include:
 
 - **`init`** — scaffold bundle layout and `docgen.yaml`.
-- **`wizard`** — local web UI for narration/bootstrap workflows (focus files, **in-place narration revise**, per-segment **asset freshness** + **rebuild-from-here**).
+- **`wizard`** — local web UI for narration/bootstrap workflows (focus files, **in-place narration revise**, per-segment **asset freshness** + **rebuild-from-here**, **Tool** tab to pip-upgrade docgen and pin `requirements-docgen.txt`).
 - **`tts`** — text-to-speech for segment files.
 - **`timestamps`** — word/segment timing (`timing.json`). Default engine **`local`** aligns the known narration text against the mp3 offline (ffmpeg silencedetect, no API); **`--engine whisper`** keeps OpenAI whisper-1 transcription. Both emit the same Whisper-shaped blocks.
 - **`image-generate`** — render scene-spec **image elements** (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle (also runs for missing assets inside `generate-all`).

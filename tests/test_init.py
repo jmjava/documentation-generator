@@ -84,6 +84,8 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     created = generate_files(plan)
 
     assert (tmp_path / "demos" / "docgen.yaml").exists()
+    assert (tmp_path / "demos" / "requirements-docgen.txt").exists()
+    assert (tmp_path / "demos" / "README.md").exists()
     assert (tmp_path / "demos" / "generate-all.sh").exists()
     assert (tmp_path / "demos" / "compose.sh").exists()
     assert (tmp_path / "demos" / "rebuild-after-audio.sh").exists()
@@ -91,6 +93,13 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert (tmp_path / "demos" / "narration" / "README.md").exists()
     assert (tmp_path / "demos" / "narration" / "01-intro.md").exists()
     assert (tmp_path / "demos" / "narration" / "02-setup.md").exists()
+
+    req = (tmp_path / "demos" / "requirements-docgen.txt").read_text(encoding="utf-8")
+    assert "docgen @ git+https://github.com/jmjava/documentation-generator.git" in req
+    assert "do NOT vendor" in req
+    bundle_readme = (tmp_path / "demos" / "README.md").read_text(encoding="utf-8")
+    assert "external" in bundle_readme.lower()
+    assert "pip install -r requirements-docgen.txt" in bundle_readme
 
     cfg_text = (tmp_path / "demos" / "docgen.yaml").read_text()
     cfg = yaml.safe_load(cfg_text.split("\n\n", 1)[-1])

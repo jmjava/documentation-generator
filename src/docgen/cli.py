@@ -76,6 +76,16 @@ def _load_env(cfg: Config | None) -> None:
         os.environ.setdefault(k, v)
 
 
+def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    if not value or ctx.resilient_parsing:
+        return
+    from docgen.install_spec import DOCGEN_PIP_SPEC, package_version
+
+    click.echo(f"docgen {package_version()}")
+    click.echo(f"install: pip install '{DOCGEN_PIP_SPEC}'")
+    ctx.exit()
+
+
 @click.group()
 @click.option(
     "--config",
@@ -84,9 +94,17 @@ def _load_env(cfg: Config | None) -> None:
     type=click.Path(exists=False),
     help="Path to docgen.yaml (parents of cwd are searched when omitted).",
 )
+@click.option(
+    "--version",
+    is_flag=True,
+    callback=_cli_version_string,
+    expose_value=False,
+    is_eager=True,
+    help="Show installed docgen version and the recommended pip install line.",
+)
 @click.pass_context
 def main(ctx: click.Context, config_path: str | None) -> None:
-    """docgen — demo generation pipeline.
+    """docgen — demo generation pipeline (install as an external tool; keep only the bundle in-repo).
 
     Environment: keys already set in the shell are not replaced by ``env_file``
     (see ``DOCGEN_ENV_OVERRIDES``). If no docgen.yaml is found, pass ``--config``.
