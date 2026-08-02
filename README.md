@@ -38,13 +38,15 @@ If you still need the legacy behaviour, pin a pre-removal commit
   `whisper-1` remains available via `timestamps.engine: whisper` /
   `docgen timestamps --engine whisper`. Both engines write the same
   `timing.json` shape.
-- **Manim animations** — primary visual surface. Use **`docgen scene-spec-generate`**
-  + **`scene-compile`** (or hand-maintained **`animations/specs/*.scene.yaml`**)
-  for deterministic diagram layout: rows are auto-paginated when they exceed the
-  frame stack budget, specs that overflow safe width / budget are rejected, and
-  (when `timing.json` carries Whisper words) each row’s first label is mapped to
-  a **`wait_word`** index. Hand-maintained custom Manim classes still live in
-  `animations/scenes.py` outside the `BEGIN/END GENERATED SCENE` markers.
+- **Manim animations (default: declarative scene specs)** — primary visual surface.
+  Prefer **`animations/specs/*.scene.yaml`** via **`docgen scene-spec-generate`**
+  + **`scene-compile`**. On **`generate-all`**, if no specs exist yet, the pipeline
+  **auto-runs** scene-spec-generate; later runs **retime-compile** specs against fresh
+  `timing.json` (no OpenAI) unless you pass **`--regen-scene-specs`**. Specs auto-paginate
+  when they exceed the frame stack budget, reject unsafe width / subject-beat gaps, and
+  map each paced label to a **`wait_word`** index. Hand-maintained custom Manim classes
+  may still live in `animations/scenes.py` outside `BEGIN/END GENERATED SCENE` markers
+  (use **`--skip-scene-retime`** to bypass the declarative stage).
 - **OpenAI image assets in Manim scenes** — a scene-spec box may be an **image
   element** (`image: images/<name>.png` + `prompt:`); `docgen image-generate`
   renders the prompt via the OpenAI Images API (default `gpt-image-1`) and the
@@ -131,7 +133,7 @@ docgen validate --pre-push
 | `docgen lint [--segment 01]` | Narration lint only |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
 | `docgen pages [--force]` | Generate `index.html`, `pages.yml`, `.gitattributes`, `.gitignore` |
-| `docgen generate-all [--skip-tts] [--skip-manim] [--retry-manim] [--regen-scene-specs]` | Full pipeline: TTS → timestamps → **scene retime** (existing specs) → Manim → compose → validate. `--regen-scene-specs` also runs OpenAI scene-spec-generate |
+| `docgen generate-all [--skip-tts] [--skip-manim] [--retry-manim] [--regen-scene-specs] [--skip-scene-retime]` | Full pipeline: TTS → timestamps → **scene specs** → Manim → compose → validate. Missing `animations/specs/*.scene.yaml` auto-generates; existing specs retime offline; `--regen-scene-specs` forces LLM rewrite |
 | `docgen rebuild-after-audio [--regen-scene-specs]` | Timestamps → scene retime → Manim → compose → validate (skips TTS) |
 | `docgen clean-bundle [-y] [--delete-config] [--keep-narration]` | Remove regenerable outputs under the bundle |
 | `docgen narration-generate --segment 01 [--extra-path REL] [--hint TEXT] [--dry-run] [--force] [--revise --revision-notes TEXT]` | Generate narration `.md` from repo sources + owner hints (OpenAI); `--revise` edits the existing script in place |

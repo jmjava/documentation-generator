@@ -56,7 +56,7 @@ Commands registered on the **`docgen`** CLI include:
 - **`clean-bundle`** — remove regenerable outputs per policy.
 - **`concat`** — stitch segment videos.
 - **`pages`** — emit static HTML for demo assets.
-- **`generate-all`** — orchestrated pipeline: TTS → timestamps → **scene retime** (compile existing `*.scene.yaml` against fresh timing) → images → Manim → compose → validate → concat → pages. Optional `--regen-scene-specs` for LLM scene YAML first.
+- **`generate-all`** — orchestrated pipeline: TTS → timestamps → **scene specs** (auto `scene-spec-generate` when `animations/specs/` is empty; otherwise offline retime) → images → Manim → compose → validate → concat → pages. `--regen-scene-specs` forces LLM rewrite; `--skip-scene-retime` keeps legacy hand `scenes.py` only.
 - **`rebuild-after-audio`** — same as generate-all with TTS skipped (still retimes scenes after timestamps).
 
 ## Implications for changes here

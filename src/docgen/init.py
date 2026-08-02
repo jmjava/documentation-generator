@@ -367,7 +367,8 @@ def _write_config(plan: InitPlan) -> str:
         "# See: https://github.com/jmjava/documentation-generator\n"
         "#\n"
         "# Edit this file to match your project structure, then run:\n"
-        "#   docgen generate-all       # full pipeline\n"
+        "#   docgen generate-all       # TTS→timestamps→scene-spec→Manim→compose\n"
+        "#                             # (creates animations/specs/*.scene.yaml if missing)\n"
         "#   docgen wizard             # interactive GUI\n"
         "#   docgen validate           # check recordings\n\n"
     )
@@ -392,7 +393,9 @@ def _write_wrapper_scripts(plan: InitPlan) -> list[str]:
     scripts = {
         "generate-all.sh": "\n".join([
             "#!/usr/bin/env bash",
-            "# Full pipeline (TTS, segment visuals, compose, validate, concat). Wraps: docgen generate-all",
+            "# Full pipeline. Default Manim path: animations/specs/*.scene.yaml",
+            "# (auto scene-spec-generate on first run; retime thereafter).",
+            "# Wraps: docgen generate-all",
             "set -euo pipefail",
             _bash_dir,
             _venv_activate,

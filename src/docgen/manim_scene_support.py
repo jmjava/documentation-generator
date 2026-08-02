@@ -162,7 +162,7 @@ def _load_timing_words(segment_key: str) -> list[dict]:
 
 
 def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=""):
-    """Labeled rounded box — slightly stronger fill/stroke for readable diagram boards.
+    """Labeled rounded box - slightly stronger fill/stroke for readable diagram boards.
 
     Optional ``subtitle`` is a second, smaller line under the primary label
     (decorative; not used for wait_word beat matching).

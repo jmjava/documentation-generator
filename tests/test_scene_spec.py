@@ -1002,6 +1002,33 @@ def test_sync_row_labels_hyphenated_label_matches_spoken_parts() -> None:
     assert out["rows"][0]["boxes"][0]["wait_word"] == 1
 
 
+def test_sync_row_labels_hyphenated_label_matches_glued_whisper_word() -> None:
+    """Whisper often emits hyphenated compounds as one token; labels still split."""
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            _row("version-controlled files"),
+            _row("setup-agent-prompts.sh"),
+            _row("SDLC-SPDD Orchestrator"),
+        ],
+    }
+    words = [
+        {"word": "into", "start": 0.0, "end": 0.2},
+        {"word": "version-controlled", "start": 1.0, "end": 1.4},
+        {"word": "files", "start": 1.5, "end": 1.8},
+        {"word": "Run", "start": 2.0, "end": 2.2},
+        {"word": "setup-agent-prompts.sh", "start": 2.3, "end": 3.0},
+        {"word": "SDLC-SPDD", "start": 3.5, "end": 4.0},
+        {"word": "Orchestrator", "start": 4.1, "end": 4.6},
+    ]
+    out = sync_row_labels_to_whisper_words(spec, words)
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 1
+    assert out["rows"][1]["boxes"][0]["wait_word"] == 4
+    assert out["rows"][2]["boxes"][0]["wait_word"] == 5
+
+
 def test_compile_title_and_box_subtitles() -> None:
     spec = {
         "segment_id": "01",
