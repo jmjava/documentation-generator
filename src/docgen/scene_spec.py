@@ -386,6 +386,56 @@ def _tokens_match(label_token: str, word_token: str) -> bool:
     return _stem(label_token) == _stem(word_token)
 
 
+def _consume_label_tokens_at(
+    tokens: list[str],
+    word_norms: list[str],
+    start: int,
+) -> int | None:
+    """Advance through ``word_norms`` from ``start`` until all ``tokens`` are consumed.
+
+    Whisper often emits hyphenated compounds as **one** token (``version-controlled`` →
+    ``versioncontrolled``, ``setup-agent-prompts.sh`` → ``setupagentpromptssh``) while
+    labels split on hyphens into multiple tokens. Accept either:
+
+    - one label token ↔ one spoken word (exact / stem), or
+    - two or more consecutive label tokens glued ↔ one spoken word.
+
+    Returns the index of the last consumed spoken word, or ``None`` if the label
+    cannot be matched starting at ``start``.
+    """
+    if not tokens or start < 0 or start >= len(word_norms):
+        return None
+    ti = 0
+    wi = start
+    m = len(tokens)
+    n = len(word_norms)
+    while ti < m:
+        if wi >= n:
+            return None
+        spoken = word_norms[wi]
+        if _tokens_match(tokens[ti], spoken):
+            ti += 1
+            wi += 1
+            continue
+        # Glue 2+ label tokens into one Whisper word (hyphenated / dotted compounds).
+        glued = tokens[ti]
+        matched_k: int | None = None
+        for k in range(2, m - ti + 1):
+            glued += tokens[ti + k - 1]
+            if glued == spoken:
+                matched_k = k
+                break
+            # Spoken word is longer only when TTS/Whisper glued extra chars we already
+            # normalized away (rare); require exact equality for compounds.
+            if len(glued) > len(spoken):
+                break
+        if matched_k is None:
+            return None
+        ti += matched_k
+        wi += 1
+    return wi - 1
+
+
 def segment_index_for_whisper_time(
     segments: list[dict[str, Any]], wall_time: float
 ) -> int:
@@ -450,10 +500,12 @@ def sync_row_labels_to_whisper_words(
 ) -> dict[str, Any]:
     """Set ``wait_word`` on each **box** from its ``label`` → first spoken match (in order).
 
-    Matching is **fail-closed**: exact/stem token equality only (plus hyphen splits).
-    No fuzzy containment and no leftover LLM ``wait_word`` when the label is absent
-    from the transcript. Each matched box waits at word ``start``. Row-level
-    ``wait_word`` / ``wait_segment`` are cleared when ``overwrite=True``.
+    Matching is **fail-closed**: exact/stem token equality, hyphen/underscore splits,
+    and glued Whisper compounds (label ``version-controlled`` ↔ spoken
+    ``versioncontrolled``). No fuzzy containment and no leftover LLM ``wait_word``
+    when the label is absent from the transcript. Each matched box waits at word
+    ``start``. Row-level ``wait_word`` / ``wait_segment`` are cleared when
+    ``overwrite=True``.
     """
     if not isinstance(words, list) or not words:
         return spec
@@ -481,17 +533,13 @@ def sync_row_labels_to_whisper_words(
         tokens = _label_tokens(label)
         if not tokens:
             return None
+        norms = [w[0] for w in word_stream]
         n = len(word_stream)
-        m = len(tokens)
         i = from_idx
-        while i <= n - m:
-            ok = True
-            for k in range(m):
-                if not _tokens_match(tokens[k], word_stream[i + k][0]):
-                    ok = False
-                    break
-            if ok:
-                return (i + m - 1, word_stream[i][2])
+        while i < n:
+            last = _consume_label_tokens_at(tokens, norms, i)
+            if last is not None:
+                return (last, word_stream[i][2])
             i += 1
         return None
 

@@ -1103,11 +1103,14 @@ def generate_all(
     regen_scene_specs: bool,
     skip_scene_retime: bool,
 ) -> None:
-    """Run full pipeline: TTS → timestamps → scene retime → Manim → compose → validate.
+    """Run full pipeline: TTS → timestamps → scene specs → Manim → compose → validate.
 
-    Order matters for beat sync: timestamps must land before scene compile so
-    ``wait_word`` indices match the current mp3. Existing declarative specs are
-    retime-compiled offline; pass ``--regen-scene-specs`` to call OpenAI first.
+    Default Manim path is declarative ``animations/specs/*.scene.yaml``:
+
+    - Specs exist → offline retime-compile against fresh ``timing.json``.
+    - No specs yet → auto ``scene-spec-generate`` (OpenAI) then compile.
+    - ``--regen-scene-specs`` forces LLM regenerate even when specs exist.
+    - ``--skip-scene-retime`` skips the whole scene-spec stage (legacy hand scenes).
     """
     from docgen.pipeline import Pipeline
 

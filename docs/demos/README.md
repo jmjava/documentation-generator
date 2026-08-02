@@ -40,15 +40,20 @@ Full **`docgen generate-all`** for this bundle needs:
 
 Historic **Playwright** / **demo-function** / **per-function** capture paths were **removed** from the library (see root **`AGENTS.md`**); do not expect browser-test recording commands in current `docgen`.
 
-## Declarative Manim (`animations/specs/*.scene.yaml`)
+## Declarative Manim (`animations/specs/*.scene.yaml`) — **default**
 
-For **`manim`** segments built from labeled `_box` diagrams:
+This is the **default** visual path for all consumers (not optional decoration):
 
-1. **`docgen scene-spec-generate --segment <ID> [--compile] [--hint "…"]`** — optional OpenAI emits **YAML**; **`--compile`** injects into **`animations/scenes.py`**. Use **`--all --compile`** for every declarative segment.
-2. **`docgen scene-compile path/to/spec.scene.yaml`** — compile a spec without another API call.
-3. Then **`docgen timestamps`**, **`docgen manim`**, **`docgen compose`**, and **`docgen concat full-demo`** when refreshing recordings.
+1. First **`docgen generate-all`** (or **`scene-spec-generate --all --compile`**) writes
+   **`animations/specs/<stem>.scene.yaml`** and injects generated classes into
+   **`animations/scenes.py`** between marker comments.
+2. Later **`generate-all`** / **`rebuild-after-audio`** **retime-compiles** those specs
+   against fresh **`timing.json`** (no OpenAI) so beat sync stays correct.
+3. Force a layout rewrite with **`--regen-scene-specs`**. Skip the stage only for
+   legacy hand scenes: **`--skip-scene-retime`**.
 
-Run **`docgen timestamps`** after changing narration audio so **`timing.json`** gains **`words`** / segments required by **`wait_segment`** / **`wait_word`** in specs.
+Label boxes with **spoken phrases from the narration** (must match `timing.json`
+words), keep ~3 rows/page, and follow **`hints/manim-scene-specs.md`**.
 
 ## Full reset (total nuke + regen)
 

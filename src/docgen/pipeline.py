@@ -4,9 +4,16 @@ The Manim stage renders only scenes referenced by ``visual_map`` for active ``se
 entries (see :meth:`docgen.config.Config.pipeline_manim_scene_names`). Segments whose visuals
 are pre-recorded (``recordings/*.mp4``) do not run through Manim capture here.
 
-After timestamps, existing ``animations/specs/*.scene.yaml`` files are **retime-compiled**
-against fresh ``timing.json`` (no OpenAI) so ``wait_word`` indices stay aligned. Optional
-``regen_scene_specs`` runs LLM ``scene-spec-generate`` for manim segments before that compile.
+After timestamps, declarative ``animations/specs/*.scene.yaml`` files are the **default**
+Manim authoring path:
+
+- **Specs present** → offline **retime-compile** against fresh ``timing.json`` (no OpenAI)
+  so ``wait_word`` indices stay aligned.
+- **No specs yet** (and the bundle has manim ``visual_map`` rows) → automatically run LLM
+  ``scene-spec-generate`` + compile (same as ``--regen-scene-specs`` for a first run).
+- **``regen_scene_specs=True``** → force LLM regenerate even when specs already exist.
+- Hand-authored classes outside ``BEGIN/END GENERATED SCENE`` markers remain supported,
+  but new consumer bundles should prefer specs.
 """
 
 from __future__ import annotations
@@ -40,7 +47,19 @@ class Pipeline:
         TimestampExtractor(self.config).extract_all()
 
         if not skip_manim and not skip_scene_retime:
-            self._run_scene_stages(regen_scene_specs=regen_scene_specs)
+            from docgen.scene_retime import list_scene_spec_paths
+
+            auto_regen = regen_scene_specs
+            if not auto_regen and self._manim_segment_ids():
+                if not list_scene_spec_paths(self.config):
+                    print(
+                        "\n[pipeline] No animations/specs/*.scene.yaml yet — "
+                        "auto-running scene-spec-generate (declarative Manim default). "
+                        "Pass --skip-scene-retime to keep hand-authored scenes.py only, "
+                        "or --regen-scene-specs to force regenerate later."
+                    )
+                    auto_regen = True
+            self._run_scene_stages(regen_scene_specs=auto_regen)
 
         if not skip_manim:
             from docgen.image_generate import generate_missing_images_for_bundle
