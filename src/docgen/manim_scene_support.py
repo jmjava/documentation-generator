@@ -243,9 +243,23 @@ class _TimedScene(Scene):
     def setup(self):
         self._clock = 0.0
 
-    def timed_play(self, *animations, run_time=1.0, **kwargs):
-        self.play(*animations, run_time=run_time, **kwargs)
-        self._clock += run_time
+    def timed_play(self, *animations, run_time=1.0, not_past=None, **kwargs):
+        """Play animations and advance ``_clock``.
+
+        Optional ``not_past`` (absolute seconds) clamps ``run_time`` so the clock
+        cannot race past the next paced reveal — defense in depth when compiled
+        run_times were not clamped (issue #66).
+        """
+        rt = float(run_time)
+        if not_past is not None:
+            try:
+                limit = float(not_past)
+            except (TypeError, ValueError):
+                limit = None
+            if limit is not None and self._clock + rt > limit:
+                rt = max(0.25, limit - self._clock)
+        self.play(*animations, run_time=rt, **kwargs)
+        self._clock += rt
 
     def wait_until(self, target: float):
         gap = target - self._clock

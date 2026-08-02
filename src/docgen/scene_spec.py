@@ -33,12 +33,20 @@ not a blind label count). ``docgen validate`` re-checks coverage when a ``*.scen
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# Compiled scenes Write the title then pace boxes with wait_until_word against
+# ``_TimedScene._clock``. Keep the title short so early Whisper starts are not
+# already in the past before the first box reveal.
+TITLE_WRITE_RUN_TIME = 1.0
+# Floor when clamping FadeIn so the clock cannot overshoot the next wait_word.
+MIN_REVEAL_RUN_TIME = 0.25
 
 ALLOWED_COLORS = frozenset(
     {
@@ -654,6 +662,255 @@ def last_paced_reveal_time(
     if not anchors:
         return None
     return max(t for _, t in anchors)
+
+
+@dataclass(frozen=True)
+class RevealEvent:
+    """One box reveal on the compiled ``_TimedScene`` clock timeline."""
+
+    label: str
+    page: int
+    row: int
+    box: int
+    wait_word: int | None
+    word_start: float | None
+    effective_at: float
+    wait_skipped: bool
+    run_time: float
+    page_fade_out: float
+
+
+def _box_wait_word(row: dict[str, Any], box: dict[str, Any], box_index: int) -> int | None:
+    if _pace_none(row) or _pace_none(box):
+        return None
+    ww = box.get("wait_word")
+    if ww is None and box_index == 0:
+        ww = row.get("wait_word")
+    if ww is None:
+        return None
+    try:
+        return int(ww)
+    except (TypeError, ValueError):
+        return None
+
+
+def _word_start_at(words: list[dict[str, Any]], index: int | None) -> float | None:
+    if index is None or not words or index < 0 or index >= len(words):
+        return None
+    w = words[index]
+    if not isinstance(w, dict):
+        return None
+    try:
+        return float(w.get("start", 0.0))
+    except (TypeError, ValueError):
+        return None
+
+
+def iter_reveal_slots(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return paced/unpaced story boxes in compiled reveal order.
+
+    Each slot is a dict with page/row/box indices, label, wait_word, word_start,
+    row run_time, and page transition metadata for the first box of each page.
+    When ``words`` is provided, ``wait_word`` is re-derived via fail-closed sync.
+    """
+    working = (
+        sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+        if words
+        else spec
+    )
+    pages = _normalized_pages(working)
+    layout = working.get("layout") or {}
+    default_tr = str(layout.get("page_transition", "fade"))
+    default_tr_rt = float(layout.get("page_transition_run_time", 0.45))
+    slots: list[dict[str, Any]] = []
+    for p, page in enumerate(pages):
+        if not isinstance(page, dict):
+            continue
+        rows = page.get("rows")
+        if not isinstance(rows, list):
+            continue
+        trans = page.get("transition", default_tr)
+        for r, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            boxes = row.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            try:
+                row_rt = float(row.get("run_time", 1.0))
+            except (TypeError, ValueError):
+                row_rt = 1.0
+            for b, box in enumerate(boxes):
+                if not isinstance(box, dict):
+                    continue
+                if box.get("image") is not None and not str(box.get("label", "")).strip():
+                    # Unlabeled image: still revealed, but no spoken wait.
+                    label = ""
+                else:
+                    label = str(box.get("label", "")).strip()
+                ww = _box_wait_word(row, box, b)
+                slots.append(
+                    {
+                        "page": p,
+                        "row": r,
+                        "box": b,
+                        "label": label,
+                        "wait_word": ww,
+                        "word_start": _word_start_at(words or [], ww),
+                        "run_time": row_rt,
+                        "page_transition": str(trans or default_tr),
+                        "page_transition_run_time": default_tr_rt,
+                    }
+                )
+    return slots
+
+
+def simulate_reveal_timeline(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+    *,
+    title_run_time: float = TITLE_WRITE_RUN_TIME,
+    clamp_run_times: bool = True,
+) -> list[RevealEvent]:
+    """Simulate ``_TimedScene`` clock for compiled wait_word + FadeIn sequences.
+
+    When ``clamp_run_times`` is True (compile default), FadeIn / page FadeOut
+    durations shrink so ``_clock`` cannot pass the next paced word start — the
+    bug that dumped the first board then froze while narration continued.
+    """
+    slots = iter_reveal_slots(spec, words)
+    if not slots:
+        return []
+
+    clock = float(title_run_time)
+    events: list[RevealEvent] = []
+
+    for i, slot in enumerate(slots):
+        word_start = slot["word_start"]
+        ww = slot["wait_word"]
+        wait_skipped = False
+        if ww is not None and word_start is not None:
+            target = float(word_start)
+            if target > clock + 0.05:
+                clock = target
+            elif clock > target + 0.05:
+                # Truly late: prior FadeIn/title already passed this spoken start.
+                wait_skipped = True
+            else:
+                # On-time within tolerance (clamp landed on the beat).
+                clock = max(clock, target)
+
+        page_fade_out = 0.0
+        if (
+            int(slot["page"]) > 0
+            and int(slot["row"]) == 0
+            and int(slot["box"]) == 0
+            and str(slot["page_transition"]) == "fade"
+        ):
+            page_fade_out = float(slot["page_transition_run_time"])
+
+        next_target: float | None = None
+        for nxt in slots[i + 1 :]:
+            if nxt["wait_word"] is not None and nxt["word_start"] is not None:
+                next_target = float(nxt["word_start"])
+                break
+
+        rt = float(slot["run_time"])
+        if clamp_run_times and next_target is not None:
+            budget = next_target - clock
+            if page_fade_out + rt > budget and budget > 0:
+                # Prefer keeping a short FadeIn; shrink page fade first.
+                if page_fade_out > 0 and page_fade_out > max(0.0, budget - MIN_REVEAL_RUN_TIME):
+                    page_fade_out = max(0.05, budget - MIN_REVEAL_RUN_TIME)
+                remain = next_target - (clock + page_fade_out)
+                if remain < rt:
+                    rt = max(MIN_REVEAL_RUN_TIME, remain)
+            elif budget <= 0:
+                page_fade_out = 0.05 if page_fade_out > 0 else 0.0
+                rt = MIN_REVEAL_RUN_TIME
+
+        if page_fade_out > 0:
+            clock += page_fade_out
+
+        events.append(
+            RevealEvent(
+                label=str(slot["label"]),
+                page=int(slot["page"]),
+                row=int(slot["row"]),
+                box=int(slot["box"]),
+                wait_word=ww,
+                word_start=word_start,
+                effective_at=float(clock),
+                wait_skipped=wait_skipped,
+                run_time=float(rt),
+                page_fade_out=float(page_fade_out),
+            )
+        )
+        clock += rt
+
+    return events
+
+
+def reveal_cadence_violations(
+    events: list[RevealEvent],
+    *,
+    audio_end: float,
+    max_skip_ratio: float = 0.25,
+    max_consecutive_skips: int = 2,
+    max_early_sec: float = 40.0,
+    max_early_ratio: float = 0.45,
+) -> list[str]:
+    """Return issues when the simulated clock dumps boxes then idles.
+
+    Checks (issue #66):
+
+    * too many ``wait_until_word`` no-ops (``_clock`` already past word start)
+    * long consecutive skip streaks (rapid cascade)
+    * last **effective** reveal finishes far before ``audio_end`` (metadata-only
+      ``story_end`` misses this when Whisper starts look late but Manim raced)
+    """
+    if not events or audio_end <= 0:
+        return []
+
+    issues: list[str] = []
+    paced = [e for e in events if e.wait_word is not None]
+    if paced:
+        skipped = sum(1 for e in paced if e.wait_skipped)
+        skip_ratio = skipped / len(paced)
+        if skip_ratio > max_skip_ratio and skipped >= 2:
+            issues.append(
+                f"wait_until_word no-op ratio {skip_ratio:.0%} ({skipped}/{len(paced)}) "
+                f"exceeds max_skip_ratio={max_skip_ratio:.0%} — FadeIn/title run_time "
+                "pushed _clock past spoken word starts (first board dumps, then freezes)"
+            )
+        streak = 0
+        best = 0
+        for e in paced:
+            if e.wait_skipped:
+                streak += 1
+                best = max(best, streak)
+            else:
+                streak = 0
+        if best > max_consecutive_skips:
+            issues.append(
+                f"{best} consecutive skipped waits (max_consecutive_skips="
+                f"{max_consecutive_skips}) — boxes cascade with only FadeIn gaps"
+            )
+
+    last_effective = max(e.effective_at for e in events)
+    early_idle = audio_end - last_effective
+    early_ratio = early_idle / audio_end if audio_end > 0 else 0.0
+    if early_idle > max_early_sec and early_ratio > max_early_ratio:
+        issues.append(
+            f"effective last reveal at {last_effective:.2f}s leaves "
+            f"early_idle={early_idle:.2f}s ({early_ratio:.0%} of audio_end="
+            f"{audio_end:.2f}s) — visual story finished on the Manim clock long "
+            "before narration ends"
+        )
+    return issues
 
 
 def upgrade_wait_segments_to_wait_words(
@@ -1388,11 +1645,20 @@ def _any_wait_segment_in_pages(pages: list[dict[str, Any]]) -> bool:
     return False
 
 
-def compile_scene_class(spec: dict[str, Any]) -> str:
+def compile_scene_class(
+    spec: dict[str, Any],
+    *,
+    words: list[dict[str, Any]] | None = None,
+) -> str:
     """Return a full ``class Name(_TimedScene): ...`` definition (no imports).
 
     ``spec`` must include ``timing_key`` (narration audio stem for ``timing.json``),
     either in the mapping or merged by the caller from ``Config.resolve_segment_name``.
+
+    When ``words`` is provided (normal ``scene-compile`` / retime path), FadeIn and
+    page-transition durations are **clamped** so ``_TimedScene._clock`` cannot race
+    past the next ``wait_word`` start — otherwise the first board dumps and freezes
+    while narration continues (issue #66).
     """
     validate_scene_spec(spec, path_label="spec")
 
@@ -1425,6 +1691,13 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
             "words, or edit the YAML to use wait_word."
         )
 
+    # Per-box clamped run_time / page fade when Whisper words are available.
+    reveal_by_key: dict[tuple[int, int, int], RevealEvent] = {}
+    if words:
+        for ev in simulate_reveal_timeline(spec, words, clamp_run_times=True):
+            reveal_by_key[(ev.page, ev.row, ev.box)] = ev
+
+    title_rt = TITLE_WRITE_RUN_TIME
     lines: list[str] = [
         f"class {class_name}(_TimedScene):",
         "    def construct(self):",
@@ -1440,7 +1713,7 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                 f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color})",
                 "        _title_sub.set_opacity(0.85)",
                 "        title = VGroup(_title_main, _title_sub).arrange(DOWN, buff=0.12).to_edge(UP)",
-                "        self.timed_play(Write(title), run_time=2.0)",
+                f"        self.timed_play(Write(title), run_time={title_rt})",
                 "",
             ]
         )
@@ -1448,7 +1721,7 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
         lines.extend(
             [
                 f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}).to_edge(UP)",
-                "        self.timed_play(Write(title), run_time=2.0)",
+                f"        self.timed_play(Write(title), run_time={title_rt})",
                 "",
             ]
         )
@@ -1553,16 +1826,37 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
 
     lines.append("")
 
+    # Box vars per page — page transitions FadeOut these individually. Fading the
+    # parent VGroup can re-add unrevealed siblings at full opacity (flash dump).
+    page_box_vars: dict[int, list[str]] = {}
+    for p, page in enumerate(pages):
+        for r, row in enumerate(page["rows"]):
+            boxes_raw = row.get("boxes") or []
+            if not isinstance(boxes_raw, list):
+                continue
+            for b_idx, box in enumerate(boxes_raw):
+                if isinstance(box, dict):
+                    page_box_vars.setdefault(p, []).append(f"_bx_{p}_{r}_{b_idx}")
+
     for p, page in enumerate(pages):
         for r, row in enumerate(page["rows"]):
             boxes_raw = row["boxes"]
             if not isinstance(boxes_raw, list):
                 continue
-            run_time = float(row["run_time"])
+            row_run_time = float(row["run_time"])
             row_ww = row.get("wait_word")
             for b_idx, box in enumerate(boxes_raw):
                 if not isinstance(box, dict):
                     continue
+                ev = reveal_by_key.get((p, r, b_idx))
+                run_time = (
+                    round(float(ev.run_time), 3) if ev is not None else row_run_time
+                )
+                page_fade_rt = (
+                    round(float(ev.page_fade_out), 3)
+                    if ev is not None
+                    else page_tr_run
+                )
                 ww = box.get("wait_word")
                 if ww is None and b_idx == 0 and row_ww is not None:
                     ww = row_ww
@@ -1572,14 +1866,18 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                     )
                 if p > 0 and r == 0 and b_idx == 0:
                     trans = page.get("transition")
-                    prev_stack = f"_p{p - 1}_stack"
+                    prev_boxes = page_box_vars.get(p - 1) or []
                     prev_edges = page_edge_vars.get(p - 1) or []
-                    fade_targets = [prev_stack] + prev_edges
-                    fade_args = ", ".join(f"FadeOut({t})" for t in fade_targets)
+                    fade_targets = prev_boxes + prev_edges
                     if trans == "fade":
-                        lines.append(
-                            f"        self.timed_play({fade_args}, run_time={page_tr_run})"
-                        )
+                        if fade_targets:
+                            fade_args = ", ".join(f"FadeOut({t})" for t in fade_targets)
+                            lines.append(
+                                f"        self.timed_play({fade_args}, "
+                                f"run_time={page_fade_rt})"
+                            )
+                        else:
+                            lines.append(f"        self.timed_wait({page_fade_rt})")
                     elif trans == "none":
                         for t in fade_targets:
                             lines.append(f"        self.remove({t})")
@@ -1588,11 +1886,11 @@ def compile_scene_class(spec: dict[str, Any]) -> str:
                 edge_anims = edges_with_target.get((p, bx), [])
                 if edge_anims:
                     parts = [f"FadeIn({bx})"]
-                    for ev, kind in edge_anims:
+                    for evar, kind in edge_anims:
                         if kind == "grow":
-                            parts.append(f"GrowArrow({ev})")
+                            parts.append(f"GrowArrow({evar})")
                         else:
-                            parts.append(f"FadeIn({ev})")
+                            parts.append(f"FadeIn({evar})")
                     anims = ", ".join(parts)
                     lines.append(
                         f"        self.timed_play({anims}, run_time={run_time})"

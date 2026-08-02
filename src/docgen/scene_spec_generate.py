@@ -365,7 +365,9 @@ def linted_class_block_from_spec(
         )
 
     try:
-        class_block = compile_scene_class(merged)
+        # Pass Whisper words so compile clamps FadeIn/page-fade run_times against
+        # the next wait_word (issue #66 — do not emit clock-racing garbage).
+        class_block = compile_scene_class(merged, words=words or None)
     except SceneSpecError as exc:
         raise SceneGenerationError(str(exc)) from exc
     issues = lint_generated_block(
