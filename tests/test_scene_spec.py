@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from docgen.scene_spec import (
+    MIN_REVEAL_RUN_TIME,
+    TITLE_WRITE_RUN_TIME,
     SceneSpecError,
     auto_fit_row_widths,
     auto_paginate,
@@ -23,7 +25,9 @@ from docgen.scene_spec import (
     narration_sentence_count,
     narration_sentences,
     pacing_violations,
+    reveal_cadence_violations,
     segment_index_for_whisper_time,
+    simulate_reveal_timeline,
     sync_row_labels_to_whisper_words,
     validate_scene_spec,
 )
@@ -99,8 +103,11 @@ def test_multi_page_emits_transition_and_second_stack() -> None:
     out = compile_scene_class(spec)
     assert "timing_words = _load_timing_words('01-x')" in out
     assert "_p1_stack" in out
-    assert "self.timed_play(FadeOut(_p0_stack), run_time=0.5)" in out
+    # Fade out revealed boxes (not the parent VGroup — that re-adds siblings).
+    assert "FadeOut(_bx_0_0_0)" in out
+    assert "FadeOut(_p0_stack)" not in out
     assert "FadeIn(_bx_1_0_0)" in out
+    assert f"Write(title), run_time={TITLE_WRITE_RUN_TIME}" in out
 
 
 def test_validate_rejects_rows_and_pages_together() -> None:
@@ -1155,3 +1162,92 @@ def test_validate_edges_requires_known_labels() -> None:
                 "edges": [{"from": "A", "to": "Missing"}],
             }
         )
+
+
+def _cascade_spec() -> dict:
+    """Three paced boxes with long FadeIn run_times vs tight Whisper gaps."""
+    return {
+        "segment_id": "01",
+        "class_name": "CascadeScene",
+        "timing_key": "01-cascade",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.5,
+                "boxes": [
+                    {
+                        "label": "Alpha",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    },
+                    {
+                        "label": "Beta",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 1,
+                    },
+                    {
+                        "label": "Gamma",
+                        "color": "C_ORANGE",
+                        "width": 3.0,
+                        "height": 0.8,
+                        "font_size": 18,
+                        "wait_word": 2,
+                    },
+                ],
+            }
+        ],
+    }
+
+
+def _cascade_words() -> list[dict]:
+    # Starts after a short title, then 0.4s apart — 1.5s FadeIns overshoot.
+    return [
+        {"word": "Alpha", "start": 1.2, "end": 1.4},
+        {"word": "Beta", "start": 1.6, "end": 1.8},
+        {"word": "Gamma", "start": 2.0, "end": 2.2},
+        {"word": "tail", "start": 40.0, "end": 40.5},
+    ]
+
+
+def test_unclamped_timeline_skips_waits_when_fadein_overshoots() -> None:
+    """Issue #66: long FadeIn run_times push _clock past the next word start."""
+    events = simulate_reveal_timeline(
+        _cascade_spec(), _cascade_words(), clamp_run_times=False
+    )
+    skipped = [e for e in events if e.wait_skipped]
+    assert len(skipped) >= 2
+    issues = reveal_cadence_violations(events, audio_end=40.5, max_skip_ratio=0.2)
+    assert issues, "unclamped cascade must be flagged"
+
+
+def test_clamped_timeline_keeps_waits_aligned() -> None:
+    """Compile-time clamp must stop creating skip cascades."""
+    events = simulate_reveal_timeline(
+        _cascade_spec(), _cascade_words(), clamp_run_times=True
+    )
+    # First wait may still no-op if word_start <= title write; later ones must wait.
+    assert events[0].run_time <= 1.5
+    assert all(e.run_time >= MIN_REVEAL_RUN_TIME for e in events)
+    # After clamp, Beta/Gamma should not arrive with clock already past their starts
+    # because prior FadeIns were shrunk.
+    assert not events[1].wait_skipped
+    assert not events[2].wait_skipped
+    assert reveal_cadence_violations(events, audio_end=40.5) == []
+
+
+def test_compile_with_words_emits_clamped_runtimes_not_garbage() -> None:
+    """Creation path: compile_scene_class(..., words=) must emit shortened FadeIns."""
+    words = _cascade_words()
+    out = compile_scene_class(_cascade_spec(), words=words)
+    assert f"run_time={TITLE_WRITE_RUN_TIME}" in out
+    # Unclamped authored run_time 1.5 must not appear for every FadeIn.
+    assert out.count("run_time=1.5") < 3
+    assert "FadeIn(_bx_0_0_0)" in out
+    assert "wait_until_word(timing_words, 0)" in out
+    assert "wait_until_word(timing_words, 1)" in out
