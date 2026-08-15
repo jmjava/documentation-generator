@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import pytest
 
-from docgen.manim_primitives import clamp_title_run_time, connector_endpoints
-from docgen.scene_spec import (
+from docgen.manim_primitives import (
     DEFAULT_DWELL_RUN_TIME,
+    MAX_STATIC_HOLD,
     MIN_DWELL_RUN_TIME,
+    MIN_HOLD_RENEW_WAIT,
+    clamp_title_run_time,
+    compute_dwell_run_time,
+    connector_endpoints,
+    plan_hold_pulses,
+    resolve_box_emphasis,
+)
+from docgen.scene_spec import (
     MIN_REVEAL_RUN_TIME,
     TITLE_WRITE_RUN_TIME,
     SceneSpecError,
     compile_scene_class,
-    compute_dwell_run_time,
     layout_overlap_violations,
-    resolve_box_emphasis,
     simulate_reveal_timeline,
     validate_scene_spec,
 )
@@ -121,6 +127,37 @@ def test_resolve_box_emphasis_box_overrides_layout() -> None:
     assert resolve_box_emphasis({"emphasis": "none"}, {"dwell_emphasis": "auto"}) == "none"
 
 
+def test_plan_hold_pulses_none_is_empty() -> None:
+    assert plan_hold_pulses(2.0, 20.0, requested="none") == ()
+
+
+def test_plan_hold_pulses_tight_gap_is_empty() -> None:
+    assert plan_hold_pulses(1.45, 1.6, requested="pulse") == ()
+
+
+def test_plan_hold_pulses_wide_gap_renews_before_freeze() -> None:
+    pulses = plan_hold_pulses(2.0, 16.0, requested="pulse")
+    assert len(pulses) >= 2
+    assert pulses[0].wait_before == 0.0
+    assert pulses[0].run_time >= MIN_DWELL_RUN_TIME
+    assert all(p.wait_before == 0.0 or p.wait_before >= MIN_HOLD_RENEW_WAIT for p in pulses)
+    clock = 2.0
+    for pulse in pulses:
+        clock += pulse.wait_before + pulse.run_time
+    assert clock < 16.0
+    # No inter-pulse wait longer than the static-hold cap.
+    assert all(
+        p.wait_before <= MAX_STATIC_HOLD + 1e-9 for p in pulses if p.wait_before > 0
+    )
+
+
+def test_plan_hold_pulses_last_box_without_deadline_is_single() -> None:
+    pulses = plan_hold_pulses(20.0, None, requested="ring")
+    assert len(pulses) == 1
+    assert pulses[0].emphasis == "ring"
+    assert pulses[0].run_time == pytest.approx(DEFAULT_DWELL_RUN_TIME)
+
+
 def test_wide_holds_get_pulse_dwell_without_skipping_waits() -> None:
     spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1), _box("Gamma", wait_word=2)])
     events = simulate_reveal_timeline(spec, _wide_words(), clamp_run_times=True)
@@ -131,9 +168,15 @@ def test_wide_holds_get_pulse_dwell_without_skipping_waits() -> None:
     assert events[1].dwell_run_time >= MIN_DWELL_RUN_TIME
     assert events[2].dwell_run_time >= MIN_DWELL_RUN_TIME
     assert all(e.emphasis == "pulse" for e in events)
-    # Clock after fade+dwell must stay behind the next spoken start.
-    assert events[0].effective_at + events[0].run_time + events[0].dwell_run_time < 8.0
-    assert events[1].effective_at + events[1].run_time + events[1].dwell_run_time < 16.0
+    # Clock after fade + every hold pulse must stay behind the next spoken start.
+    assert len(events[0].hold_pulses) >= 2
+    assert len(events[1].hold_pulses) >= 2
+    span0 = sum(p.wait_before + p.run_time for p in events[0].hold_pulses)
+    span1 = sum(p.wait_before + p.run_time for p in events[1].hold_pulses)
+    assert events[0].effective_at + events[0].run_time + span0 < 8.0
+    assert events[1].effective_at + events[1].run_time + span1 < 16.0
+    # Last box uses the audio tail as its deadline (tail word ends 24.4).
+    assert len(events[2].hold_pulses) >= 2
 
 
 def test_tight_cascade_gets_no_dwell() -> None:
@@ -175,6 +218,10 @@ def test_compile_wide_holds_emits_indicate() -> None:
     pulse_at = out.index("Indicate(_bx_0_0_0)")
     next_wait = out.index("wait_until_word(timing_words, 1)")
     assert fade_at < pulse_at < next_wait
+    # Mid-hold renew: wait, then pulse again, still before the next spoken word.
+    first_block = out[pulse_at:next_wait]
+    assert "self.timed_wait(" in first_block
+    assert first_block.count("Indicate(_bx_0_0_0)") >= 2
 
 
 def test_compile_ring_emits_circumscribe() -> None:

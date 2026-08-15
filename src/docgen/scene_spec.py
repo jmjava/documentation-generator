@@ -17,10 +17,12 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
 * Uses the shared ``_box`` helper (text centered in the node; optional
   ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
   slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
-  ``wait_word`` is long enough — clamped so ``_clock`` cannot race.
-  Every compiled ``Text()`` sets ``font=MANIM_FONT``. ``docgen validate``
-  ``scene_assets`` re-checks cadence, frame budget, helpers, and compile sync
-  before a render.
+  ``wait_word`` is long enough — clamped so ``_clock`` cannot race. Long
+  holds schedule **additional** mid-hold pulses (``timed_wait`` + emphasis)
+  so the board does not freeze after the first Indicate. The last box uses
+  the audio tail as its deadline. Every compiled ``Text()`` sets
+  ``font=MANIM_FONT``. ``docgen validate`` ``scene_assets`` re-checks
+  cadence, hold idle, frame budget, helpers, and compile sync before a render.
 
 Typical workflow:
 
@@ -51,9 +53,12 @@ from docgen.manim_primitives import (
     ALLOWED_REVEALS,
     ALLOWED_SHAPES,
     DEFAULT_DWELL_RUN_TIME,
+    HoldPulse,
     MIN_DWELL_RUN_TIME,
+    audio_end_from_words,
     clamp_title_run_time,
-    compute_dwell_run_time,
+    hold_span_seconds,
+    plan_hold_pulses,
     resolve_box_emphasis,
 )
 
@@ -751,6 +756,7 @@ class RevealEvent:
     emphasis: str = "none"
     dwell_run_time: float = 0.0
     reveal: str = "fade"
+    hold_pulses: tuple[HoldPulse, ...] = ()
 
 
 def default_box_reveal(
@@ -944,12 +950,18 @@ def simulate_reveal_timeline(
         default_dwell = float(
             (spec.get("layout") or {}).get("dwell_run_time", DEFAULT_DWELL_RUN_TIME)
         )
-        dwell_rt = compute_dwell_run_time(
+        deadline = next_target
+        if deadline is None:
+            tail = audio_end_from_words(words)
+            if tail is not None and tail > clock_after_reveal:
+                deadline = tail
+        pulses = plan_hold_pulses(
             clock_after_reveal,
-            next_target,
+            deadline,
             requested=requested,
             default_rt=default_dwell,
         )
+        dwell_rt = float(pulses[0].run_time) if pulses else 0.0
         emphasis = requested if dwell_rt > 0 else "none"
 
         events.append(
@@ -967,9 +979,10 @@ def simulate_reveal_timeline(
                 emphasis=emphasis,
                 dwell_run_time=float(dwell_rt),
                 reveal=str(slot.get("reveal") or "fade"),
+                hold_pulses=pulses,
             )
         )
-        clock = clock_after_reveal + dwell_rt
+        clock = clock_after_reveal + hold_span_seconds(pulses)
 
     return events
 
@@ -1020,7 +1033,10 @@ def reveal_cadence_violations(
                 f"{max_consecutive_skips}) — boxes cascade with only FadeIn gaps"
             )
 
-    last_effective = max(e.effective_at for e in events)
+    last_effective = max(
+        e.effective_at + e.run_time + hold_span_seconds(e.hold_pulses or ())
+        for e in events
+    )
     early_idle = audio_end - last_effective
     early_ratio = early_idle / audio_end if audio_end > 0 else 0.0
     if early_idle > max_early_sec and early_ratio > max_early_ratio:
@@ -2190,13 +2206,26 @@ def compile_scene_class(
                 lines.append(
                     f"        self.timed_play({anims}, run_time={run_time})"
                 )
-                dwell_rt = float(ev.dwell_run_time) if ev is not None else 0.0
-                emphasis = str(ev.emphasis) if ev is not None else "none"
-                emph = _emphasis_anim(bx, emphasis)
-                if emph and dwell_rt >= MIN_DWELL_RUN_TIME:
-                    lines.append(
-                        f"        self.timed_play({emph}, run_time={round(dwell_rt, 3)})"
+                pulses = ev.hold_pulses if ev is not None else ()
+                if not pulses and ev is not None and float(ev.dwell_run_time) >= MIN_DWELL_RUN_TIME:
+                    pulses = (
+                        HoldPulse(
+                            wait_before=0.0,
+                            run_time=float(ev.dwell_run_time),
+                            emphasis=str(ev.emphasis),
+                        ),
                     )
+                for pulse in pulses:
+                    if float(pulse.wait_before) > 0:
+                        lines.append(
+                            f"        self.timed_wait({round(float(pulse.wait_before), 3)})"
+                        )
+                    emph = _emphasis_anim(bx, str(pulse.emphasis))
+                    if emph and float(pulse.run_time) >= MIN_DWELL_RUN_TIME:
+                        lines.append(
+                            f"        self.timed_play({emph}, "
+                            f"run_time={round(float(pulse.run_time), 3)})"
+                        )
 
     lines.extend(
         [

@@ -134,7 +134,7 @@ Design goals:
 - **Motion (keep labels spoken):** vary ``shape`` / ``reveal`` / ``emphasis`` instead of inventing
   extra labels. Prefer ``reveal: grow`` on the first node of a pipeline and ``emphasis: ring`` on
   a decision diamond. Do **not** add boxes just to fill time — the toolchain pulses a revealed
-  box during a long subject-beat hold.
+  box at the start of a long subject-beat hold and again before the board would sit still.
   Allowed shapes: {", ".join(sorted(ALLOWED_SHAPES))}; reveals: {", ".join(sorted(ALLOWED_REVEALS))};
   emphasis: {", ".join(sorted(ALLOWED_EMPHASIS))}.
 - **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
