@@ -14,7 +14,10 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
   content; use multiple **pages** when the story needs more boxes than fit.
 * Between pages, runs a **page transition** (default ``fade`` out the previous
   page's stack) so the next page appears on a clear canvas.
-* Uses the shared ``_box`` helper (text centered in the rounded rect).
+* Uses the shared ``_box`` helper (text centered in the node; optional
+  ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
+  slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
+  ``wait_word`` is long enough — clamped so ``_clock`` cannot race.
 
 Typical workflow:
 
@@ -38,6 +41,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from docgen.manim_primitives import (
+    ALLOWED_DWELL_EMPHASIS,
+    ALLOWED_EMPHASIS,
+    ALLOWED_REVEALS,
+    ALLOWED_SHAPES,
+    DEFAULT_DWELL_RUN_TIME,
+    MIN_DWELL_RUN_TIME,
+    compute_dwell_run_time,
+    resolve_box_emphasis,
+)
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
@@ -726,6 +740,9 @@ class RevealEvent:
     wait_skipped: bool
     run_time: float
     page_fade_out: float
+    emphasis: str = "none"
+    dwell_run_time: float = 0.0
+    reveal: str = "fade"
 
 
 def _box_wait_word(row: dict[str, Any], box: dict[str, Any], box_index: int) -> int | None:
@@ -811,6 +828,8 @@ def iter_reveal_slots(
                         "run_time": row_rt,
                         "page_transition": str(trans or default_tr),
                         "page_transition_run_time": default_tr_rt,
+                        "emphasis": resolve_box_emphasis(box, layout),
+                        "reveal": str(box.get("reveal") or "fade").strip().lower(),
                     }
                 )
     return slots
@@ -883,6 +902,19 @@ def simulate_reveal_timeline(
         if page_fade_out > 0:
             clock += page_fade_out
 
+        clock_after_reveal = clock + rt
+        requested = str(slot.get("emphasis") or "none")
+        default_dwell = float(
+            (spec.get("layout") or {}).get("dwell_run_time", DEFAULT_DWELL_RUN_TIME)
+        )
+        dwell_rt = compute_dwell_run_time(
+            clock_after_reveal,
+            next_target,
+            requested=requested,
+            default_rt=default_dwell,
+        )
+        emphasis = requested if dwell_rt > 0 else "none"
+
         events.append(
             RevealEvent(
                 label=str(slot["label"]),
@@ -895,9 +927,12 @@ def simulate_reveal_timeline(
                 wait_skipped=wait_skipped,
                 run_time=float(rt),
                 page_fade_out=float(page_fade_out),
+                emphasis=emphasis,
+                dwell_run_time=float(dwell_rt),
+                reveal=str(slot.get("reveal") or "fade"),
             )
         )
-        clock += rt
+        clock = clock_after_reveal + dwell_rt
 
     return events
 
@@ -1477,6 +1512,21 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                     raise SceneSpecError(f"{bp}: subtitle must be a string if set")
                 if len(bsub.strip()) > 60:
                     raise SceneSpecError(f"{bp}: subtitle must be at most 60 characters")
+            shape = box.get("shape")
+            if shape is not None and str(shape).strip().lower() not in ALLOWED_SHAPES:
+                raise SceneSpecError(
+                    f"{bp}: shape must be one of {sorted(ALLOWED_SHAPES)} if set"
+                )
+            reveal = box.get("reveal")
+            if reveal is not None and str(reveal).strip().lower() not in ALLOWED_REVEALS:
+                raise SceneSpecError(
+                    f"{bp}: reveal must be one of {sorted(ALLOWED_REVEALS)} if set"
+                )
+            emphasis = box.get("emphasis")
+            if emphasis is not None and str(emphasis).strip().lower() not in ALLOWED_EMPHASIS:
+                raise SceneSpecError(
+                    f"{bp}: emphasis must be one of {sorted(ALLOWED_EMPHASIS)} if set"
+                )
 
         has_row_pacing = row.get("wait_word") is not None or row.get("wait_segment") is not None
         if has_row_pacing and box_pacing:
@@ -1605,6 +1655,18 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         raise SceneSpecError(
             f"{path_label}: layout.page_transition_run_time must be a number in (0, 5] if set"
         )
+    dwell_mode = layout.get("dwell_emphasis", "auto")
+    if str(dwell_mode).strip().lower() not in ALLOWED_DWELL_EMPHASIS:
+        raise SceneSpecError(
+            f"{path_label}: layout.dwell_emphasis must be one of "
+            f"{sorted(ALLOWED_DWELL_EMPHASIS)} if set"
+        )
+    if "dwell_run_time" in layout:
+        drt = layout.get("dwell_run_time")
+        if not isinstance(drt, (int, float)) or not (0 < float(drt) <= 3.0):
+            raise SceneSpecError(
+                f"{path_label}: layout.dwell_run_time must be a number in (0, 3] if set"
+            )
 
     if has_rows:
         rows = data["rows"]
@@ -1691,6 +1753,41 @@ def _any_wait_segment_in_pages(pages: list[dict[str, Any]]) -> bool:
             if row.get("wait_segment") is not None:
                 return True
     return False
+
+
+def _box_ctor_line(var: str, box: dict[str, Any]) -> str:
+    """Emit ``_box(...)``; omit default ``shape='rounded'`` so stale helpers still work."""
+    lab = str(box["label"])
+    col = str(box["color"])
+    w = float(box["width"])
+    h = float(box["height"])
+    fs = int(box["font_size"])
+    extras: list[str] = []
+    bsub = str(box.get("subtitle") or "").strip()
+    if bsub:
+        extras.append(f"subtitle={bsub!r}")
+    shape = str(box.get("shape") or "rounded").strip().lower()
+    if shape != "rounded":
+        extras.append(f"shape={shape!r}")
+    extra = (", " + ", ".join(extras)) if extras else ""
+    return f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs}{extra})"
+
+
+def _reveal_anim(bx: str, reveal: str) -> str:
+    kind = str(reveal or "fade").strip().lower()
+    if kind == "grow":
+        return f"GrowFromCenter({bx})"
+    if kind == "slide":
+        return f"FadeIn({bx}, shift=UP * 0.22)"
+    return f"FadeIn({bx})"
+
+
+def _emphasis_anim(bx: str, emphasis: str) -> str | None:
+    if emphasis == "ring":
+        return f"Circumscribe({bx})"
+    if emphasis == "pulse":
+        return f"Indicate({bx})"
+    return None
 
 
 def compile_scene_class(
@@ -1797,18 +1894,7 @@ def compile_scene_class(
                         f"        {var} = _image({rel!r}, {w}, {h})"
                     )
                     continue
-                lab = str(box["label"])
-                col = str(box["color"])
-                fs = int(box["font_size"])
-                bsub = str(box.get("subtitle") or "").strip()
-                if bsub:
-                    lines.append(
-                        f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs}, subtitle={bsub!r})"
-                    )
-                else:
-                    lines.append(
-                        f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs})"
-                    )
+                lines.append(_box_ctor_line(var, box))
 
         for r, row in enumerate(rows):
             boxes_raw = row["boxes"]
@@ -1851,8 +1937,7 @@ def compile_scene_class(
             estyle = str(edge.get("style") or "solid").strip().lower() or "solid"
             elabel = str(edge.get("label") or "").strip()
             lines.append(
-                f"        {evar} = _arrow({src_var}.get_center(), {dst_var}.get_center(), "
-                f"{ecol}, style={estyle!r})"
+                f"        {evar} = _arrow({src_var}, {dst_var}, {ecol}, style={estyle!r})"
             )
             page_edge_vars.setdefault(p, []).append(evar)
             # Reveal with the later endpoint (second in box creation order).
@@ -1931,21 +2016,29 @@ def compile_scene_class(
                             lines.append(f"        self.remove({t})")
                         lines.append("        self.timed_wait(0.05)")
                 bx = f"_bx_{p}_{r}_{b_idx}"
+                reveal = (
+                    str(ev.reveal)
+                    if ev is not None
+                    else str(box.get("reveal") or "fade").strip().lower()
+                )
+                reveal_part = _reveal_anim(bx, reveal)
                 edge_anims = edges_with_target.get((p, bx), [])
-                if edge_anims:
-                    parts = [f"FadeIn({bx})"]
-                    for evar, kind in edge_anims:
-                        if kind == "grow":
-                            parts.append(f"GrowArrow({evar})")
-                        else:
-                            parts.append(f"FadeIn({evar})")
-                    anims = ", ".join(parts)
+                parts = [reveal_part]
+                for evar, kind in edge_anims:
+                    if kind == "grow":
+                        parts.append(f"GrowArrow({evar})")
+                    else:
+                        parts.append(f"FadeIn({evar})")
+                anims = ", ".join(parts)
+                lines.append(
+                    f"        self.timed_play({anims}, run_time={run_time})"
+                )
+                dwell_rt = float(ev.dwell_run_time) if ev is not None else 0.0
+                emphasis = str(ev.emphasis) if ev is not None else "none"
+                emph = _emphasis_anim(bx, emphasis)
+                if emph and dwell_rt >= MIN_DWELL_RUN_TIME:
                     lines.append(
-                        f"        self.timed_play({anims}, run_time={run_time})"
-                    )
-                else:
-                    lines.append(
-                        f"        self.timed_play(FadeIn({bx}), run_time={run_time})"
+                        f"        self.timed_play({emph}, run_time={round(dwell_rt, 3)})"
                     )
 
     lines.extend(
