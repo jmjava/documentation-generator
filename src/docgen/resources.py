@@ -17,7 +17,10 @@ def is_frozen() -> bool:
 def meipass_dir() -> Path | None:
     if not is_frozen():
         return None
-    return Path(sys._MEIPASS)
+    root = getattr(sys, "_MEIPASS", None)
+    if not root:
+        return None
+    return Path(root)
 
 
 def package_root() -> Path:

@@ -70,6 +70,8 @@ def test_api_benchmark_returns_corpus(tmp_path: Path) -> None:
     assert page.status_code == 200
     assert b"benchmark-app" in page.data
     assert b"vue.global.prod.js" in page.data
+    assert b"{{ loading" in page.data
+    assert b"{% raw %}" not in page.data
     res = client.get("/api/benchmark")
     assert res.status_code == 200
     data = res.get_json()
@@ -106,8 +108,8 @@ def test_api_benchmark_update_baseline_roundtrip(tmp_path: Path, monkeypatch) ->
 
 
 def test_update_baseline_disabled_when_frozen(monkeypatch) -> None:
-    monkeypatch.setattr("docgen.resources.is_frozen", lambda: True)
     app = create_app(None)
+    monkeypatch.setattr("docgen.resources.is_frozen", lambda: True)
     res = app.test_client().post("/api/benchmark/update-baseline")
     assert res.status_code == 400
     assert res.get_json()["ok"] is False
