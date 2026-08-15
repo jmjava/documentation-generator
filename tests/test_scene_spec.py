@@ -45,7 +45,7 @@ def test_load_and_compile_fixture() -> None:
     assert "def construct(self):" in out
     assert "timing_words = _load_timing_words('99-overview')" in out
     assert "_docgen_segs = _load_timing('99-overview')" in out
-    assert "title = Text('Test declarative', font_size=40, color=C_WHITE).to_edge(UP)" in out
+    assert "title = Text('Test declarative', font_size=40, color=C_WHITE, font=MANIM_FONT).to_edge(UP)" in out
     assert "_bx_0_0_0 = _box('Alpha', C_ORANGE, 5.0, 1.2, 28)" in out
     assert "_bx_0_1_0 = _box('Beta', C_BLUE, 3.5, 1.2, 24)" in out
     assert "_bx_0_1_1 = _box('Gamma', C_TEAL, 3.5, 1.2, 24)" in out
@@ -1109,10 +1109,7 @@ def test_compile_edges_emits_arrows_and_grow() -> None:
         "edges": [{"from": "Hints", "to": "YAML", "color": "C_ACCENT"}],
     }
     out = compile_scene_class(spec)
-    assert (
-        "_ar_0_0 = _arrow(_bx_0_0_0.get_center(), _bx_0_0_1.get_center(), "
-        "C_ACCENT, style='solid')"
-    ) in out
+    assert "_ar_0_0 = _arrow(_bx_0_0_0, _bx_0_0_1, C_ACCENT, style='solid')" in out
     assert "GrowArrow(_ar_0_0)" in out
     assert "FadeIn(_bx_0_0_1)" in out
 

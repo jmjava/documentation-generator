@@ -112,6 +112,10 @@ def test_generate_scene_spec_dry_run_no_llm(tmp_path: Path) -> None:
     assert "Hello world" in result.prompt
     assert "SUBJECT BEATS" in result.prompt
     assert "--- system ---" in result.prompt
+    assert "shape:" in result.prompt
+    assert "reveal:" in result.prompt
+    assert "emphasis:" in result.prompt
+    assert "dwell_emphasis" in result.prompt
     assert result.yaml_text == ""
 
 

@@ -24,6 +24,7 @@ from docgen.manim_scene_support import (
 )
 from docgen.manim_scene_support import _load_narration as load_narration_for_scene
 from docgen.manim_scene_support import _load_timing_segments as load_timing_for_scene
+from docgen.manim_primitives import ALLOWED_EMPHASIS, ALLOWED_REVEALS, ALLOWED_SHAPES
 from docgen.scene_spec import (
     ALLOWED_COLORS,
     FRAME_HEIGHT,
@@ -82,6 +83,10 @@ Each row must have:
   - height: positive number (typical 0.65–1.1; **smaller when a page has many rows**)
   - font_size: int >= 14
   - subtitle: optional second line ≤60 chars (decorative; not used for beat matching)
+  - shape: optional rounded (default) | pill | diamond — use diamond for decisions, pill for states
+  - reveal: optional fade (default) | grow | slide — grow for the first node of a flow; slide for a new row
+  - emphasis: optional none | pulse | ring — omit to inherit layout.dwell_emphasis (auto = pulse when the
+    hold until the next wait_word is long enough). The compiler clamps emphasis so it cannot race the clock.
 
 Optional **image elements** (only when project-owner hints ask for generated imagery): a ``boxes`` entry
 may instead be an image element with:
@@ -103,7 +108,8 @@ Optional per-row (legacy; first box only — prefer per-box above):
 
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
-  for multi-page specs also page_transition: fade | none (default fade), page_transition_run_time (default 0.45, max 5).
+  for multi-page specs also page_transition: fade | none (default fade), page_transition_run_time (default 0.45, max 5);
+  dwell_emphasis: auto (default; pulse during long holds) | none; dwell_run_time: seconds for that pulse (default 0.5, max 3).
 - edges: optional list of connectors for **single-page** ``rows`` specs (see below).
 
 Optional per-page (when using ``pages``):
@@ -123,7 +129,14 @@ Design goals:
 - **Edges / arrows:** when narration describes a flow or pipeline, add ``edges`` so the board shows
   directed connections (not only isolated boxes). Keep edge endpoints as spoken labels.
   Use ``style: dashed`` for optional/secondary paths and a short ``label`` on the arrow when
-  the narration names the relationship (keep edge captions terse).
+  the narration names the relationship (keep edge captions terse). Arrows attach to box **edges**,
+  not centers.
+- **Motion (keep labels spoken):** vary ``shape`` / ``reveal`` / ``emphasis`` instead of inventing
+  extra labels. Prefer ``reveal: grow`` on the first node of a pipeline and ``emphasis: ring`` on
+  a decision diamond. Do **not** add boxes just to fill time — the toolchain pulses a revealed
+  box during a long subject-beat hold.
+  Allowed shapes: {", ".join(sorted(ALLOWED_SHAPES))}; reveals: {", ".join(sorted(ALLOWED_REVEALS))};
+  emphasis: {", ".join(sorted(ALLOWED_EMPHASIS))}.
 - **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
   **hold the board**. When the topic shifts, reveal a new spoken-phrase label for that beat.
   Do **not** invent a box per sentence, and do **not** leave a new topic without a matching label.
@@ -395,11 +408,13 @@ def inject_class_block_into_scenes_py(
         ensure_image_helper,
         ensure_scenes_bootstrap,
         inject_or_replace,
+        refresh_bootstrap_helpers,
     )
 
     scenes_path = cfg.animations_dir / "scenes.py"
     try:
         ensure_scenes_bootstrap(scenes_path)
+        refresh_bootstrap_helpers(scenes_path)
         if "_image(" in class_block:
             ensure_image_helper(scenes_path)
     except SceneGenerationError as exc:

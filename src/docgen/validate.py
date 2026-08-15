@@ -236,6 +236,13 @@ def _lint_manim_text_usage(
                 "use keyword form `Text(..., color=...)`."
             )
 
+        kw_names = {kw.arg for kw in node.keywords if kw.arg}
+        if "font" not in kw_names:
+            issues.append(
+                f"{path}:{node.lineno} Text() is missing font=MANIM_FONT; "
+                "machine Pango defaults drift (font consistency)."
+            )
+
         for kw in node.keywords:
             if kw.arg == "weight" and kw.value is not None and _is_bold_weight(kw.value):
                 issues.append(
@@ -301,6 +308,7 @@ class Validator:
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
             report.checks.append(self._check_subject_beat_coverage(seg_id))
+            report.checks.append(self._check_scene_assets(seg_id))
 
         return report.to_dict()
 
@@ -582,6 +590,30 @@ class Validator:
             "subject_beat_coverage",
             True,
             ["Subject beats covered; no invented unspoken labels"],
+        )
+
+    def _check_scene_assets(self, seg_id: str) -> CheckResult:
+        """Pre-render stuck / overlap / font / compile-sync gate (no video required)."""
+        sa_cfg = self.config.scene_assets_config
+        if not sa_cfg.get("enabled", True):
+            return CheckResult(
+                "scene_assets",
+                True,
+                ["validation.scene_assets disabled (skipped)"],
+            )
+        is_manim = self.config.visual_map.get(seg_id, {}).get("type") == "manim"
+        if not is_manim:
+            return CheckResult("scene_assets", True, ["non-manim (skipped)"])
+
+        from docgen.scene_asset_validate import scene_asset_violations_for_segment
+
+        issues = scene_asset_violations_for_segment(self.config, seg_id)
+        if issues:
+            return CheckResult("scene_assets", False, issues[:20])
+        return CheckResult(
+            "scene_assets",
+            True,
+            ["Spec layout, reveal cadence, helpers, and compiled class are consistent"],
         )
 
     def _check_layout(self, path: Path) -> CheckResult:

@@ -397,8 +397,8 @@ C_BLUE = "#2979ff"
 
 class Demo(Scene):
     def construct(self):
-        Text("Some label", font_size=16, color=C_BLUE)
-        Text("Heading", font_size=36, color=WHITE)
+        Text("Some label", font_size=16, color=C_BLUE, font=MANIM_FONT)
+        Text("Heading", font_size=36, color=WHITE, font=MANIM_FONT)
 """.strip(),
         )
         v = Validator(config)
@@ -496,7 +496,7 @@ from manim import *
 
 class Demo(Scene):
     def construct(self):
-        Text("arrow \u2192 here", font_size=16)
+        Text("arrow \u2192 here", font_size=16, font=MANIM_FONT)
 """.strip(),
             extra_cfg={"manim": {"unsafe_unicode": []}},
         )
