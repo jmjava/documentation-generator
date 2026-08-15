@@ -23,7 +23,10 @@ how a *consumer* bundle (typically `docs/demos/`) is expected to be operated.
 
 **Manim diagram segments:** use **`docgen scene-spec-generate`** / **`scene-compile`** with committed **`animations/specs/*.scene.yaml`** instead of hand-editing **`scenes.py`** inside generated regions. Subject-beat coverage (hold board on same topic; cover topic shifts; no invented labels) is enforced by **`scene-spec-generate`** and **`validate`** — not a blind label count.
 
-**Surviving CLI commands (indicative):** `init`, `wizard`, `tts`, `timestamps`, `manim`, `compose`, `validate`, `lint`, `narration-generate`, `scene-spec-generate`, `scene-compile`, `yaml-generate`, `clean-bundle`, `concat`, `pages`, `generate-all`, `rebuild-after-audio`.
+**Surviving CLI commands (indicative):** `init`, `wizard`, `tts`, `timestamps`, `manim`, `compose`, `validate`, `lint`, `narration-generate`, `scene-spec-generate`, `scene-compile`, `yaml-generate`, `clean-bundle`, `concat`, `pages`, `generate-all`, `rebuild-after-audio`, `benchmark`.
+
+**Clock / compile changes:** run **`docgen benchmark`** and keep the CI
+`benchmark` job. See **`.cursor/rules/docgen-benchmark.mdc`**.
 
 **If the right command does not exist:** implement it in **docgen** (or a thin wrapper script committed to the consumer repo), then use it — do not bypass with manual file edits.
 

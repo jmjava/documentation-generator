@@ -101,10 +101,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
-docgen benchmark          # standard scene-timing corpus (no Manim / OpenAI)
+docgen benchmark          # required: scene-timing corpus vs committed baseline
 ```
 
-CI installs `ffmpeg` and `tesseract` via apt — see `.github/workflows/ci.yml`.
+CI runs **`ruff`**, **`pytest`**, and a required **`benchmark`** job (`docgen benchmark`).
+CI also installs `ffmpeg` and `tesseract` via apt for unit tests — see `.github/workflows/ci.yml`.
 
 **Roadmap:** [milestones/README.md](milestones/README.md).
 

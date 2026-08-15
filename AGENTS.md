@@ -65,9 +65,22 @@ Commands registered on the **`docgen`** CLI include:
 - **Manim / `scenes.py` (marker blocks):** Fix generators under `src/docgen/**` (`manim_scene_support.py`, `scene_spec.py`, `scene_spec_generate.py`, `validate`, `yaml_generate`, tests). **Do not** patch generated classes inside a consumer's **`animations/scenes.py`** between **`BEGIN/END GENERATED SCENE`** markers; re-run **`scene-spec-generate`** / **`scene-compile --retime`** and **`manim`** instead. Preferred consumer order: narration → TTS → timestamps → scene-spec/compile → Manim → compose.
 - **Beat sync (fail-closed):** when `timing.json` has words, every story box label must match a spoken phrase (`wait_word`); unmatched labels and leftover LLM indices are rejected. Opt out with ``pace: none``. Fuzzy containment matching is not used. **`scene-compile` clamps FadeIn / page-fade `run_time` against the next word start** so `_TimedScene._clock` cannot race past waits (issue #66 — do not emit cascading first-board dumps). After a reveal, a **dwell** slot may play `Indicate` / `Circumscribe` when the gap to the next `wait_word` is long enough (also clamped). Long holds emit additional mid-hold pulses (`timed_wait` + emphasis) so the board does not freeze after the first Indicate. Optional box fields: `shape` (rounded/pill/diamond), `reveal` (fade/grow/slide), `emphasis` (none/pulse/ring). Page transitions FadeOut revealed boxes, not the parent `VGroup`. `scene-compile` refreshes stale `_box` / `_arrow` / `_TimedScene` helpers in `scenes.py`.
 - **Subject-beat coverage:** implemented in `scene_spec.layout_density_violations` / `cluster_subject_beats`; enforced by **`scene-spec-generate`** and **`validate`** (`validation.subject_beat_coverage.enabled`, default true). Not a blind label count.
+- **`docgen benchmark` is required** after clock / compile / `_TimedScene` / dwell changes. Pytest string assertions are not a substitute. Do not remove the CI `benchmark` job. See **Required gate** below.
 - Prefer **stable CLI / library contracts** and **documented exit codes** so CI can depend on them.
 - **`narration_from_source`:** hints in config + **`docgen narration-generate`** — owner-supplied context paths, not opaque bulk edits to outputs.
 - Avoid duplicating long orchestration docs here; **link** to downstream repos when describing their publish pipelines.
+
+## Required gate: `docgen benchmark`
+
+Clock, compile, scene-spec motion, `_TimedScene` helpers, and dwell/hold changes **must** stay green on the packaged corpus:
+
+1. Run **`docgen benchmark`** (or **`./scripts/benchmark-scenes.sh`**). Exit 0 vs ``src/docgen/benchmark_data/baseline.json``.
+2. Keep **`tests/test_scene_benchmark.py`** in the default ``pytest tests/`` run.
+3. Keep the **`benchmark`** job in **`.github/workflows/ci.yml`** (it must invoke ``docgen benchmark``). Do not delete or skip it.
+4. **`--update-baseline`** only when the scorecard change is the point of the PR; review the JSON diff. Do not bump the baseline to hide a regression.
+5. When production fails in a new way, add a case to ``standard_cases()`` and update the baseline in the same PR.
+
+String assertions on compiled ``scenes.py`` and ``simulate_reveal_timeline`` are not a substitute — the harness executes ``construct()`` on the real clock.
 
 ## Testing (downstream relevance)
 
@@ -77,7 +90,7 @@ Tests should cover **CLI-visible behavior** and contracts that adopters rely on:
 
 - **Virtualenv:** the project is installed editable into **`/workspace/.venv`** (created by the startup update script). Shells do **not** auto-activate it — run `. /workspace/.venv/bin/activate` (or prefix the venv path) before `docgen`, `pytest`, or `ruff`. The `docgen` console script lives at `/workspace/.venv/bin/docgen`.
 - **System deps are pre-baked in the VM snapshot** (not the update script): `ffmpeg` + `tesseract-ocr` (validation/compose/OCR), plus `build-essential`, `python3-dev`, `libcairo2-dev`, `libpango1.0-dev`, `pkg-config` (needed to build the `manim` extra's `manimpango`/`pycairo` wheels). If a fresh VM ever lacks these, reinstall via apt before `pip install`.
-- **Standard commands** are in `README.md` / `pyproject.toml` / `.github/workflows/ci.yml`: lint `ruff check src/ tests/`; tests `pytest tests/ -v --tb=short`; the CI unit job also exports `PYTHONPATH=src` (not needed locally because of the editable install, but harmless).
+- **Standard commands** are in `README.md` / `pyproject.toml` / `.github/workflows/ci.yml`: lint `ruff check src/ tests/`; tests `pytest tests/ -v --tb=short`; **required** `docgen benchmark` (CI job `benchmark`). The CI unit job also exports `PYTHONPATH=src` (not needed locally because of the editable install, but harmless).
 - **OpenAI-gated vs offline commands:** `tts`, `timestamps --engine whisper`, `image-generate`, `narration-generate`, `scene-spec-generate`, and `yaml-generate --llm` call OpenAI and need `OPENAI_API_KEY` (integration tests auto-skip without it). Fully offline: `init`, `scene-compile`, `manim`, `compose`, `validate`, `lint`, `pages`, `concat`, `yaml-generate` (no `--llm`), `timestamps` (default `local` engine), and `benchmark`.
 - **`scene-compile` gotcha:** paced specs (`wait_word`) need a `timing.json` entry for that stem (`docgen timestamps` after TTS). Prefer `scene-compile --retime` after fresh timestamps; for a fully offline smoke render, author rows without wait indices only if you accept unpaced reveals.
 - **No in-repo dogfood bundle:** exercise the pipeline against a scratch bundle (`docgen init /tmp/<name> --defaults` in a throwaway git dir). Do not hand-edit consumer generated assets (see `.cursor/rules/no-asset-edits.mdc`).

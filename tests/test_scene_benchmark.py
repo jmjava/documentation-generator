@@ -129,3 +129,25 @@ def test_packaged_baseline_exists() -> None:
     assert path.is_file()
     data = json.loads(path.read_text(encoding="utf-8"))
     assert set(data["cases"]) == {c.id for c in standard_cases()}
+
+
+def test_cli_registers_benchmark_command() -> None:
+    assert "benchmark" in main.commands
+
+
+def test_ci_workflow_requires_docgen_benchmark() -> None:
+    """Future PRs must not drop the named CI job that runs the corpus."""
+    workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+    text = workflow.read_text(encoding="utf-8")
+    assert "\n  benchmark:" in text
+    assert "docgen benchmark" in text
+    assert "Scene-timing benchmark" in text
+
+
+def test_agent_rules_require_benchmark() -> None:
+    root = Path(__file__).resolve().parents[1]
+    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "## Required gate: `docgen benchmark`" in agents
+    rule = (root / ".cursor" / "rules" / "docgen-benchmark.mdc").read_text(encoding="utf-8")
+    assert "docgen benchmark" in rule
+    assert "alwaysApply: true" in rule

@@ -19,6 +19,11 @@ production failure we have already shipped by accident:
 `baseline.json` is the last accepted scorecard. A change that raises
 `defect_points` or drops `quality_points` fails the command (exit 1).
 
+This command is a **required gate**: CI job `benchmark` in
+`.github/workflows/ci.yml`, `tests/test_scene_benchmark.py` in the default
+pytest run, and `.cursor/rules/docgen-benchmark.mdc` for agents. Do not
+remove those hooks.
+
 After an **intentional** improvement:
 
 ```bash
