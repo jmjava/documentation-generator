@@ -28,6 +28,7 @@ from docgen.manim_scene_support import (
     inject_or_replace,
     lint_generated_block,
     merged_scene_generation_settings,
+    refresh_bootstrap_helpers,
     sync_audio_tail_waits_in_scenes,
 )
 
@@ -505,3 +506,65 @@ def test_lint_returns_partial_issues_when_unparsable() -> None:
     code = f"Text('x {arrow} y', font_size=12,\n# unbalanced"
     issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=["\u2192"])
     assert any("U+2192" in i for i in issues)
+
+
+_STALE_HELPERS = '''
+def _box(label, color, w=2.2, h=0.75, fs=18):
+    return None
+
+def _arrow(start, end, color="#cdd6f4"):
+    return Arrow(start, end, color=color)
+
+class _TimedScene(Scene):
+    def setup(self):
+        self._clock = 0.0
+
+    def timed_play(self, *animations, run_time=1.0, **kwargs):
+        self.play(*animations, run_time=run_time, **kwargs)
+        self._clock += run_time
+'''
+
+
+def test_refresh_bootstrap_helpers_upgrades_stale_box_arrow_clock(tmp_path: Path) -> None:
+    p = tmp_path / "scenes.py"
+    p.write_text(
+        "from manim import *\n\n"
+        + _STALE_HELPERS
+        + "\n# ── BEGIN GENERATED SCENE: 01 (DemoScene) ──\n"
+        "class DemoScene(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        pass\n"
+        "# ── END GENERATED SCENE: 01 ──\n",
+        encoding="utf-8",
+    )
+    changed = refresh_bootstrap_helpers(p)
+    assert set(changed) == {"_box", "_arrow", "_TimedScene"}
+    text = p.read_text(encoding="utf-8")
+    assert "shape=" in text
+    assert "get_critical_point" in text
+    assert "not_past" in text
+    assert "BEGIN GENERATED SCENE: 01 (DemoScene)" in text
+    assert "class DemoScene(_TimedScene):" in text
+
+
+def test_refresh_bootstrap_helpers_noop_when_current(tmp_path: Path) -> None:
+    p = tmp_path / "scenes.py"
+    p.write_text(BOOTSTRAP_HEADER, encoding="utf-8")
+    before = p.read_text(encoding="utf-8")
+    assert refresh_bootstrap_helpers(p) == []
+    assert p.read_text(encoding="utf-8") == before
+
+
+def test_ensure_bootstrap_refreshes_stale_helpers(tmp_path: Path) -> None:
+    p = tmp_path / "scenes.py"
+    p.write_text(
+        BOOTSTRAP_HEADER.replace(
+            "def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=\"\", shape=\"rounded\"):",
+            "def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=\"\"):",
+        ),
+        encoding="utf-8",
+    )
+    ensure_scenes_bootstrap(p)
+    text = p.read_text(encoding="utf-8")
+    assert "shape=" in text
+    assert "def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=\"\", shape=\"rounded\"):" in text

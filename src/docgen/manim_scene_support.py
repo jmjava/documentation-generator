@@ -161,17 +161,40 @@ def _load_timing_words(segment_key: str) -> list[dict]:
     return list(words) if isinstance(words, list) else []
 
 
-def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=""):
-    """Labeled rounded box - slightly stronger fill/stroke for readable diagram boards.
+def _box(label, color, w=2.2, h=0.75, fs=18, subtitle="", shape="rounded"):
+    """Labeled diagram node. ``shape`` is rounded (default), pill, or diamond.
 
     Optional ``subtitle`` is a second, smaller line under the primary label
     (decorative; not used for wait_word beat matching).
     """
-    r = RoundedRectangle(
-        corner_radius=0.18, width=w, height=h,
-        stroke_color=color, stroke_width=2.5,
-        fill_color=color, fill_opacity=0.28,
-    )
+    kind = str(shape or "rounded").strip().lower()
+    if kind == "diamond":
+        r = Polygon(
+            [0, h / 2, 0],
+            [w / 2, 0, 0],
+            [0, -h / 2, 0],
+            [-w / 2, 0, 0],
+            stroke_color=color,
+            stroke_width=2.5,
+            fill_color=color,
+            fill_opacity=0.28,
+        )
+    elif kind == "pill":
+        r = RoundedRectangle(
+            corner_radius=max(h / 2, 0.08),
+            width=w,
+            height=h,
+            stroke_color=color,
+            stroke_width=2.5,
+            fill_color=color,
+            fill_opacity=0.28,
+        )
+    else:
+        r = RoundedRectangle(
+            corner_radius=0.18, width=w, height=h,
+            stroke_color=color, stroke_width=2.5,
+            fill_color=color, fill_opacity=0.28,
+        )
     t = Text(str(label), font_size=fs, color=C_WHITE)
     # Prefer white label text for contrast; fall back to the accent color when
     # the palette token is already near-white.
@@ -198,15 +221,24 @@ def _box(label, color, w=2.2, h=0.75, fs=18, subtitle=""):
 
 
 def _arrow(start, end, color="#cdd6f4", style="solid"):
-    """Connector between box centers (used by scene-spec ``edges``).
+    """Connector for scene-spec ``edges``.
 
-    ``style`` is ``solid`` (default) or ``dashed``. Dashed edges should be
-    revealed with ``FadeIn`` (not ``GrowArrow``).
+    Accepts two mobjects (edge-to-edge via ``get_critical_point``) or two
+    points (legacy ``.get_center()`` compile output). ``style`` is ``solid``
+    (default) or ``dashed``. Dashed edges should be revealed with ``FadeIn``.
     """
-    # Allow palette token names that compile_scene_class emits as bare identifiers.
+    def _is_mob(x):
+        return hasattr(x, "get_center") and hasattr(x, "get_critical_point")
+
+    if _is_mob(start) and _is_mob(end):
+        direction = end.get_center() - start.get_center()
+        p0 = start.get_critical_point(direction)
+        p1 = end.get_critical_point(-direction)
+    else:
+        p0, p1 = start, end
     arr = Arrow(
-        start,
-        end,
+        p0,
+        p1,
         color=color,
         stroke_width=3,
         buff=0.2,
@@ -1155,11 +1187,89 @@ def _bootstrap_helper_source(name: str) -> str:
     """Extract one top-level helper definition from :data:`BOOTSTRAP_HEADER` by name."""
     tree = ast.parse(BOOTSTRAP_HEADER)
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == name:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name == name:
             segment = ast.get_source_segment(BOOTSTRAP_HEADER, node)
             if segment:
                 return segment
     raise SceneGenerationError(f"bootstrap helper {name!r} not found in BOOTSTRAP_HEADER")
+
+
+def _fn_arg_names(node: ast.FunctionDef) -> set[str]:
+    names = {a.arg for a in node.args.args}
+    names.update(a.arg for a in node.args.kwonlyargs)
+    return names
+
+
+def _class_method(node: ast.ClassDef, name: str) -> ast.FunctionDef | None:
+    for child in node.body:
+        if isinstance(child, ast.FunctionDef) and child.name == name:
+            return child
+    return None
+
+
+def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
+    """True when a present helper is missing the current motion/clock API."""
+    for node in tree.body:
+        if name == "_box" and isinstance(node, ast.FunctionDef) and node.name == "_box":
+            return "shape" not in _fn_arg_names(node)
+        if name == "_arrow" and isinstance(node, ast.FunctionDef) and node.name == "_arrow":
+            return "get_critical_point" not in ast.unparse(node)
+        if name == "_TimedScene" and isinstance(node, ast.ClassDef) and node.name == "_TimedScene":
+            timed = _class_method(node, "timed_play")
+            if timed is None:
+                return True
+            return "not_past" not in _fn_arg_names(timed)
+        if name == "_image" and isinstance(node, ast.FunctionDef) and node.name == "_image":
+            return False
+    return False
+
+
+def _replace_top_level_def(text: str, node: ast.AST, new_src: str) -> str:
+    if getattr(node, "lineno", None) is None or getattr(node, "end_lineno", None) is None:
+        raise SceneGenerationError("cannot refresh helper without line numbers")
+    start = node.lineno - 1
+    decos = getattr(node, "decorator_list", None) or []
+    if decos:
+        start = min(d.lineno for d in decos) - 1
+    end = node.end_lineno
+    lines = text.splitlines(keepends=True)
+    replacement = new_src if new_src.endswith("\n") else new_src + "\n"
+    return "".join(lines[:start]) + replacement + "".join(lines[end:])
+
+
+def refresh_bootstrap_helpers(scenes_path: Path) -> list[str]:
+    """Replace stale ``_box`` / ``_arrow`` / ``_TimedScene`` with canonical bodies.
+
+    Does not touch generated scene classes. Missing ``_image`` is still handled
+    by :func:`ensure_image_helper`. Returns the names that were rewritten.
+    """
+    if not scenes_path.is_file():
+        return []
+    text = scenes_path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise SceneGenerationError(
+            f"{scenes_path} did not parse as Python ({exc.msg} at line {exc.lineno}); "
+            "fix the file before refreshing helpers."
+        ) from exc
+
+    refreshed: list[str] = []
+    # Replace from the bottom of the file so earlier line numbers stay valid.
+    nodes: list[tuple[int, str, ast.AST]] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in {"_box", "_arrow"}:
+            if helper_needs_refresh(tree, node.name):
+                nodes.append((node.lineno, node.name, node))
+        elif isinstance(node, ast.ClassDef) and node.name == "_TimedScene":
+            if helper_needs_refresh(tree, "_TimedScene"):
+                nodes.append((node.lineno, node.name, node))
+    for _lineno, name, node in sorted(nodes, key=lambda item: item[0], reverse=True):
+        text = _replace_top_level_def(text, node, _bootstrap_helper_source(name))
+        refreshed.append(name)
+    if refreshed:
+        scenes_path.write_text(text, encoding="utf-8")
+    return list(reversed(refreshed))
 
 
 def ensure_image_helper(scenes_path: Path) -> bool:
@@ -1228,6 +1338,7 @@ def ensure_scenes_bootstrap(scenes_path: Path) -> None:
             "Either restore the helpers (palette + _box + _arrow + _load_timing + _load_timing_words + _TimedScene) "
             f"or delete {scenes_path.name} so scene-spec-generate / scene-compile can write a fresh bootstrap."
         )
+    refresh_bootstrap_helpers(scenes_path)
 
 
 # ── Narration / timing loaders (scene-spec-generate) ───────────────────────
