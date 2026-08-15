@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from docgen.manim_primitives import connector_endpoints
+from docgen.manim_primitives import clamp_title_run_time, connector_endpoints
 from docgen.scene_spec import (
     DEFAULT_DWELL_RUN_TIME,
     MIN_DWELL_RUN_TIME,
     MIN_REVEAL_RUN_TIME,
+    TITLE_WRITE_RUN_TIME,
     SceneSpecError,
     compile_scene_class,
     compute_dwell_run_time,
+    layout_overlap_violations,
     resolve_box_emphasis,
     simulate_reveal_timeline,
     validate_scene_spec,
@@ -253,6 +255,77 @@ def test_validate_rejects_bad_layout_dwell_fields() -> None:
         validate_scene_spec(_spec([_box("A")], layout={"dwell_emphasis": "loud"}))
     with pytest.raises(SceneSpecError, match="dwell_run_time"):
         validate_scene_spec(_spec([_box("A")], layout={"dwell_run_time": 0}))
+
+
+def test_clamp_title_shrinks_when_first_word_is_early() -> None:
+    assert clamp_title_run_time(1.0, 0.6) == pytest.approx(0.55)
+    assert clamp_title_run_time(1.0, 1.4) == pytest.approx(1.0)
+    assert clamp_title_run_time(1.0, None) == pytest.approx(1.0)
+
+
+def test_simulate_clamps_title_so_first_wait_is_not_skipped() -> None:
+    spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
+    words = [
+        {"word": "Alpha", "start": 0.55, "end": 0.7},
+        {"word": "Beta", "start": 4.0, "end": 4.2},
+    ]
+    events = simulate_reveal_timeline(spec, words, clamp_run_times=True)
+    assert not events[0].wait_skipped
+    assert events[0].effective_at >= 0.55 - 0.02
+
+
+def test_compile_emits_clamped_title_write() -> None:
+    spec = _spec([_box("Alpha", wait_word=0)])
+    words = [{"word": "Alpha", "start": 0.55, "end": 0.7}]
+    out = compile_scene_class(spec, words=words)
+    assert f"Write(title), run_time={TITLE_WRITE_RUN_TIME}" not in out
+    assert "Write(title), run_time=0.5" in out
+
+
+def test_compile_slide_page_transition() -> None:
+    spec = {
+        "segment_id": "01",
+        "class_name": "PagedScene",
+        "timing_key": "01-x",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "layout": {"page_transition": "slide", "page_transition_run_time": 0.4},
+        "pages": [
+            {"rows": [{"run_time": 0.5, "boxes": [_box("P0")]}]},
+            {
+                "transition": "slide",
+                "rows": [{"run_time": 0.5, "boxes": [_box("P1")]}],
+            },
+        ],
+    }
+    validate_scene_spec(spec)
+    out = compile_scene_class(spec)
+    assert "FadeOut(_bx_0_0_0, shift=LEFT * 0.35)" in out
+
+
+def test_flow_page_auto_grows_first_box() -> None:
+    spec = _spec([_box("Hints"), _box("YAML")])
+    spec["rows"][0]["boxes"][1]["color"] = "C_BLUE"
+    spec["edges"] = [{"from": "Hints", "to": "YAML", "color": "C_ACCENT"}]
+    out = compile_scene_class(spec)
+    assert "GrowFromCenter(_bx_0_0_0)" in out
+    assert "FadeIn(_bx_0_0_1)" in out
+
+
+def test_layout_overlap_flags_tiny_title_buff() -> None:
+    spec = _spec([_box("Alpha")], layout={"first_row_title_buff": 0.1})
+    issues = layout_overlap_violations(spec)
+    assert any("first_row_title_buff" in i for i in issues)
+
+
+def test_layout_overlap_flags_tight_column_gap() -> None:
+    spec = _spec([_box("A"), _box("B")], layout={"column_gap": 0.05})
+    issues = layout_overlap_violations(spec)
+    assert any("column_gap" in i for i in issues)
+
+
+def test_layout_overlap_clean_for_default_gaps() -> None:
+    spec = _spec([_box("A"), _box("B")])
+    assert layout_overlap_violations(spec) == []
 
 
 def test_connector_endpoints_are_on_facing_edges() -> None:
