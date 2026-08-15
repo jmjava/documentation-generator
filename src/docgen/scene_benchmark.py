@@ -34,7 +34,9 @@ BASELINE_NAME = "baseline.json"
 
 
 def benchmark_data_dir() -> Path:
-    return Path(__file__).resolve().parent / "benchmark_data"
+    from docgen.resources import benchmark_data_dir as _packaged
+
+    return _packaged()
 
 
 def default_baseline_path() -> Path:
@@ -435,3 +437,31 @@ def scores_as_json(scores: list[CaseScore], *, regressions: list[str]) -> dict[s
         ),
         "regressions": regressions,
     }
+
+
+def build_benchmark_report(
+    *,
+    case_id: str | None = None,
+    baseline_path: Path | None = None,
+) -> dict[str, Any]:
+    """JSON payload for the CLI, wizard Vue view, and desktop GUI."""
+    scores = run_benchmark(case_id=case_id)
+    path = baseline_path or default_baseline_path()
+    baseline = load_baseline(path)
+    regressions = compare_to_baseline(scores, baseline)
+    report = scores_as_json(scores, regressions=regressions)
+    stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
+    for row in report["cases"]:
+        prev = stored.get(row["case_id"]) if isinstance(stored, dict) else None
+        row["baseline"] = prev if isinstance(prev, dict) else {}
+    report["baseline_path"] = str(path)
+    report["meets_baseline"] = not regressions
+    report["frozen"] = False
+    try:
+        from docgen.resources import is_frozen
+
+        report["frozen"] = is_frozen()
+    except Exception:
+        pass
+    report["case_ids"] = [c.id for c in standard_cases()]
+    return report

@@ -313,10 +313,12 @@ def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path |
 
 
 def create_app(config: Any | None = None) -> Flask:
+    from docgen.resources import static_dir, templates_dir
+
     app = Flask(
         __name__,
-        template_folder=str(Path(__file__).parent / "templates"),
-        static_folder=str(Path(__file__).parent / "static"),
+        template_folder=str(templates_dir()),
+        static_folder=str(static_dir()),
     )
     app.config["DOCGEN"] = config
 
@@ -328,6 +330,41 @@ def create_app(config: Any | None = None) -> Flask:
     @app.route("/")
     def index():
         return render_template("wizard.html")
+
+    @app.route("/api/benchmark")
+    def api_benchmark():
+        """Run the packaged scene-timing corpus (no Manim / OpenAI)."""
+        from docgen.scene_benchmark import build_benchmark_report
+
+        case_id = (request.args.get("case") or "").strip() or None
+        try:
+            report = build_benchmark_report(case_id=case_id)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        report["ok"] = True
+        return jsonify(report)
+
+    @app.route("/api/benchmark/update-baseline", methods=["POST"])
+    def api_benchmark_update_baseline():
+        """Rewrite the committed baseline. Disabled inside a frozen app."""
+        from docgen.resources import is_frozen
+        from docgen.scene_benchmark import (
+            build_benchmark_report,
+            run_benchmark,
+            write_baseline,
+        )
+
+        if is_frozen():
+            return jsonify({
+                "ok": False,
+                "error": "baseline updates are disabled in a packaged desktop build",
+            }), 400
+        scores = run_benchmark()
+        path = write_baseline(scores)
+        report = build_benchmark_report()
+        report["ok"] = True
+        report["wrote"] = str(path)
+        return jsonify(report)
 
     # -- API: tool version / upgrade (external install) ------------------------
 

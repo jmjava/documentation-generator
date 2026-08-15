@@ -25,6 +25,9 @@
       document.getElementById("view-" + btn.dataset.view).classList.remove("hidden");
       if (btn.dataset.view === "production") loadProductionView();
       if (btn.dataset.view === "tool") loadToolView();
+      if (btn.dataset.view === "benchmark" && window.docgenMountBenchmark) {
+        window.docgenMountBenchmark();
+      }
     });
   });
 
@@ -129,6 +132,12 @@
 
   // Prefetch version badge on load
   loadToolView();
+
+  const initialView = new URLSearchParams(window.location.search).get("view");
+  if (initialView) {
+    const nav = document.querySelector('.nav-btn[data-view="' + initialView + '"]');
+    if (nav) nav.click();
+  }
 
   // ---- Tab switching ----
   document.addEventListener("click", (e) => {

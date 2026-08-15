@@ -174,6 +174,38 @@ def init(
     print_summary(plan, created)
 
 
+@main.command("gui")
+@click.option("--port", default=0, help="Bind port (0 = ephemeral).")
+@click.option(
+    "--view",
+    default="benchmark",
+    show_default=True,
+    help="Initial view: benchmark, setup, production, or tool.",
+)
+@click.option(
+    "--browser",
+    is_flag=True,
+    help="Open the system browser instead of a pywebview window.",
+)
+@click.pass_context
+def gui(ctx: click.Context, port: int, view: str, browser: bool) -> None:
+    """Desktop GUI (Vue). Prefer `pip install 'docgen[gui]'` for a native window.
+
+    This is the entry PyInstaller freezes (see packaging/docgen-gui.spec).
+    """
+    from docgen.gui.__main__ import main as gui_main
+
+    args: list[str] = ["--view", view]
+    if port:
+        args.extend(["--port", str(port)])
+    if browser:
+        args.append("--browser")
+    cfg = ctx.obj.get("config") if ctx.obj else None
+    if cfg is not None and getattr(cfg, "yaml_path", None) and Path(cfg.yaml_path).is_file():
+        args.extend(["--config", str(cfg.yaml_path)])
+    gui_main(args)
+
+
 @main.command()
 @click.option("--port", default=8501, help="Port for the wizard web server.")
 @click.pass_context
@@ -1174,12 +1206,20 @@ def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write the full JSON report to this path.",
 )
+@click.option(
+    "--gui",
+    is_flag=True,
+    help="Open the Vue benchmark view (desktop window if pywebview is installed).",
+)
+@click.pass_context
 def benchmark(
+    ctx: click.Context,
     case_id: str | None,
     fmt: str,
     update_baseline: bool,
     baseline_path: Path | None,
     output_path: Path | None,
+    gui: bool,
 ) -> None:
     """Score the standard scene-timing corpus (no bundle, no Manim, no OpenAI).
 
@@ -1197,6 +1237,16 @@ def benchmark(
         scores_as_json,
         write_baseline,
     )
+
+    if gui:
+        from docgen.gui.desktop import launch_desktop
+
+        path = "/?view=benchmark"
+        if case_id:
+            path += "&case=" + case_id
+        cfg = ctx.obj.get("config") if ctx.obj else None
+        launch_desktop(cfg, path=path)
+        return
 
     try:
         scores = run_benchmark(case_id=case_id)
