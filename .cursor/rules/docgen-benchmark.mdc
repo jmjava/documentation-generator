@@ -1,0 +1,27 @@
+---
+description: Clock and scene-compile changes must pass docgen benchmark against the committed baseline.
+alwaysApply: true
+---
+
+# Required gate: `docgen benchmark`
+
+String checks on compiled `scenes.py` and `simulate_reveal_timeline` are **not**
+enough. Production uses `_TimedScene._clock` inside `construct()`.
+
+**After any change** to scene compile, clock math, `_TimedScene` / bootstrap
+helpers, dwell / hold pulses, `scene_asset_validate`, or the benchmark corpus
+itself, you **must**:
+
+1. Run **`docgen benchmark`** (or **`./scripts/benchmark-scenes.sh`**).
+2. Leave it green vs **`src/docgen/benchmark_data/baseline.json`** (exit 0).
+3. Keep the **`benchmark`** job in **`.github/workflows/ci.yml`** (it must
+   invoke `docgen benchmark`). Do not delete or skip that job.
+4. Keep **`tests/test_scene_benchmark.py`** in the default pytest run.
+
+`--update-baseline` is allowed **only** when the scorecard change is the point
+of the PR. Review the baseline JSON diff. Do not bump the baseline to hide a
+regression.
+
+When a consumer render fails in a new way, **add a case** to
+`standard_cases()` in `src/docgen/scene_benchmark.py` and update the baseline
+in the same PR.

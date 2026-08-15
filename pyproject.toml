@@ -37,7 +37,7 @@ docgen = "docgen.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-docgen = ["templates/*.html", "static/*.css", "static/*.js"]
+docgen = ["templates/*.html", "static/*.css", "static/*.js", "benchmark_data/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

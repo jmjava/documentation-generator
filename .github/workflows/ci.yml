@@ -60,3 +60,16 @@ jobs:
           done
       - run: pip install --no-cache-dir ".[dev]"
       - run: pytest tests/ -v --tb=short
+
+  # Required gate for clock / scene-compile changes. Do not remove: tests
+  # assert this job runs `docgen benchmark` against the committed baseline.
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir "."
+      - name: Scene-timing benchmark
+        run: docgen benchmark

@@ -317,6 +317,27 @@ def scene_asset_violations_for_segment(cfg: "Config", seg_id: str) -> list[str]:
             )
             issues.extend(dwell_overshoot_violations(events, audio_end=audio_end or None))
             issues.extend(hold_idle_violations(events, audio_end=audio_end))
+            merged_clock = dict(spec)
+            if not merged_clock.get("timing_key"):
+                merged_clock["timing_key"] = stem
+            try:
+                from docgen.scene_clock_harness import (
+                    clock_contract_violations,
+                    run_compiled_scene_clock,
+                )
+                from docgen.scene_spec import compile_scene_class
+
+                compiled = compile_scene_class(merged_clock, words=words)
+                trace = run_compiled_scene_clock(compiled, words)
+                issues.extend(
+                    f"clock: {m}"
+                    for m in clock_contract_violations(trace, words, audio_end=audio_end)
+                )
+            except Exception as exc:  # noqa: BLE001 — fail closed before Manim
+                issues.append(
+                    f"clock: compiled construct failed to execute ({exc}) — "
+                    "run `docgen scene-compile --retime`"
+                )
         if scenes_text:
             merged = dict(spec)
             if not merged.get("timing_key"):

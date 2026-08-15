@@ -101,9 +101,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+docgen benchmark          # required: scene-timing corpus vs committed baseline
 ```
 
-CI installs `ffmpeg` and `tesseract` via apt — see `.github/workflows/ci.yml`.
+CI runs **`ruff`**, **`pytest`**, and a required **`benchmark`** job (`docgen benchmark`).
+CI also installs `ffmpeg` and `tesseract` via apt for unit tests — see `.github/workflows/ci.yml`.
 
 **Roadmap:** [milestones/README.md](milestones/README.md).
 
@@ -140,6 +142,7 @@ docgen validate --pre-push
 | `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into `docgen.yaml`; optional OpenAI refresh of `tts.instructions` / `wizard.system_prompt` (rewrites the file — review in Git) |
 | `docgen scene-compile [SPEC.scene.yaml \| --all] [--retime] [--dry-run]` | Compile declarative scene YAML into `animations/scenes.py`. **`--all --retime`** re-derives `wait_word` from current `timing.json` with no OpenAI; unmatched labels fail closed (or set `pace: none`) |
 | `docgen scene-spec-generate [--segment 01 \| --all] [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit YAML only (same schema as `scene-compile`); rejects frame-budget overflow and **subject-beat coverage** failures (hold board on same topic; cover topic shifts; no invented labels — not a blind count); auto-paginate + word-alignment; optionally writes `animations/specs/<stem>.scene.yaml` and `--compile`s into `scenes.py` |
+| `docgen benchmark [--case ID] [--format text\|json] [--update-baseline]` | Score the **standard scene-timing corpus** (execute compiled `construct()` on the real `_TimedScene` clock, no Manim). Diffs a committed baseline so clock changes are measured, not guessed |
 
 ## Configuration
 

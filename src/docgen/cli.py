@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -1139,4 +1140,91 @@ def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
     cfg = ctx.obj["config"]
     pipeline = Pipeline(cfg)
     pipeline.run(skip_tts=True, regen_scene_specs=regen_scene_specs)
+
+
+@main.command("benchmark")
+@click.option(
+    "--case",
+    "case_id",
+    default=None,
+    help="Run one standard case id (default: the full corpus).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+)
+@click.option(
+    "--update-baseline",
+    is_flag=True,
+    help="Rewrite the committed baseline from this run (only after an intentional improvement).",
+)
+@click.option(
+    "--baseline",
+    "baseline_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Baseline JSON to compare (default: packaged benchmark_data/baseline.json).",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the full JSON report to this path.",
+)
+def benchmark(
+    case_id: str | None,
+    fmt: str,
+    update_baseline: bool,
+    baseline_path: Path | None,
+    output_path: Path | None,
+) -> None:
+    """Score the standard scene-timing corpus (no bundle, no Manim, no OpenAI).
+
+    Executes compiled construct() on the real _TimedScene clock with stub
+    mobjects. Compare against the committed baseline to see if a change
+    improved or regressed production failure modes (issue #66 dumps, stuck
+    holds, title skip, page transitions).
+    """
+    from docgen.scene_benchmark import (
+        compare_to_baseline,
+        default_baseline_path,
+        format_table,
+        load_baseline,
+        run_benchmark,
+        scores_as_json,
+        write_baseline,
+    )
+
+    try:
+        scores = run_benchmark(case_id=case_id)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    base_path = baseline_path or default_baseline_path()
+    if update_baseline:
+        if case_id:
+            raise click.ClickException("--update-baseline requires the full corpus (omit --case)")
+        written = write_baseline(scores, base_path)
+        click.echo(f"wrote baseline {written}")
+    baseline = load_baseline(base_path)
+    regressions = compare_to_baseline(scores, baseline)
+    report = scores_as_json(scores, regressions=regressions)
+    if output_path:
+        output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if fmt == "json":
+        click.echo(json.dumps(report, indent=2))
+    else:
+        click.echo(format_table(scores))
+        if regressions:
+            click.echo("")
+            click.echo("regressions vs baseline:")
+            for note in regressions:
+                click.echo(f"  - {note}")
+        elif base_path.is_file():
+            click.echo("")
+            click.echo(f"meets baseline {base_path}")
+    if regressions and not update_baseline:
+        raise SystemExit(1)
 
