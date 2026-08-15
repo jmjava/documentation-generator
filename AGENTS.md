@@ -58,6 +58,7 @@ Commands registered on the **`docgen`** CLI include:
 - **`pages`** — emit static HTML for demo assets.
 - **`generate-all`** — orchestrated pipeline: TTS → timestamps → **scene specs** (auto `scene-spec-generate` when `animations/specs/` is empty; otherwise offline retime) → images → Manim → compose → validate → concat → pages. `--regen-scene-specs` forces LLM rewrite; `--skip-scene-retime` keeps legacy hand `scenes.py` only.
 - **`rebuild-after-audio`** — same as generate-all with TTS skipped (still retimes scenes after timestamps).
+- **`benchmark`** — score the packaged scene-timing corpus (no bundle / Manim / OpenAI). Executes compiled ``construct()`` on the real ``_TimedScene`` clock and diffs ``src/docgen/benchmark_data/baseline.json``. Exit 1 on regression. ``--update-baseline`` only after an intentional improvement.
 
 ## Implications for changes here
 
@@ -70,14 +71,14 @@ Commands registered on the **`docgen`** CLI include:
 
 ## Testing (downstream relevance)
 
-Tests should cover **CLI-visible behavior** and contracts that adopters rely on: **`yaml-generate`**, **`scene-spec-generate`**, **`scene-compile`**, **`validate`**, **`compose`**, **`generate-all`**, **`pages`**, **`init`**, **config** loading (`repo_root`, `env_file`), and package exports. Use small in-tree fixtures; this library does not ship a dogfood bundle.
+Tests should cover **CLI-visible behavior** and contracts that adopters rely on: **`yaml-generate`**, **`scene-spec-generate`**, **`scene-compile`**, **`validate`**, **`compose`**, **`generate-all`**, **`pages`**, **`init`**, **`benchmark`**, **config** loading (`repo_root`, `env_file`), and package exports. Use small in-tree fixtures; this library does not ship a dogfood bundle. Clock / compile changes must keep ``docgen benchmark`` at or above ``benchmark_data/baseline.json`` — string assertions on ``scenes.py`` are not enough.
 
 ## Cursor Cloud specific instructions
 
 - **Virtualenv:** the project is installed editable into **`/workspace/.venv`** (created by the startup update script). Shells do **not** auto-activate it — run `. /workspace/.venv/bin/activate` (or prefix the venv path) before `docgen`, `pytest`, or `ruff`. The `docgen` console script lives at `/workspace/.venv/bin/docgen`.
 - **System deps are pre-baked in the VM snapshot** (not the update script): `ffmpeg` + `tesseract-ocr` (validation/compose/OCR), plus `build-essential`, `python3-dev`, `libcairo2-dev`, `libpango1.0-dev`, `pkg-config` (needed to build the `manim` extra's `manimpango`/`pycairo` wheels). If a fresh VM ever lacks these, reinstall via apt before `pip install`.
 - **Standard commands** are in `README.md` / `pyproject.toml` / `.github/workflows/ci.yml`: lint `ruff check src/ tests/`; tests `pytest tests/ -v --tb=short`; the CI unit job also exports `PYTHONPATH=src` (not needed locally because of the editable install, but harmless).
-- **OpenAI-gated vs offline commands:** `tts`, `timestamps --engine whisper`, `image-generate`, `narration-generate`, `scene-spec-generate`, and `yaml-generate --llm` call OpenAI and need `OPENAI_API_KEY` (integration tests auto-skip without it). Fully offline: `init`, `scene-compile`, `manim`, `compose`, `validate`, `lint`, `pages`, `concat`, `yaml-generate` (no `--llm`), and `timestamps` (default `local` engine).
+- **OpenAI-gated vs offline commands:** `tts`, `timestamps --engine whisper`, `image-generate`, `narration-generate`, `scene-spec-generate`, and `yaml-generate --llm` call OpenAI and need `OPENAI_API_KEY` (integration tests auto-skip without it). Fully offline: `init`, `scene-compile`, `manim`, `compose`, `validate`, `lint`, `pages`, `concat`, `yaml-generate` (no `--llm`), `timestamps` (default `local` engine), and `benchmark`.
 - **`scene-compile` gotcha:** paced specs (`wait_word`) need a `timing.json` entry for that stem (`docgen timestamps` after TTS). Prefer `scene-compile --retime` after fresh timestamps; for a fully offline smoke render, author rows without wait indices only if you accept unpaced reveals.
 - **No in-repo dogfood bundle:** exercise the pipeline against a scratch bundle (`docgen init /tmp/<name> --defaults` in a throwaway git dir). Do not hand-edit consumer generated assets (see `.cursor/rules/no-asset-edits.mdc`).
 - **Wizard:** `docgen wizard --port 8501` is an optional local Flask app (long-lived); run it from a bundle directory that contains `docgen.yaml`.
