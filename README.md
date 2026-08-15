@@ -80,8 +80,10 @@ pip install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
 # Prefer a SHA pin in CI:
 # pip install 'docgen @ git+https://github.com/jmjava/documentation-generator.git@<sha>'
 
-# Optional Manim extra
+# Optional extras
 pip install 'docgen[manim] @ git+https://github.com/jmjava/documentation-generator.git'
+pip install 'docgen[gui] @ git+https://github.com/jmjava/documentation-generator.git'   # pywebview desktop window
+# Freeze the Vue GUI only (not the full Manim CLI): pip install 'docgen[packaging]' && pyinstaller packaging/docgen-gui.spec
 
 # Isolated global CLI (no project venv)
 pipx install 'docgen @ git+https://github.com/jmjava/documentation-generator.git'
@@ -100,6 +102,8 @@ cd documentation-generator
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+# Optional: pip install -e ".[gui]"          # pywebview window for `docgen gui`
+# Optional: pip install -e ".[packaging]"    # PyInstaller (see packaging/README.md)
 pytest
 docgen benchmark          # required: scene-timing corpus vs committed baseline
 ```
@@ -125,7 +129,8 @@ docgen validate --pre-push
 |---------|-------------|
 | `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
-| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
+| `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, Vue **Benchmark** view, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
+| `docgen gui [--view benchmark] [--browser]` | Desktop GUI (Vue + Flask). Install `docgen[gui]` for a pywebview window; `--browser` uses the system browser. Freeze with `pyinstaller packaging/docgen-gui.spec` |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
@@ -142,7 +147,7 @@ docgen validate --pre-push
 | `docgen yaml-generate [--merge-defaults] [--llm] [--dry-run] [--list-gaps]` | Merge defaults into `docgen.yaml`; optional OpenAI refresh of `tts.instructions` / `wizard.system_prompt` (rewrites the file — review in Git) |
 | `docgen scene-compile [SPEC.scene.yaml \| --all] [--retime] [--dry-run]` | Compile declarative scene YAML into `animations/scenes.py`. **`--all --retime`** re-derives `wait_word` from current `timing.json` with no OpenAI; unmatched labels fail closed (or set `pace: none`) |
 | `docgen scene-spec-generate [--segment 01 \| --all] [--compile] [--print-only] [--output PATH] [--hint …] [--model …]` | Call OpenAI to emit YAML only (same schema as `scene-compile`); rejects frame-budget overflow and **subject-beat coverage** failures (hold board on same topic; cover topic shifts; no invented labels — not a blind count); auto-paginate + word-alignment; optionally writes `animations/specs/<stem>.scene.yaml` and `--compile`s into `scenes.py` |
-| `docgen benchmark [--case ID] [--format text\|json] [--update-baseline]` | Score the **standard scene-timing corpus** (execute compiled `construct()` on the real `_TimedScene` clock, no Manim). Diffs a committed baseline so clock changes are measured, not guessed |
+| `docgen benchmark [--case ID] [--format text\|json] [--update-baseline] [--gui]` | Score the **standard scene-timing corpus** (execute compiled `construct()` on the real `_TimedScene` clock, no Manim). Diffs a committed baseline so clock changes are measured, not guessed. `--gui` opens the Vue view |
 
 ## Configuration
 

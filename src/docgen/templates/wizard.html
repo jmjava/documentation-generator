@@ -12,6 +12,7 @@
   <span class="brand">docgen wizard</span>
   <button class="nav-btn active" data-view="setup">Setup</button>
   <button class="nav-btn" data-view="production">Production</button>
+  <button class="nav-btn" data-view="benchmark">Benchmark</button>
   <button class="nav-btn" data-view="tool">Tool</button>
   <span id="tool-version-badge" class="tool-version-badge" title="Installed docgen version">…</span>
 </nav>
@@ -55,6 +56,113 @@
         <h2>Generated drafts</h2>
         <div id="drafts-container"></div>
       </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- VIEW: BENCHMARK (Vue 3)                                            -->
+<!-- ================================================================== -->
+<div id="view-benchmark" class="view hidden">
+  <div id="benchmark-app" v-cloak>
+    <section class="panel bench-header">
+      <div>
+        <h2>Scene-timing benchmark</h2>
+        <p class="hint">
+          Executes compiled <code>construct()</code> on the real
+          <code>_TimedScene</code> clock. This is the required gate for clock
+          and compile changes — the same corpus as <code>docgen benchmark</code>.
+        </p>
+      </div>
+      <div class="bench-actions">
+        <select v-model="caseFilter" :disabled="loading">
+          <option value="">All cases</option>
+          <option v-for="id in caseIds" :key="id" :value="id">{{ id }}</option>
+        </select>
+        <button class="btn btn-primary" :disabled="loading" @click="run()">
+          {{ loading ? "Running…" : "Run benchmark" }}
+        </button>
+        <button
+          class="btn btn-secondary"
+          :disabled="loading || frozen || !report"
+          title="Writes src/docgen/benchmark_data/baseline.json (disabled in a packaged app)"
+          @click="updateBaseline()"
+        >
+          Update baseline
+        </button>
+      </div>
+    </section>
+
+    <p v-if="error" class="bench-error">{{ error }}</p>
+
+    <div v-if="report" class="bench-summary">
+      <div class="bench-card" :class="report.meets_baseline ? 'ok' : 'bad'">
+        <div class="bench-card-label">Baseline</div>
+        <div class="bench-card-value">{{ report.meets_baseline ? "meets" : "regressed" }}</div>
+      </div>
+      <div class="bench-card">
+        <div class="bench-card-label">Quality average</div>
+        <div class="bench-card-value">{{ Number(report.quality_average).toFixed(1) }}</div>
+      </div>
+      <div class="bench-card">
+        <div class="bench-card-label">Regressions</div>
+        <div class="bench-card-value">{{ (report.regressions || []).length }}</div>
+      </div>
+      <div class="bench-card">
+        <div class="bench-card-label">Control dump</div>
+        <div class="bench-card-value">{{ controlSkips }} skips</div>
+      </div>
+    </div>
+
+    <ul v-if="report && report.regressions && report.regressions.length" class="bench-regressions">
+      <li v-for="note in report.regressions" :key="note">{{ note }}</li>
+    </ul>
+
+    <section v-if="rows.length" class="panel bench-table-wrap">
+      <table class="bench-table">
+        <thead>
+          <tr>
+            <th>case</th>
+            <th>role</th>
+            <th>skip</th>
+            <th>ovr</th>
+            <th>idle</th>
+            <th>drift</th>
+            <th>pulse</th>
+            <th>q</th>
+            <th>def</th>
+            <th>score</th>
+            <th>Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="row in rows"
+            :key="row.case_id"
+            :class="rowClass(row)"
+            @click="selected = row"
+          >
+            <td class="mono">{{ row.case_id }}</td>
+            <td>{{ row.role }}</td>
+            <td>{{ row.wait_skips }}</td>
+            <td>{{ row.overshoots }}</td>
+            <td>{{ row.hold_idle_violations }}</td>
+            <td>{{ row.sim_drift }}</td>
+            <td>{{ row.mid_hold_pulses }}</td>
+            <td>{{ row.quality_points }}</td>
+            <td>{{ row.defect_points }}</td>
+            <td>{{ row.score }}</td>
+            <td>{{ deltaScore(row) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section v-if="selected" class="panel">
+      <h2>{{ selected.case_id }}</h2>
+      <p class="hint">{{ selected.title }}</p>
+      <pre v-if="selected.issues && selected.issues.length" class="bench-issues">{{ selected.issues.join("\n") }}</pre>
+      <p v-else class="hint">No issues on this case.</p>
     </section>
   </div>
 </div>
@@ -231,6 +339,8 @@
   </div>
 </div>
 
+<script src="/static/vendor/vue.global.prod.js"></script>
+<script src="/static/benchmark-app.js"></script>
 <script src="/static/wizard.js"></script>
 </body>
 </html>
