@@ -103,6 +103,8 @@ C_RED = "#ff5252"
 C_TEAL = "#26c6da"
 C_PURPLE = "#ce93d8"
 C_WHITE = "#cdd6f4"
+# Single family for every Text() — do not rely on Pango's machine default.
+MANIM_FONT = "Liberation Sans"
 
 # Layout: default Manim 16:9 frame ~14.22 x 8. Leave margin so nothing touches edges.
 SAFE_CONTENT_WIDTH = 12.85
@@ -195,15 +197,15 @@ def _box(label, color, w=2.2, h=0.75, fs=18, subtitle="", shape="rounded"):
             stroke_color=color, stroke_width=2.5,
             fill_color=color, fill_opacity=0.28,
         )
-    t = Text(str(label), font_size=fs, color=C_WHITE)
+    t = Text(str(label), font_size=fs, color=C_WHITE, font=MANIM_FONT)
     # Prefer white label text for contrast; fall back to the accent color when
     # the palette token is already near-white.
     if str(color) in (C_WHITE, "C_WHITE", "#cdd6f4"):
         t.set_color(color)
     sub = str(subtitle or "").strip()
     if sub:
-        sub_fs = max(10, int(fs * 0.72))
-        s = Text(sub, font_size=sub_fs, color=C_WHITE)
+        sub_fs = max(14, int(fs * 0.72))
+        s = Text(sub, font_size=sub_fs, color=C_WHITE, font=MANIM_FONT)
         if str(color) in (C_WHITE, "C_WHITE", "#cdd6f4"):
             s.set_color(color)
         s.set_opacity(0.85)
@@ -1021,6 +1023,12 @@ def lint_generated_block(
         if not is_text:
             continue
 
+        kw_names = {kw.arg for kw in node.keywords if kw.arg}
+        if "font" not in kw_names:
+            issues.append(
+                f"line {node.lineno}: Text() is missing font=MANIM_FONT — "
+                "machine Pango defaults drift (font consistency)"
+            )
         for kw in node.keywords:
             if kw.arg == "weight" and isinstance(kw.value, ast.Name) and kw.value.id == "BOLD":
                 issues.append(
@@ -1211,7 +1219,7 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
     """True when a present helper is missing the current motion/clock API."""
     for node in tree.body:
         if name == "_box" and isinstance(node, ast.FunctionDef) and node.name == "_box":
-            return "shape" not in _fn_arg_names(node)
+            return "shape" not in _fn_arg_names(node) or "MANIM_FONT" not in ast.unparse(node)
         if name == "_arrow" and isinstance(node, ast.FunctionDef) and node.name == "_arrow":
             return "get_critical_point" not in ast.unparse(node)
         if name == "_TimedScene" and isinstance(node, ast.ClassDef) and node.name == "_TimedScene":

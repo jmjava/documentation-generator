@@ -302,6 +302,17 @@ class Config:
         return defaults
 
     @property
+    def scene_assets_config(self) -> dict[str, Any]:
+        """Pre-render checks for stuck boards, overlaps, fonts, and compile sync.
+
+        Runs in ``docgen validate`` (hard fail in ``--pre-push``) and as a
+        ``generate-all`` gate before Manim so a stale spec cannot burn a render.
+        """
+        defaults: dict[str, Any] = {"enabled": True}
+        defaults.update(self.raw.get("validation", {}).get("scene_assets", {}))
+        return defaults
+
+    @property
     def story_end_config(self) -> dict[str, Any]:
         """Visual story finished early vs narration (``docgen validate`` ``story_end``).
 

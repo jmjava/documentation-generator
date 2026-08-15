@@ -18,6 +18,9 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
   ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
   slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
   ``wait_word`` is long enough — clamped so ``_clock`` cannot race.
+  Every compiled ``Text()`` sets ``font=MANIM_FONT``. ``docgen validate``
+  ``scene_assets`` re-checks cadence, frame budget, helpers, and compile sync
+  before a render.
 
 Typical workflow:
 
@@ -1854,8 +1857,8 @@ def compile_scene_class(
         sub_fs = max(14, title_fs - 10)
         lines.extend(
             [
-                f"        _title_main = Text({title_text!r}, font_size={title_fs}, color={title_color})",
-                f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color})",
+                f"        _title_main = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT)",
+                f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color}, font=MANIM_FONT)",
                 "        _title_sub.set_opacity(0.85)",
                 "        title = VGroup(_title_main, _title_sub).arrange(DOWN, buff=0.12).to_edge(UP)",
                 f"        self.timed_play(Write(title), run_time={title_rt})",
@@ -1865,7 +1868,7 @@ def compile_scene_class(
     else:
         lines.extend(
             [
-                f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}).to_edge(UP)",
+                f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT).to_edge(UP)",
                 f"        self.timed_play(Write(title), run_time={title_rt})",
                 "",
             ]
@@ -1949,7 +1952,7 @@ def compile_scene_class(
             if elabel:
                 lvar = f"{evar}_lbl"
                 lines.append(
-                    f"        {lvar} = Text({elabel!r}, font_size=16, color={ecol})"
+                    f"        {lvar} = Text({elabel!r}, font_size=16, color={ecol}, font=MANIM_FONT)"
                 )
                 lines.append(
                     f"        {lvar}.move_to({evar}.get_center()).shift(UP * 0.22)"

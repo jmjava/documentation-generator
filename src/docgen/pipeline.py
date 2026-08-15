@@ -71,6 +71,7 @@ class Pipeline:
 
             scene_list = self.config.pipeline_manim_scene_names()
             if scene_list:
+                self._preflight_scene_assets()
                 print("\n=== Stage: Manim ===")
                 from docgen.manim_runner import ManimRunner
                 ManimRunner(self.config).render(scenes=scene_list)
@@ -111,6 +112,24 @@ class Pipeline:
         PagesGenerator(self.config).generate_all(force=True)
 
         print("\n=== Pipeline complete ===")
+
+    def _preflight_scene_assets(self) -> None:
+        """Fail before Manim when specs / helpers / compile would produce a stuck or overlapping board."""
+        from docgen.config import Config
+        from docgen.scene_asset_validate import bundle_scene_asset_violations
+
+        if not isinstance(self.config, Config):
+            return
+        print("\n=== Stage: Scene asset preflight ===")
+        issues = bundle_scene_asset_violations(self.config)
+        if issues:
+            shown = "\n  ".join(issues[:20])
+            more = f"\n  (+{len(issues) - 20} more)" if len(issues) > 20 else ""
+            raise RuntimeError(
+                "scene asset preflight failed — fix specs/helpers or run "
+                f"`docgen scene-compile --retime` before Manim:\n  {shown}{more}"
+            )
+        print("[pipeline] scene assets ok (stuck / overlap / font / compile sync)")
 
     def _manim_segment_ids(self) -> list[str]:
         ids: list[str] = []

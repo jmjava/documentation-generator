@@ -260,7 +260,7 @@ _GOOD_CLASS = (
     "class DemoFunctionScene(_TimedScene):\n"
     "    def construct(self):\n"
     "        self.camera.background_color = C_BG\n"
-    "        title = Text('demo', font_size=42, color=C_ACCENT)\n"
+    "        title = Text('demo', font_size=42, color=C_ACCENT, font=MANIM_FONT)\n"
     "        self.timed_play(Write(title), run_time=1.0)\n"
     "        self.timed_play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)\n"
     "        self.timed_wait(0.5)\n"
@@ -382,6 +382,16 @@ def test_lint_flags_title_down_row_collision_pattern() -> None:
 def test_lint_passes_vgroup_row_without_title_down_collision() -> None:
     issues = lint_generated_block(_GOOD_CLASS, min_font_size=14, unsafe_unicode=["\u2192"])
     assert issues == []
+
+
+def test_lint_flags_missing_font_keyword() -> None:
+    code = (
+        "class A(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        Text('hi', font_size=20, color=C_WHITE)\n"
+    )
+    issues = lint_generated_block(code, min_font_size=14, unsafe_unicode=[])
+    assert any("font=MANIM_FONT" in i for i in issues)
 
 
 def test_lint_flags_small_font_size() -> None:
