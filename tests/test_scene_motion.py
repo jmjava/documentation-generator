@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import pytest
 
-from docgen.manim_primitives import connector_endpoints
-from docgen.scene_spec import (
+from docgen.manim_primitives import (
     DEFAULT_DWELL_RUN_TIME,
+    MAX_STATIC_HOLD,
     MIN_DWELL_RUN_TIME,
+    MIN_HOLD_RENEW_WAIT,
+    clamp_title_run_time,
+    compute_dwell_run_time,
+    connector_endpoints,
+    plan_hold_pulses,
+    resolve_box_emphasis,
+)
+from docgen.scene_spec import (
     MIN_REVEAL_RUN_TIME,
+    TITLE_WRITE_RUN_TIME,
     SceneSpecError,
     compile_scene_class,
-    compute_dwell_run_time,
-    resolve_box_emphasis,
+    layout_overlap_violations,
     simulate_reveal_timeline,
     validate_scene_spec,
 )
@@ -119,6 +127,37 @@ def test_resolve_box_emphasis_box_overrides_layout() -> None:
     assert resolve_box_emphasis({"emphasis": "none"}, {"dwell_emphasis": "auto"}) == "none"
 
 
+def test_plan_hold_pulses_none_is_empty() -> None:
+    assert plan_hold_pulses(2.0, 20.0, requested="none") == ()
+
+
+def test_plan_hold_pulses_tight_gap_is_empty() -> None:
+    assert plan_hold_pulses(1.45, 1.6, requested="pulse") == ()
+
+
+def test_plan_hold_pulses_wide_gap_renews_before_freeze() -> None:
+    pulses = plan_hold_pulses(2.0, 16.0, requested="pulse")
+    assert len(pulses) >= 2
+    assert pulses[0].wait_before == 0.0
+    assert pulses[0].run_time >= MIN_DWELL_RUN_TIME
+    assert all(p.wait_before == 0.0 or p.wait_before >= MIN_HOLD_RENEW_WAIT for p in pulses)
+    clock = 2.0
+    for pulse in pulses:
+        clock += pulse.wait_before + pulse.run_time
+    assert clock < 16.0
+    # No inter-pulse wait longer than the static-hold cap.
+    assert all(
+        p.wait_before <= MAX_STATIC_HOLD + 1e-9 for p in pulses if p.wait_before > 0
+    )
+
+
+def test_plan_hold_pulses_last_box_without_deadline_is_single() -> None:
+    pulses = plan_hold_pulses(20.0, None, requested="ring")
+    assert len(pulses) == 1
+    assert pulses[0].emphasis == "ring"
+    assert pulses[0].run_time == pytest.approx(DEFAULT_DWELL_RUN_TIME)
+
+
 def test_wide_holds_get_pulse_dwell_without_skipping_waits() -> None:
     spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1), _box("Gamma", wait_word=2)])
     events = simulate_reveal_timeline(spec, _wide_words(), clamp_run_times=True)
@@ -129,9 +168,15 @@ def test_wide_holds_get_pulse_dwell_without_skipping_waits() -> None:
     assert events[1].dwell_run_time >= MIN_DWELL_RUN_TIME
     assert events[2].dwell_run_time >= MIN_DWELL_RUN_TIME
     assert all(e.emphasis == "pulse" for e in events)
-    # Clock after fade+dwell must stay behind the next spoken start.
-    assert events[0].effective_at + events[0].run_time + events[0].dwell_run_time < 8.0
-    assert events[1].effective_at + events[1].run_time + events[1].dwell_run_time < 16.0
+    # Clock after fade + every hold pulse must stay behind the next spoken start.
+    assert len(events[0].hold_pulses) >= 2
+    assert len(events[1].hold_pulses) >= 2
+    span0 = sum(p.wait_before + p.run_time for p in events[0].hold_pulses)
+    span1 = sum(p.wait_before + p.run_time for p in events[1].hold_pulses)
+    assert events[0].effective_at + events[0].run_time + span0 < 8.0
+    assert events[1].effective_at + events[1].run_time + span1 < 16.0
+    # Last box uses the audio tail as its deadline (tail word ends 24.4).
+    assert len(events[2].hold_pulses) >= 2
 
 
 def test_tight_cascade_gets_no_dwell() -> None:
@@ -173,6 +218,10 @@ def test_compile_wide_holds_emits_indicate() -> None:
     pulse_at = out.index("Indicate(_bx_0_0_0)")
     next_wait = out.index("wait_until_word(timing_words, 1)")
     assert fade_at < pulse_at < next_wait
+    # Mid-hold renew: wait, then pulse again, still before the next spoken word.
+    first_block = out[pulse_at:next_wait]
+    assert "self.timed_wait(" in first_block
+    assert first_block.count("Indicate(_bx_0_0_0)") >= 2
 
 
 def test_compile_ring_emits_circumscribe() -> None:
@@ -253,6 +302,77 @@ def test_validate_rejects_bad_layout_dwell_fields() -> None:
         validate_scene_spec(_spec([_box("A")], layout={"dwell_emphasis": "loud"}))
     with pytest.raises(SceneSpecError, match="dwell_run_time"):
         validate_scene_spec(_spec([_box("A")], layout={"dwell_run_time": 0}))
+
+
+def test_clamp_title_shrinks_when_first_word_is_early() -> None:
+    assert clamp_title_run_time(1.0, 0.6) == pytest.approx(0.55)
+    assert clamp_title_run_time(1.0, 1.4) == pytest.approx(1.0)
+    assert clamp_title_run_time(1.0, None) == pytest.approx(1.0)
+
+
+def test_simulate_clamps_title_so_first_wait_is_not_skipped() -> None:
+    spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
+    words = [
+        {"word": "Alpha", "start": 0.55, "end": 0.7},
+        {"word": "Beta", "start": 4.0, "end": 4.2},
+    ]
+    events = simulate_reveal_timeline(spec, words, clamp_run_times=True)
+    assert not events[0].wait_skipped
+    assert events[0].effective_at >= 0.55 - 0.02
+
+
+def test_compile_emits_clamped_title_write() -> None:
+    spec = _spec([_box("Alpha", wait_word=0)])
+    words = [{"word": "Alpha", "start": 0.55, "end": 0.7}]
+    out = compile_scene_class(spec, words=words)
+    assert f"Write(title), run_time={TITLE_WRITE_RUN_TIME}" not in out
+    assert "Write(title), run_time=0.5" in out
+
+
+def test_compile_slide_page_transition() -> None:
+    spec = {
+        "segment_id": "01",
+        "class_name": "PagedScene",
+        "timing_key": "01-x",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "layout": {"page_transition": "slide", "page_transition_run_time": 0.4},
+        "pages": [
+            {"rows": [{"run_time": 0.5, "boxes": [_box("P0")]}]},
+            {
+                "transition": "slide",
+                "rows": [{"run_time": 0.5, "boxes": [_box("P1")]}],
+            },
+        ],
+    }
+    validate_scene_spec(spec)
+    out = compile_scene_class(spec)
+    assert "FadeOut(_bx_0_0_0, shift=LEFT * 0.35)" in out
+
+
+def test_flow_page_auto_grows_first_box() -> None:
+    spec = _spec([_box("Hints"), _box("YAML")])
+    spec["rows"][0]["boxes"][1]["color"] = "C_BLUE"
+    spec["edges"] = [{"from": "Hints", "to": "YAML", "color": "C_ACCENT"}]
+    out = compile_scene_class(spec)
+    assert "GrowFromCenter(_bx_0_0_0)" in out
+    assert "FadeIn(_bx_0_0_1)" in out
+
+
+def test_layout_overlap_flags_tiny_title_buff() -> None:
+    spec = _spec([_box("Alpha")], layout={"first_row_title_buff": 0.1})
+    issues = layout_overlap_violations(spec)
+    assert any("first_row_title_buff" in i for i in issues)
+
+
+def test_layout_overlap_flags_tight_column_gap() -> None:
+    spec = _spec([_box("A"), _box("B")], layout={"column_gap": 0.05})
+    issues = layout_overlap_violations(spec)
+    assert any("column_gap" in i for i in issues)
+
+
+def test_layout_overlap_clean_for_default_gaps() -> None:
+    spec = _spec([_box("A"), _box("B")])
+    assert layout_overlap_violations(spec) == []
 
 
 def test_connector_endpoints_are_on_facing_edges() -> None:

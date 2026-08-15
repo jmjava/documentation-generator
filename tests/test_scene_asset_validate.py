@@ -10,11 +10,13 @@ import yaml
 
 from docgen.config import Config
 from docgen.manim_scene_support import BOOTSTRAP_HEADER
+from docgen.manim_primitives import HoldPulse
 from docgen.scene_asset_validate import (
     bundle_scene_asset_violations,
     compiled_scene_sync_violations,
     dwell_overshoot_violations,
     helper_api_violations,
+    hold_idle_violations,
     motion_plan_from_source,
     scene_asset_violations_for_segment,
 )
@@ -105,7 +107,62 @@ def test_dwell_overshoot_flags_clock_past_next_word() -> None:
 def test_dwell_overshoot_clean_when_clamped() -> None:
     spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
     events = simulate_reveal_timeline(spec, _wide_words(), clamp_run_times=True)
-    assert dwell_overshoot_violations(events) == []
+    assert dwell_overshoot_violations(events, audio_end=16.4) == []
+    assert hold_idle_violations(events, audio_end=16.4) == []
+
+
+def test_hold_idle_flags_long_freeze_without_renew() -> None:
+    events = [
+        RevealEvent(
+            label="Alpha",
+            page=0,
+            row=0,
+            box=0,
+            wait_word=0,
+            word_start=1.0,
+            effective_at=1.0,
+            wait_skipped=False,
+            run_time=0.5,
+            page_fade_out=0.0,
+            emphasis="pulse",
+            dwell_run_time=0.5,
+            hold_pulses=(HoldPulse(wait_before=0.0, run_time=0.5, emphasis="pulse"),),
+        ),
+        RevealEvent(
+            label="Beta",
+            page=0,
+            row=0,
+            box=1,
+            wait_word=1,
+            word_start=20.0,
+            effective_at=20.0,
+            wait_skipped=False,
+            run_time=0.4,
+            page_fade_out=0.0,
+        ),
+    ]
+    issues = hold_idle_violations(events)
+    assert issues
+    assert any("hold idle" in i for i in issues)
+
+
+def test_motion_plan_reads_mid_hold_wait() -> None:
+    src = """
+class X(_TimedScene):
+    def construct(self):
+        self.wait_until_word(timing_words, 0)
+        self.timed_play(FadeIn(_bx_0_0_0), run_time=0.4)
+        self.timed_play(Indicate(_bx_0_0_0), run_time=0.5)
+        self.timed_wait(2.0)
+        self.timed_play(Indicate(_bx_0_0_0), run_time=0.5)
+"""
+    assert motion_plan_from_source(src) == [
+        "wait_word:0",
+        "reveal:fade:_bx_0_0_0",
+        "dwell:pulse:_bx_0_0_0",
+        "hold_wait:2.0",
+        "dwell:pulse:_bx_0_0_0",
+    ]
 
 
 def test_motion_plan_reads_reveal_dwell_and_edge_arrows() -> None:

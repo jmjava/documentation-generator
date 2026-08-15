@@ -4,7 +4,8 @@ Historical failure modes this module is meant to catch **offline**:
 
 * **Stuck boards** — FadeIn run_times race ``_clock`` (issue #66), then the
   diagram dumps and freezes while narration continues. Also dwell that
-  overshoots the next ``wait_word``.
+  overshoots the next ``wait_word``, or a long subject-beat hold with no
+  mid-hold pulse (one Indicate then a multi-second freeze).
 * **Overlaps** — a page stack that exceeds the Manim frame budget (boxes
   clip or collide). ``layout_budget_violations`` already exists at generate
   time; validate re-runs it so a stale spec cannot sneak into a render.
@@ -25,12 +26,25 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+def _hold_span(ev: Any) -> float:
+    pulses = getattr(ev, "hold_pulses", ()) or ()
+    if pulses:
+        return sum(float(p.wait_before) + float(p.run_time) for p in pulses)
+    return float(getattr(ev, "dwell_run_time", 0.0) or 0.0)
+
+
+def motion_end_time(ev: Any) -> float:
+    """Clock after reveal FadeIn plus every hold pulse."""
+    return float(ev.effective_at) + float(ev.run_time) + _hold_span(ev)
+
+
 def dwell_overshoot_violations(
     events: list[Any],
     *,
     slack: float = 0.05,
+    audio_end: float | None = None,
 ) -> list[str]:
-    """Fail when fade + dwell would push ``_clock`` past the next spoken start."""
+    """Fail when fade + hold pulses would push ``_clock`` past the next spoken start."""
     issues: list[str] = []
     for i, ev in enumerate(events):
         nxt_start = None
@@ -38,13 +52,51 @@ def dwell_overshoot_violations(
             if getattr(later, "word_start", None) is not None:
                 nxt_start = float(later.word_start)
                 break
+        if nxt_start is None and audio_end:
+            nxt_start = float(audio_end)
         if nxt_start is None:
             continue
-        end = float(ev.effective_at) + float(ev.run_time) + float(ev.dwell_run_time)
+        end = motion_end_time(ev)
         if end > nxt_start + slack:
             issues.append(
                 f"stuck: dwell/reveal overshoots next wait_word "
                 f"(label={ev.label!r} ends at {end:.2f}s, next start {nxt_start:.2f}s)"
+            )
+    return issues
+
+
+def hold_idle_violations(
+    events: list[Any],
+    *,
+    audio_end: float = 0.0,
+    slack: float = 0.15,
+) -> list[str]:
+    """Fail when a long hold has no mid-hold pulse and the board would freeze."""
+    from docgen.manim_primitives import (
+        DWELL_CLOCK_MARGIN,
+        MAX_STATIC_HOLD,
+        MIN_DWELL_RUN_TIME,
+    )
+
+    allowed = MAX_STATIC_HOLD + MIN_DWELL_RUN_TIME + DWELL_CLOCK_MARGIN + slack
+    issues: list[str] = []
+    for i, ev in enumerate(events):
+        if str(getattr(ev, "emphasis", "none") or "none") == "none":
+            continue
+        nxt_start = None
+        for later in events[i + 1 :]:
+            if getattr(later, "word_start", None) is not None:
+                nxt_start = float(later.word_start)
+                break
+        if nxt_start is None and audio_end > 0:
+            nxt_start = float(audio_end)
+        if nxt_start is None:
+            continue
+        idle = float(nxt_start) - motion_end_time(ev)
+        if idle > allowed:
+            issues.append(
+                f"stuck: hold idle {idle:.2f}s after {ev.label!r} "
+                f"(max {allowed:.2f}s) — mid-hold pulse missing"
             )
     return issues
 
@@ -96,6 +148,11 @@ def motion_plan_from_source(source: str) -> list[str]:
             idx = call.args[1]
             if isinstance(idx, ast.Constant):
                 plan.append(f"wait_word:{idx.value}")
+            continue
+        if attr == "timed_wait" and call.args:
+            arg = call.args[0]
+            if isinstance(arg, ast.Constant):
+                plan.append(f"hold_wait:{arg.value}")
             continue
         if attr != "timed_play":
             continue
@@ -258,7 +315,8 @@ def scene_asset_violations_for_segment(cfg: "Config", seg_id: str) -> list[str]:
             issues.extend(
                 f"stuck: {m}" for m in reveal_cadence_violations(events, audio_end=audio_end)
             )
-            issues.extend(dwell_overshoot_violations(events))
+            issues.extend(dwell_overshoot_violations(events, audio_end=audio_end or None))
+            issues.extend(hold_idle_violations(events, audio_end=audio_end))
         if scenes_text:
             merged = dict(spec)
             if not merged.get("timing_key"):

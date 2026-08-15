@@ -108,7 +108,7 @@ Optional per-row (legacy; first box only — prefer per-box above):
 
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
-  for multi-page specs also page_transition: fade | none (default fade), page_transition_run_time (default 0.45, max 5);
+  for multi-page specs also page_transition: fade | slide | none (default fade), page_transition_run_time (default 0.45, max 5);
   dwell_emphasis: auto (default; pulse during long holds) | none; dwell_run_time: seconds for that pulse (default 0.5, max 3).
 - edges: optional list of connectors for **single-page** ``rows`` specs (see below).
 
@@ -118,7 +118,7 @@ Optional per-page (when using ``pages``):
   drawn as arrows between those boxes after layout. Box labels must be unique on that page.
   Prefer edges for pipeline / flow diagrams (A → B → C); omit when boxes are unrelated topics.
 
-Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|none, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
+Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|slide|none, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in). Prefer ``slide`` when the next page continues the same pipeline.
 
 Palette tokens (exact spelling): {", ".join(sorted(ALLOWED_COLORS))}
 
@@ -134,7 +134,7 @@ Design goals:
 - **Motion (keep labels spoken):** vary ``shape`` / ``reveal`` / ``emphasis`` instead of inventing
   extra labels. Prefer ``reveal: grow`` on the first node of a pipeline and ``emphasis: ring`` on
   a decision diamond. Do **not** add boxes just to fill time — the toolchain pulses a revealed
-  box during a long subject-beat hold.
+  box at the start of a long subject-beat hold and again before the board would sit still.
   Allowed shapes: {", ".join(sorted(ALLOWED_SHAPES))}; reveals: {", ".join(sorted(ALLOWED_REVEALS))};
   emphasis: {", ".join(sorted(ALLOWED_EMPHASIS))}.
 - **Subject-beat coverage (mandatory):** consecutive sentences on the same topic are one beat —
