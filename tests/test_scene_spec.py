@@ -1110,6 +1110,7 @@ def test_compile_edges_emits_arrows_and_grow() -> None:
     }
     out = compile_scene_class(spec)
     assert "_ar_0_0 = _arrow(_bx_0_0_0, _bx_0_0_1, C_ACCENT, style='solid')" in out
+    assert "GrowFromCenter(_bx_0_0_0)" in out
     assert "GrowArrow(_ar_0_0)" in out
     assert "FadeIn(_bx_0_0_1)" in out
 

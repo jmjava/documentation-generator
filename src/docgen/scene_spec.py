@@ -52,6 +52,7 @@ from docgen.manim_primitives import (
     ALLOWED_SHAPES,
     DEFAULT_DWELL_RUN_TIME,
     MIN_DWELL_RUN_TIME,
+    clamp_title_run_time,
     compute_dwell_run_time,
     resolve_box_emphasis,
 )
@@ -79,7 +80,11 @@ ALLOWED_COLORS = frozenset(
     }
 )
 
-ALLOWED_PAGE_TRANSITIONS = frozenset({"fade", "none"})
+ALLOWED_PAGE_TRANSITIONS = frozenset({"fade", "slide", "none"})
+# Spec-geometry floors — tighter than this and boxes collide or sit on the title.
+MIN_TITLE_ROW_BUFF = 0.35
+MIN_ROW_GAP = 0.2
+MIN_COLUMN_GAP = 0.2
 ALLOWED_EDGE_STYLES = frozenset({"solid", "dashed"})
 
 SPEC_REQUIRED_TOP = ("segment_id", "class_name", "title")
@@ -748,6 +753,21 @@ class RevealEvent:
     reveal: str = "fade"
 
 
+def default_box_reveal(
+    box: dict[str, Any],
+    *,
+    page_has_edges: bool,
+    is_first_on_page: bool,
+) -> str:
+    """``grow`` the first node of a flow page when the author omitted ``reveal``."""
+    raw = box.get("reveal")
+    if raw is not None and str(raw).strip():
+        return str(raw).strip().lower()
+    if page_has_edges and is_first_on_page:
+        return "grow"
+    return "fade"
+
+
 def _box_wait_word(row: dict[str, Any], box: dict[str, Any], box_index: int) -> int | None:
     if _pace_none(row) or _pace_none(box):
         return None
@@ -801,6 +821,8 @@ def iter_reveal_slots(
         if not isinstance(rows, list):
             continue
         trans = page.get("transition", default_tr)
+        page_has_edges = bool(page.get("edges"))
+        first_box_seen = False
         for r, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
@@ -820,6 +842,12 @@ def iter_reveal_slots(
                 else:
                     label = str(box.get("label", "")).strip()
                 ww = _box_wait_word(row, box, b)
+                reveal = default_box_reveal(
+                    box,
+                    page_has_edges=page_has_edges,
+                    is_first_on_page=not first_box_seen,
+                )
+                first_box_seen = True
                 slots.append(
                     {
                         "page": p,
@@ -832,7 +860,7 @@ def iter_reveal_slots(
                         "page_transition": str(trans or default_tr),
                         "page_transition_run_time": default_tr_rt,
                         "emphasis": resolve_box_emphasis(box, layout),
-                        "reveal": str(box.get("reveal") or "fade").strip().lower(),
+                        "reveal": reveal,
                     }
                 )
     return slots
@@ -855,6 +883,12 @@ def simulate_reveal_timeline(
     if not slots:
         return []
 
+    first_start = next(
+        (float(s["word_start"]) for s in slots if s["word_start"] is not None),
+        None,
+    )
+    if clamp_run_times:
+        title_run_time = clamp_title_run_time(title_run_time, first_start)
     clock = float(title_run_time)
     events: list[RevealEvent] = []
 
@@ -878,7 +912,7 @@ def simulate_reveal_timeline(
             int(slot["page"]) > 0
             and int(slot["row"]) == 0
             and int(slot["box"]) == 0
-            and str(slot["page_transition"]) == "fade"
+            and str(slot["page_transition"]) in {"fade", "slide"}
         ):
             page_fade_out = float(slot["page_transition_run_time"])
 
@@ -1389,6 +1423,98 @@ def layout_budget_violations(spec: dict[str, Any]) -> list[str]:
                 f"pages[{pi}] widest row ~{max_rw:.2f} exceeds safe width ~{_LAYOUT_HORIZONTAL_SAFE:.2f} "
                 f"(narrow boxes or use more rows)"
             )
+    issues.extend(layout_overlap_violations(spec))
+    return issues
+
+
+def layout_overlap_violations(spec: dict[str, Any]) -> list[str]:
+    """Offline geometry: title collision, tight gaps, and boxes that clip the frame.
+
+    Uses the same stack math as compile (no Manim). Catches the overlap cases
+    OCR layout checks only see after a wasted render.
+    """
+    title = spec.get("title") if isinstance(spec.get("title"), dict) else {}
+    layout = spec.get("layout") if isinstance(spec.get("layout"), dict) else {}
+    issues: list[str] = []
+    try:
+        row_gap = float(layout.get("row_gap", 0.6))
+        col_gap = float(layout.get("column_gap", 0.8))
+        title_buff = float(layout.get("first_row_title_buff", 0.5))
+    except (TypeError, ValueError):
+        return []
+    if title_buff + 1e-9 < MIN_TITLE_ROW_BUFF:
+        issues.append(
+            f"overlap: first_row_title_buff={title_buff:.2f} < {MIN_TITLE_ROW_BUFF} "
+            "(first row will sit on the title band)"
+        )
+    if row_gap + 1e-9 < MIN_ROW_GAP:
+        issues.append(
+            f"overlap: row_gap={row_gap:.2f} < {MIN_ROW_GAP} (rows will collide)"
+        )
+    if col_gap + 1e-9 < MIN_COLUMN_GAP:
+        issues.append(
+            f"overlap: column_gap={col_gap:.2f} < {MIN_COLUMN_GAP} (boxes in a row will collide)"
+        )
+
+    fs = title.get("font_size")
+    if not isinstance(fs, (int, float)):
+        fs = 36
+    has_sub = bool(str(title.get("subtitle") or "").strip())
+    band = _title_band_estimate(int(fs), has_subtitle=has_sub)
+    title_bottom = FRAME_HEIGHT / 2.0 - band
+    frame_left = -_LAYOUT_HORIZONTAL_SAFE / 2.0
+    frame_right = _LAYOUT_HORIZONTAL_SAFE / 2.0
+    frame_bottom = -FRAME_HEIGHT / 2.0 + _LAYOUT_BOTTOM_MARGIN
+
+    for pi, rows in enumerate(_spec_pages_rows(spec)):
+        y_top = title_bottom - title_buff
+        rects: list[tuple[float, float, float, float, str]] = []
+        for ri, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            boxes = [b for b in (row.get("boxes") or []) if isinstance(b, dict)]
+            if not boxes:
+                continue
+            try:
+                heights = [float(b.get("height", 0)) for b in boxes]
+                widths = [float(b.get("width", 0)) for b in boxes]
+            except (TypeError, ValueError):
+                continue
+            if not heights or not widths:
+                continue
+            row_h = max(heights)
+            row_w = sum(widths) + max(0, len(widths) - 1) * col_gap
+            x = -row_w / 2.0
+            for bi, box in enumerate(boxes):
+                w = widths[bi]
+                h = heights[bi]
+                # VGroup.arrange(RIGHT) centers on the row's vertical mid-line.
+                mid_y = y_top - row_h / 2.0
+                left, right = x, x + w
+                bottom, top = mid_y - h / 2.0, mid_y + h / 2.0
+                lab = str(box.get("label") or f"pages[{pi}].rows[{ri}].boxes[{bi}]")
+                if top > title_bottom + 0.02:
+                    issues.append(
+                        f"overlap: {lab!r} on pages[{pi}] intersects the title band"
+                    )
+                if left < frame_left - 0.05 or right > frame_right + 0.05:
+                    issues.append(
+                        f"overlap: {lab!r} on pages[{pi}] clips the horizontal safe frame"
+                    )
+                if bottom < frame_bottom - 0.05:
+                    issues.append(
+                        f"overlap: {lab!r} on pages[{pi}] clips below the safe bottom"
+                    )
+                rects.append((left, bottom, right, top, lab))
+                x += w + col_gap
+            y_top -= row_h + row_gap
+        for i in range(len(rects)):
+            for j in range(i + 1, len(rects)):
+                a, b = rects[i], rects[j]
+                if a[0] < b[2] - 0.02 and b[0] < a[2] - 0.02 and a[1] < b[3] - 0.02 and b[1] < a[3] - 0.02:
+                    issues.append(
+                        f"overlap: {a[4]!r} intersects {b[4]!r} on pages[{pi}]"
+                    )
     return issues
 
 
@@ -1846,6 +1972,16 @@ def compile_scene_class(
             reveal_by_key[(ev.page, ev.row, ev.box)] = ev
 
     title_rt = TITLE_WRITE_RUN_TIME
+    if words:
+        first_start = next(
+            (
+                float(s["word_start"])
+                for s in iter_reveal_slots(spec, words)
+                if s["word_start"] is not None
+            ),
+            None,
+        )
+        title_rt = clamp_title_run_time(TITLE_WRITE_RUN_TIME, first_start)
     lines: list[str] = [
         f"class {class_name}(_TimedScene):",
         "    def construct(self):",
@@ -1975,6 +2111,8 @@ def compile_scene_class(
                     page_box_vars.setdefault(p, []).append(f"_bx_{p}_{r}_{b_idx}")
 
     for p, page in enumerate(pages):
+        page_has_edges = bool(page.get("edges"))
+        first_box_seen = False
         for r, row in enumerate(page["rows"]):
             boxes_raw = row["boxes"]
             if not isinstance(boxes_raw, list):
@@ -2014,6 +2152,17 @@ def compile_scene_class(
                             )
                         else:
                             lines.append(f"        self.timed_wait({page_fade_rt})")
+                    elif trans == "slide":
+                        if fade_targets:
+                            fade_args = ", ".join(
+                                f"FadeOut({t}, shift=LEFT * 0.35)" for t in fade_targets
+                            )
+                            lines.append(
+                                f"        self.timed_play({fade_args}, "
+                                f"run_time={page_fade_rt})"
+                            )
+                        else:
+                            lines.append(f"        self.timed_wait({page_fade_rt})")
                     elif trans == "none":
                         for t in fade_targets:
                             lines.append(f"        self.remove({t})")
@@ -2022,8 +2171,13 @@ def compile_scene_class(
                 reveal = (
                     str(ev.reveal)
                     if ev is not None
-                    else str(box.get("reveal") or "fade").strip().lower()
+                    else default_box_reveal(
+                        box,
+                        page_has_edges=page_has_edges,
+                        is_first_on_page=not first_box_seen,
+                    )
                 )
+                first_box_seen = True
                 reveal_part = _reveal_anim(bx, reveal)
                 edge_anims = edges_with_target.get((p, bx), [])
                 parts = [reveal_part]

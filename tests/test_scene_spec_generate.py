@@ -116,6 +116,7 @@ def test_generate_scene_spec_dry_run_no_llm(tmp_path: Path) -> None:
     assert "reveal:" in result.prompt
     assert "emphasis:" in result.prompt
     assert "dwell_emphasis" in result.prompt
+    assert "slide" in result.prompt
     assert result.yaml_text == ""
 
 

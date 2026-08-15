@@ -73,6 +73,26 @@ def resolve_box_emphasis(box: dict, layout: dict | None) -> str:
     return "pulse"
 
 
+def clamp_title_run_time(
+    title_rt: float,
+    first_word_start: float | None,
+    *,
+    min_rt: float = 0.25,
+    slack: float = 0.05,
+) -> float:
+    """Shrink the title ``Write`` so ``_clock`` does not skip the first wait_word."""
+    try:
+        rt = float(title_rt)
+    except (TypeError, ValueError):
+        rt = 1.0
+    if first_word_start is None:
+        return rt
+    budget = float(first_word_start) - slack
+    if budget <= min_rt:
+        return float(min_rt)
+    return min(rt, budget)
+
+
 def compute_dwell_run_time(
     clock: float,
     next_target: float | None,
