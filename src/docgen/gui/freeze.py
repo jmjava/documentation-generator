@@ -52,13 +52,25 @@ def run_freeze(
     distpath.mkdir(parents=True, exist_ok=True)
     spec = spec_path()
     if spec.is_file():
-        args = ["--distpath", str(distpath)]
+        spec = spec.resolve()
+        args = ["--distpath", str(distpath.resolve())]
         if noconfirm:
             args.append("--noconfirm")
         if workpath is not None:
-            args.extend(["--workpath", str(workpath)])
+            args.extend(["--workpath", str(Path(workpath).resolve())])
         args.append(str(spec))
-        _pyinstaller_run(args)
+        old_cwd = os.getcwd()
+        old_root = os.environ.get("DOCGEN_FREEZE_ROOT")
+        os.environ["DOCGEN_FREEZE_ROOT"] = str(spec.parent.parent)
+        try:
+            os.chdir(spec.parent.parent)
+            _pyinstaller_run(args)
+        finally:
+            os.chdir(old_cwd)
+            if old_root is None:
+                os.environ.pop("DOCGEN_FREEZE_ROOT", None)
+            else:
+                os.environ["DOCGEN_FREEZE_ROOT"] = old_root
     else:
         args = [
             "--onedir",

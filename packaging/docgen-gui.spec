@@ -6,11 +6,32 @@ From the repo root, after ``pip install -e '.[packaging]'``:
     pyinstaller packaging/docgen-gui.spec
 """
 
+import os
 import sys
 from pathlib import Path
 
-SPECDIR = Path(SPECPATH).resolve().parent
-ROOT = SPECDIR.parent
+
+def _repo_root() -> Path:
+    env = os.environ.get("DOCGEN_FREEZE_ROOT")
+    if env:
+        root = Path(env).resolve()
+        if (root / "src" / "docgen" / "gui" / "__main__.py").is_file():
+            return root
+    here = Path(os.path.abspath(str(SPECPATH))).resolve()
+    for candidate in (
+        here.parent.parent,
+        here.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ):
+        if (candidate / "src" / "docgen" / "gui" / "__main__.py").is_file():
+            return candidate
+    raise SystemExit(
+        f"cannot locate docgen repo root from SPECPATH={SPECPATH!r} cwd={Path.cwd()}"
+    )
+
+
+ROOT = _repo_root()
 sys.path.insert(0, str(ROOT / "src"))
 
 from docgen.gui.packaging import pyinstaller_datas, pyinstaller_hiddenimports  # noqa: E402

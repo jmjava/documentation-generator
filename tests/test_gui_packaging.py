@@ -27,6 +27,19 @@ def test_package_root_uses_meipass(tmp_path: Path, monkeypatch) -> None:
     assert (templates_dir() / "wizard.html").read_text(encoding="utf-8") == "ok"
 
 
+def test_manim_scene_support_has_no_toplevel_validate_import() -> None:
+    """The GUI freeze excludes cv2; BOOTSTRAP_HEADER must not import validate."""
+    import ast
+
+    src = (package_root() / "manim_scene_support.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "docgen.validate":
+            raise AssertionError(
+                "top-level docgen.validate import pulls cv2 into the GUI freeze"
+            )
+
+
 def test_package_root_has_gui_assets() -> None:
     root = package_root()
     assert (root / "templates" / "wizard.html").is_file()
@@ -55,6 +68,7 @@ def test_pyinstaller_spec_exists_and_points_at_gui_entry() -> None:
     assert "docgen.gui" in text or "__main__.py" in text
     assert "pyinstaller_datas" in text
     assert "excludes" in text
+    assert "DOCGEN_FREEZE_ROOT" in text
 
 
 def test_wizard_html_is_vue_benchmark_shell() -> None:
