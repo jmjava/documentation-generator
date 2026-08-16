@@ -12,6 +12,57 @@ from flask import Flask, jsonify, render_template, request
 STATE_FILENAME = ".docgen-state.json"
 
 
+def session_payload(config: Any | None) -> dict[str, Any]:
+    """GUI session: frozen shell vs pip CLI, and whether a bundle is attached."""
+    from docgen.resources import is_frozen
+
+    frozen = is_frozen()
+    yaml_path = None
+    bundle_dir = None
+    has_bundle = False
+    if config is not None:
+        yp = getattr(config, "yaml_path", None)
+        if yp is not None:
+            path = Path(yp)
+            if path.is_file():
+                has_bundle = True
+                yaml_path = str(path)
+                bundle_dir = str(config.base_dir)
+    return {
+        "frozen": frozen,
+        "pipeline_available": not frozen,
+        "has_bundle": has_bundle,
+        "bundle_dir": bundle_dir,
+        "config_path": yaml_path,
+    }
+
+
+def _frozen_pipeline_response():
+    from docgen.resources import is_frozen
+
+    if not is_frozen():
+        return None
+    return jsonify({
+        "ok": False,
+        "error": "pipeline steps need the pip CLI; this packaged app is a GUI shell",
+    }), 400
+
+
+def open_bundle_config(raw_path: str):
+    """Load ``docgen.yaml`` from a file or bundle directory path."""
+    from docgen.config import Config
+
+    text = (raw_path or "").strip()
+    if not text:
+        raise ValueError("path is required")
+    path = Path(text).expanduser().resolve()
+    if path.is_dir():
+        path = path / "docgen.yaml"
+    if not path.is_file():
+        raise ValueError(f"no docgen.yaml at {path}")
+    return Config.from_yaml(path)
+
+
 # ---------------------------------------------------------------------------
 # File tree scanner
 # ---------------------------------------------------------------------------
@@ -366,6 +417,22 @@ def create_app(config: Any | None = None) -> Flask:
         report["wrote"] = str(path)
         return jsonify(report)
 
+    @app.route("/api/session")
+    def api_session():
+        return jsonify(session_payload(_cfg()))
+
+    @app.route("/api/open-bundle", methods=["POST"])
+    def api_open_bundle():
+        data = request.get_json(silent=True) or {}
+        try:
+            cfg = open_bundle_config(str(data.get("path") or ""))
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        app.config["DOCGEN"] = cfg
+        payload = session_payload(cfg)
+        payload["ok"] = True
+        return jsonify(payload)
+
     # -- API: tool version / upgrade (external install) ------------------------
 
     @app.route("/api/tool")
@@ -389,6 +456,9 @@ def create_app(config: Any | None = None) -> Flask:
         """
         from docgen.install_spec import update_docgen_install
 
+        blocked = _frozen_pipeline_response()
+        if blocked is not None:
+            return blocked
         cfg = _cfg()
         data = request.json or {}
         ref = str(data.get("ref") or "main")
@@ -449,6 +519,9 @@ def create_app(config: Any | None = None) -> Flask:
 
     @app.route("/api/generate-narration", methods=["POST"])
     def api_generate_narration():
+        blocked = _frozen_pipeline_response()
+        if blocked is not None:
+            return blocked
         cfg = _cfg()
         data = request.json or {}
         source_paths: list[str] = list(data.get("source_paths") or [])
@@ -846,6 +919,9 @@ def create_app(config: Any | None = None) -> Flask:
     @app.route("/api/run/<step>/<segment_id>", methods=["POST"])
     def api_run_step(step: str, segment_id: str):
         """Run a single pipeline step for one segment. Returns result or error."""
+        blocked = _frozen_pipeline_response()
+        if blocked is not None:
+            return blocked
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
@@ -863,6 +939,9 @@ def create_app(config: Any | None = None) -> Flask:
         Body (optional): ``{"llm_scene_spec": false}`` — when true, the cascade
         uses LLM ``scene-spec`` instead of offline ``scene-retime``.
         """
+        blocked = _frozen_pipeline_response()
+        if blocked is not None:
+            return blocked
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
