@@ -55,6 +55,7 @@ docgen = [
 testpaths = ["tests"]
 markers = [
     "integration: optional network/OpenAI; skipped when credentials unavailable",
+    "freeze: optional PyInstaller onedir smoke; skipped unless DOCGEN_FREEZE_SMOKE=1",
 ]
 
 [tool.ruff]

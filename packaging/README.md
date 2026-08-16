@@ -6,8 +6,9 @@ wizard (benchmark view first). It is **not** a frozen copy of the full
 
 ```bash
 pip install -e '.[packaging]'
-pyinstaller packaging/docgen-gui.spec
-# dist/docgen-gui/docgen-gui
+docgen freeze                 # writes dist/docgen-gui/docgen-gui
+docgen freeze --smoke         # freeze, then headless GET / and /api/benchmark
+# equivalent: pyinstaller packaging/docgen-gui.spec
 ```
 
 From a source checkout you can run the same entry without freezing:

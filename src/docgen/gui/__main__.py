@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
+import sys
+from pathlib import Path
 
 
 def _load_config(config_path: str | None):
@@ -31,10 +34,27 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Optional path to a consumer docgen.yaml (Setup / Production).",
     )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Headless HTTP check of / and /api/benchmark; do not open a window.",
+    )
+    parser.add_argument(
+        "--smoke-output",
+        default=None,
+        help="Write the --smoke JSON report to this path.",
+    )
     args = parser.parse_args(argv)
     path = f"/?view={args.view}"
     port = args.port or None
     config = _load_config(args.config)
+    if args.smoke:
+        from docgen.gui.freeze import smoke_session
+
+        out = Path(args.smoke_output) if args.smoke_output else None
+        result = smoke_session(config, output=out)
+        print(json.dumps(result, indent=2))
+        return
     if args.browser:
         import webbrowser
 
@@ -50,4 +70,8 @@ def main(argv: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"docgen-gui failed: {exc}", file=sys.stderr)
+        raise

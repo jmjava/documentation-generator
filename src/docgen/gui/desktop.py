@@ -64,12 +64,24 @@ def launch_desktop(
         _wait_until_interrupt(httpd)
         return url
 
+    class _GuiBridge:
+        def pick_bundle(self) -> str | None:
+            wins = webview.windows
+            if not wins:
+                return None
+            result = wins[0].create_file_dialog(webview.FOLDER_DIALOG)
+            if not result:
+                return None
+            chosen = result[0] if isinstance(result, (list, tuple)) else result
+            return str(chosen)
+
     webview.create_window(
         "docgen",
         url,
         width=width,
         height=height,
         min_size=(800, 560),
+        js_api=_GuiBridge(),
     )
     webview.start()
     httpd.shutdown()
