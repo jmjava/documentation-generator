@@ -23,8 +23,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from docgen.config import Config
 
-from docgen.validate import lint_manim_timing_stub_antipattern
-
 _TITLE_DOWN_OVERLAP_RE = re.compile(r"\.next_to\(\s*title\s*,\s*DOWN\b")
 _SHIFT_LEFT_RE = re.compile(r"\.shift\(\s*LEFT\s*\*")
 _SHIFT_RIGHT_RE = re.compile(r"\.shift\(\s*RIGHT\s*\*")
@@ -1042,6 +1040,8 @@ def lint_generated_block(
                         f"line {node.lineno}: Text() font_size={int(val)} is below "
                         f"minimum {min_font_size}; small text is unreadable in video"
                     )
+    from docgen.validate import lint_manim_timing_stub_antipattern
+
     issues.extend(lint_manim_timing_stub_antipattern(tree, "generated"))
     issues.extend(lint_manim_title_down_row_collision_risk(code))
     issues.extend(lint_set_opacity_then_fadein(code))

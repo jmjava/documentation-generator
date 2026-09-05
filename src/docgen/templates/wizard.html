@@ -14,8 +14,20 @@
   <button class="nav-btn" data-view="production">Production</button>
   <button class="nav-btn" data-view="benchmark">Benchmark</button>
   <button class="nav-btn" data-view="tool">Tool</button>
+  <span id="frozen-badge" class="frozen-badge hidden" title="Packaged GUI shell — pipeline stays on the pip CLI">shell</span>
   <span id="tool-version-badge" class="tool-version-badge" title="Installed docgen version">…</span>
 </nav>
+<div id="bundle-bar">
+  <label for="bundle-path">Bundle</label>
+  <input id="bundle-path" type="text" placeholder="path/to/docgen.yaml or bundle directory">
+  <button id="btn-bundle-browse" class="btn btn-secondary" type="button">Browse</button>
+  <button id="btn-bundle-open" class="btn btn-secondary" type="button">Open</button>
+  <span id="bundle-status" class="status-text">no bundle</span>
+</div>
+<p id="pipeline-shell-note" class="pipeline-shell-note hidden">
+  This packaged app is a GUI shell. TTS, Manim, compose, and OpenAI stay on the pip
+  <code>docgen</code> CLI.
+</p>
 
 <!-- ================================================================== -->
 <!-- VIEW: SETUP                                                        -->

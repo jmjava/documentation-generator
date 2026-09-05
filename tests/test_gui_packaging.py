@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from click.testing import CliRunner
 from docgen.cli import main
 from docgen.gui.packaging import pyinstaller_datas, pyinstaller_hiddenimports, spec_path
 from docgen.resources import benchmark_data_dir, is_frozen, package_root, static_dir, templates_dir
-from docgen.wizard import create_app
+from docgen.wizard import create_app, open_bundle_config, session_payload
 
 
 def test_package_root_uses_meipass(tmp_path: Path, monkeypatch) -> None:
@@ -24,6 +25,19 @@ def test_package_root_uses_meipass(tmp_path: Path, monkeypatch) -> None:
     assert is_frozen() is True
     assert package_root() == bundled
     assert (templates_dir() / "wizard.html").read_text(encoding="utf-8") == "ok"
+
+
+def test_manim_scene_support_has_no_toplevel_validate_import() -> None:
+    """The GUI freeze excludes cv2; BOOTSTRAP_HEADER must not import validate."""
+    import ast
+
+    src = (package_root() / "manim_scene_support.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "docgen.validate":
+            raise AssertionError(
+                "top-level docgen.validate import pulls cv2 into the GUI freeze"
+            )
 
 
 def test_package_root_has_gui_assets() -> None:
@@ -41,8 +55,10 @@ def test_pyinstaller_datas_include_vue_and_baseline() -> None:
     assert "docgen/static" in dests
     assert "docgen/templates" in dests
     assert "docgen/benchmark_data" in dests
-    assert "webview" in pyinstaller_hiddenimports()
-    assert "docgen.gui.desktop" in pyinstaller_hiddenimports()
+    hidden = pyinstaller_hiddenimports()
+    assert "flask" in hidden
+    assert "docgen.gui.desktop" in hidden
+    assert "docgen.gui.freeze" in hidden
 
 
 def test_pyinstaller_spec_exists_and_points_at_gui_entry() -> None:
@@ -52,6 +68,7 @@ def test_pyinstaller_spec_exists_and_points_at_gui_entry() -> None:
     assert "docgen.gui" in text or "__main__.py" in text
     assert "pyinstaller_datas" in text
     assert "excludes" in text
+    assert "DOCGEN_FREEZE_ROOT" in text
 
 
 def test_wizard_html_is_vue_benchmark_shell() -> None:
@@ -61,6 +78,9 @@ def test_wizard_html_is_vue_benchmark_shell() -> None:
     assert "vue.global.prod.js" in html
     assert "benchmark-app.js" in html
     assert "createApp" in (static_dir() / "benchmark-app.js").read_text(encoding="utf-8")
+    assert 'id="bundle-path"' in html
+    assert 'id="frozen-badge"' in html
+    assert "pipeline-shell-note" in html
 
 
 def test_api_benchmark_returns_corpus(tmp_path: Path) -> None:
@@ -117,10 +137,15 @@ def test_update_baseline_disabled_when_frozen(monkeypatch) -> None:
 
 def test_cli_registers_gui() -> None:
     assert "gui" in main.commands
+    assert "freeze" in main.commands
     runner = CliRunner()
     result = runner.invoke(main, ["gui", "--help"])
     assert result.exit_code == 0
     assert "pywebview" in result.output or "desktop" in result.output.lower()
+    assert "--smoke" in result.output
+    freeze_help = runner.invoke(main, ["freeze", "--help"])
+    assert freeze_help.exit_code == 0
+    assert "PyInstaller" in freeze_help.output or "docgen-gui" in freeze_help.output
     from docgen.gui.__main__ import main as gui_main
 
     with pytest.raises(SystemExit) as exc:
@@ -149,3 +174,74 @@ def test_serve_url_answers_benchmark(monkeypatch) -> None:
         assert data["cases"][0]["case_id"] == "early_title"
     finally:
         httpd.shutdown()
+
+
+def test_session_and_open_bundle(tmp_path: Path) -> None:
+    app = create_app(None)
+    client = app.test_client()
+    res = client.get("/api/session")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["frozen"] is False
+    assert data["pipeline_available"] is True
+    assert data["has_bundle"] is False
+    (tmp_path / "docgen.yaml").write_text("segments:\n  default: ['01']\n", encoding="utf-8")
+    opened = client.post("/api/open-bundle", json={"path": str(tmp_path)})
+    assert opened.status_code == 200, opened.get_json()
+    body = opened.get_json()
+    assert body["ok"] is True
+    assert body["has_bundle"] is True
+    assert body["config_path"].endswith("docgen.yaml")
+    missing = client.post("/api/open-bundle", json={"path": str(tmp_path / "missing")})
+    assert missing.status_code == 400
+    empty = client.post("/api/open-bundle", json={"path": ""})
+    assert empty.status_code == 400
+
+
+def test_open_bundle_config_helper(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text("segments:\n  default: ['01']\n", encoding="utf-8")
+    cfg = open_bundle_config(str(tmp_path))
+    assert cfg.yaml_path == yaml_path
+    assert session_payload(cfg)["has_bundle"] is True
+    with pytest.raises(ValueError):
+        open_bundle_config("")
+
+
+def test_frozen_blocks_pipeline(monkeypatch) -> None:
+    app = create_app(None)
+    monkeypatch.setattr("docgen.resources.is_frozen", lambda: True)
+    client = app.test_client()
+    assert client.post("/api/generate-narration", json={}).status_code == 400
+    assert client.post("/api/run/tts/01").status_code == 400
+    assert client.post("/api/run-from/tts/01").status_code == 400
+    assert client.post("/api/tool/update", json={"ref": "main"}).status_code == 400
+    sess = client.get("/api/session").get_json()
+    assert sess["frozen"] is True
+    assert sess["pipeline_available"] is False
+
+
+def test_gui_smoke_headless(tmp_path: Path) -> None:
+    out = tmp_path / "smoke.json"
+    runner = CliRunner()
+    result = runner.invoke(main, ["gui", "--smoke", "--smoke-output", str(out)])
+    assert result.exit_code == 0, result.output
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["ok"] is True
+    assert data["case_id"] == "early_title"
+    assert data["html_has_benchmark"] is True
+
+
+@pytest.mark.freeze
+def test_optional_pyinstaller_freeze_smoke(tmp_path: Path) -> None:
+    if not os.environ.get("DOCGEN_FREEZE_SMOKE"):
+        pytest.skip("set DOCGEN_FREEZE_SMOKE=1 to run the PyInstaller onedir smoke")
+    from docgen.gui.freeze import run_freeze, smoke_frozen_binary
+
+    dist = tmp_path / "dist"
+    work = tmp_path / "build"
+    binary = run_freeze(distpath=dist, workpath=work)
+    assert binary.is_file()
+    report = smoke_frozen_binary(binary, output=tmp_path / "frozen-smoke.json")
+    assert report["ok"] is True
+    assert report["case_id"] == "early_title"

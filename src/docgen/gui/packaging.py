@@ -24,13 +24,14 @@ def pyinstaller_datas() -> list[tuple[str, str]]:
 
 
 def pyinstaller_hiddenimports() -> list[str]:
-    return [
+    names = [
         "docgen",
         "docgen.cli",
         "docgen.config",
         "docgen.gui",
         "docgen.gui.desktop",
         "docgen.gui.__main__",
+        "docgen.gui.freeze",
         "docgen.resources",
         "docgen.scene_benchmark",
         "docgen.scene_clock_harness",
@@ -43,8 +44,13 @@ def pyinstaller_hiddenimports() -> list[str]:
         "jinja2",
         "click",
         "yaml",
-        "webview",
     ]
+    try:
+        import webview  # noqa: F401
+    except ImportError:
+        return names
+    names.append("webview")
+    return names
 
 
 def spec_path() -> Path:

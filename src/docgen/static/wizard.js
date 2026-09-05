@@ -16,6 +16,95 @@
   let scanExtensions = null;
   let filterText = "";
 
+  // ---- Session (bundle + frozen shell) ----
+  async function loadSession() {
+    try {
+      const res = await fetch("/api/session");
+      const data = await res.json();
+      applySession(data);
+    } catch (err) {
+      const status = document.getElementById("bundle-status");
+      if (status) status.textContent = "session unavailable";
+    }
+  }
+
+  function applySession(data) {
+    document.body.classList.toggle("gui-frozen", !!data.frozen);
+    const badge = document.getElementById("frozen-badge");
+    if (badge) badge.classList.toggle("hidden", !data.frozen);
+    const note = document.getElementById("pipeline-shell-note");
+    if (note) note.classList.toggle("hidden", !data.frozen);
+    const input = document.getElementById("bundle-path");
+    if (input && data.config_path) input.value = data.config_path;
+    const status = document.getElementById("bundle-status");
+    if (status) {
+      status.textContent = data.has_bundle ? (data.bundle_dir || "bundle open") : "no bundle";
+    }
+    const disable = !!data.frozen;
+    [
+      "btn-generate",
+      "btn-revise-narration",
+      "btn-regen-narration",
+      "btn-redo-tts",
+      "btn-redo-all",
+      "btn-rebuild-from",
+      "btn-tool-update",
+    ].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = disable;
+    });
+    document.querySelectorAll(".video-actions button").forEach((el) => {
+      el.disabled = disable;
+    });
+  }
+
+  document.getElementById("btn-bundle-open")?.addEventListener("click", async () => {
+    const input = document.getElementById("bundle-path");
+    const status = document.getElementById("bundle-status");
+    const path = (input && input.value || "").trim();
+    if (!path) {
+      alert("Enter a path to docgen.yaml or a bundle directory.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/open-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        if (status) status.textContent = data.error || "open failed";
+        alert("Open bundle failed: " + (data.error || res.status));
+        return;
+      }
+      applySession(data);
+      if (document.getElementById("view-production") &&
+          !document.getElementById("view-production").classList.contains("hidden")) {
+        loadProductionView();
+      }
+    } catch (err) {
+      if (status) status.textContent = "open failed";
+      alert("Open bundle error: " + err.message);
+    }
+  });
+
+  document.getElementById("btn-bundle-browse")?.addEventListener("click", async () => {
+    const input = document.getElementById("bundle-path");
+    let picked = null;
+    try {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_bundle) {
+        picked = await window.pywebview.api.pick_bundle();
+      }
+    } catch (err) {
+      picked = null;
+    }
+    if (picked && input) input.value = picked;
+    else if (input) input.focus();
+  });
+
+  loadSession();
+
   // ---- View switching ----
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {

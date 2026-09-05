@@ -130,7 +130,8 @@ docgen validate --pre-push
 | `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
 | `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, Vue **Benchmark** view, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
-| `docgen gui [--view benchmark] [--browser]` | Desktop GUI (Vue + Flask). Install `docgen[gui]` for a pywebview window; `--browser` uses the system browser. Freeze with `pyinstaller packaging/docgen-gui.spec` |
+| `docgen gui [--view benchmark] [--browser] [--smoke]` | Desktop GUI (Vue + Flask). Install `docgen[gui]` for a pywebview window; `--browser` uses the system browser; `--smoke` is a headless HTTP check |
+| `docgen freeze [--dist DIR] [--smoke]` | PyInstaller onedir for **`docgen-gui` only** (`pip install 'docgen[packaging]'`). Not the full Manim CLI |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |

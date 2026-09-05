@@ -187,8 +187,26 @@ def init(
     is_flag=True,
     help="Open the system browser instead of a pywebview window.",
 )
+@click.option(
+    "--smoke",
+    is_flag=True,
+    help="Headless HTTP check of / and /api/benchmark; do not open a window.",
+)
+@click.option(
+    "--smoke-output",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the --smoke JSON report to this path.",
+)
 @click.pass_context
-def gui(ctx: click.Context, port: int, view: str, browser: bool) -> None:
+def gui(
+    ctx: click.Context,
+    port: int,
+    view: str,
+    browser: bool,
+    smoke: bool,
+    smoke_output: Path | None,
+) -> None:
     """Desktop GUI (Vue). Prefer `pip install 'docgen[gui]'` for a native window.
 
     This is the entry PyInstaller freezes (see packaging/docgen-gui.spec).
@@ -200,10 +218,70 @@ def gui(ctx: click.Context, port: int, view: str, browser: bool) -> None:
         args.extend(["--port", str(port)])
     if browser:
         args.append("--browser")
+    if smoke:
+        args.append("--smoke")
+    if smoke_output is not None:
+        args.extend(["--smoke-output", str(smoke_output)])
     cfg = ctx.obj.get("config") if ctx.obj else None
     if cfg is not None and getattr(cfg, "yaml_path", None) and Path(cfg.yaml_path).is_file():
         args.extend(["--config", str(cfg.yaml_path)])
     gui_main(args)
+
+
+@main.command("freeze")
+@click.option(
+    "--dist",
+    "distpath",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="PyInstaller dist directory (default: ./dist).",
+)
+@click.option(
+    "--work",
+    "workpath",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="PyInstaller work directory (default: ./build).",
+)
+@click.option(
+    "--smoke",
+    is_flag=True,
+    help="After the freeze, run the binary with --smoke (headless HTTP check).",
+)
+@click.option(
+    "--smoke-output",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="JSON report path for --smoke (default: <dist>/docgen-gui-smoke.json).",
+)
+def freeze(
+    distpath: Path | None,
+    workpath: Path | None,
+    smoke: bool,
+    smoke_output: Path | None,
+) -> None:
+    """Freeze the Vue desktop GUI with PyInstaller (not the full Manim CLI).
+
+    Requires ``pip install 'docgen[packaging]'``. Writes ``dist/docgen-gui/``.
+    """
+    from docgen.gui.freeze import run_freeze, smoke_frozen_binary
+
+    dist = (distpath or Path.cwd() / "dist").resolve()
+    work = (workpath or Path.cwd() / "build").resolve()
+    try:
+        binary = run_freeze(distpath=dist, workpath=work)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"wrote {binary}")
+    if not smoke:
+        return
+    report = smoke_output or (dist / "docgen-gui-smoke.json")
+    try:
+        payload = smoke_frozen_binary(binary, output=report)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"smoke ok {report}")
+    click.echo(json.dumps(payload, indent=2))
 
 
 @main.command()
