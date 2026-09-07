@@ -1010,3 +1010,59 @@ def test_from_yaml_validation_nested_numerics_allowed(tmp_path: Path) -> None:
     assert c.av_sync_config["tolerance_sec"] == 2.5
     assert c.timing_sync_config["max_tail_gap_sec"] == 4.0
     assert c.story_end_config["max_early_sec"] == 30
+
+
+def test_from_yaml_string_av_sync_enabled_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'validation:\n  av_sync:\n    enabled: "false"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.av_sync.enabled must be a YAML boolean"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_scene_lint_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('manim:\n  scene_lint: "false"\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.scene_lint must be a YAML boolean"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_int_subject_beat_coverage_enabled_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n  subject_beat_coverage:\n    enabled: 0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="validation.subject_beat_coverage.enabled must be a YAML boolean",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_validation_enable_bools_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim:\n  scene_lint: false\n"
+        "validation:\n"
+        "  av_sync:\n    enabled: false\n    prefer_scene_spec_labels: true\n"
+        "  timing_sync:\n    enabled: true\n"
+        "  scene_assets:\n    enabled: true\n"
+        "  story_end:\n    enabled: false\n"
+        "  layout:\n    check_overlap: false\n"
+        "  subject_beat_coverage:\n    enabled: false\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.manim_scene_lint_enabled is False
+    assert c.av_sync_config["enabled"] is False
+    assert c.av_sync_config["prefer_scene_spec_labels"] is True
+    assert c.timing_sync_config["enabled"] is True
+    assert c.scene_assets_config["enabled"] is True
+    assert c.story_end_config["enabled"] is False
+    assert c.layout_config["check_overlap"] is False
+    assert c.subject_beat_coverage_enabled is False
