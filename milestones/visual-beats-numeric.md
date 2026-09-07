@@ -1,7 +1,7 @@
 # Milestone: visual_beats must be YAML numbers (no silent auto-fallback)
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#120](https://github.com/jmjava/documentation-generator/pull/120)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/validation-enable-bools.md` (PR #119)
 
@@ -36,13 +36,13 @@ schedule.
 
 ## Done when
 
-- [ ] Present tunables must be YAML numbers / number lists.
-- [ ] Tests for bool ``visual_beats``, list ``visual_beats``, bool items
+- [x] Present tunables must be YAML numbers / number lists.
+- [x] Tests for bool ``visual_beats``, list ``visual_beats``, bool items
       in ``pace_segment_indices``, invalid resolve fallbacks, and valid
       numbers.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (701 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
