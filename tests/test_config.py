@@ -371,3 +371,10 @@ def test_from_yaml_string_post_tts_deny_patterns_raises(tmp_path: Path) -> None:
         ConfigError, match="validation.narration_lint.post_tts_deny_patterns must be a YAML list"
     ):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_manim_unsafe_unicode_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim:\n  unsafe_unicode: \"\\u2192\"\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.unsafe_unicode must be a YAML list"):
+        Config.from_yaml(p)

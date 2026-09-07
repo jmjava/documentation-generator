@@ -206,6 +206,7 @@ class Config:
         # List-valued keys: a string must not be iterated as characters.
         _ = self.segments_all
         _ = self.manim_scenes
+        _ = self.manim_unsafe_unicode
         concat = self._block("concat")
         src = self._source_label()
         for name, segs in concat.items():
@@ -538,15 +539,13 @@ class Config:
                    "\u2260", "\u2264", "\u2265", "\u2014", "\u2013",
                    "\u2018", "\u2019", "\u201c", "\u201d", "\u2022",
                    "\u2026"]
-        val = self._block("manim").get("unsafe_unicode", default)
-        if val is None:
-            return list(default)
-        if not isinstance(val, list):
-            raise ConfigError(
-                f"{self._source_label()}: manim.unsafe_unicode must be a YAML list, "
-                f"not {type(val).__name__}"
-            )
-        return [str(x) for x in val]
+        return string_list_block(
+            self._block("manim"),
+            "unsafe_unicode",
+            fallback=default,
+            label="manim.unsafe_unicode",
+            source=self._source_label(),
+        )
 
     # -- Compose ----------------------------------------------------------------
 
