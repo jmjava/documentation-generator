@@ -5,12 +5,15 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[pipeline-fail-closed.md](pipeline-fail-closed.md)** — `generate-all`
-and `yaml-generate` fail closed (preserve still/recording wiring; no silent
-compose/validate skip).
+**Active:** **[timestamps-fail-closed.md](timestamps-fail-closed.md)** — timestamps,
+concat, Anthropic `base_url`, and remaining CLI/wizard silent-success paths.
 
-**Shipped:** **[multi-host-ai-hardening.md](multi-host-ai-hardening.md)** — Cloud /
-local Cursor / Claude Code keys, `--repo` clone cache, fail-closed chat.
+**Shipped:**
+- **[pipeline-fail-closed.md](pipeline-fail-closed.md)** — `generate-all` /
+  `yaml-generate` fail closed (preserve still/recording wiring; no silent
+  compose/validate skip).
+- **[multi-host-ai-hardening.md](multi-host-ai-hardening.md)** — Cloud /
+  local Cursor / Claude Code keys, `--repo` clone cache, fail-closed chat.
 
 **Not in this milestone:** archived slides / i18n / Playwright / Embabel
 roadmaps under [archive/](archive/) (Playwright was removed from the product;
