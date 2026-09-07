@@ -1,7 +1,7 @@
 # Milestone: wizard source_paths and string fields must be typed
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#131](https://github.com/jmjava/documentation-generator/pull/131)  
 **Depends on:** `milestones/wizard-json-object.md` (PR #129),
 `milestones/bootstrap-timing-helpers.md` (PR #130)
 
@@ -26,13 +26,13 @@ when present. Focus ``paths`` items must be strings.
 
 ## Done when
 
-- [ ] String ``source_paths`` returns 400 (not char-split)
-- [ ] Non-string list items return 400
-- [ ] List ``guidance`` / ``text`` return 400
-- [ ] Focus path integers return 400
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] String ``source_paths`` returns 400 (not char-split)
+- [x] Non-string list items return 400
+- [x] List ``guidance`` / ``text`` return 400
+- [x] Focus path integers return 400
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (755 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
