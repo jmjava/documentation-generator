@@ -1,7 +1,7 @@
 # Milestone: hint segment create must be a YAML boolean
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#116](https://github.com/jmjava/documentation-generator/pull/116)  
 **Depends on:** `milestones/numeric-config-tunables.md` (PR #115),
 `milestones/hint-front-matter-yaml.md` (PR #102),
 `milestones/discovery-bool-flags.md` (PR #114)
@@ -33,8 +33,8 @@ string or integer (not bool/list).
 - [x] List `stem` / `id` raise.
 - [x] YAML `create: false` still skips; integer `id: 5` still pads.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (672 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
