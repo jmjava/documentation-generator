@@ -652,3 +652,68 @@ def test_from_yaml_list_dirs_narration_raises(tmp_path: Path) -> None:
     p.write_text("dirs:\n  narration:\n    - narration\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="dirs.narration must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_nfs_segment_system_prompt_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'narration_from_source:\n  segments:\n    "01":\n      system_prompt:\n'
+        "        - Write narration\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="narration_from_source.segments.01.system_prompt must be a YAML string",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_nfs_segment_topic_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'narration_from_source:\n  segments:\n    "01":\n      topic:\n        - Overview\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="narration_from_source.segments.01.topic must be a YAML string",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_msg_segment_class_name_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'manim_scene_generation:\n  segments:\n    "01":\n      class_name:\n'
+        "        - OverviewScene\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.segments.01.class_name must be a YAML string",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_msg_segment_scene_spec_prompt_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'manim_scene_generation:\n  segments:\n    "01":\n'
+        "      scene_spec_system_prompt:\n        - Cover beats\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.segments.01.scene_spec_system_prompt must be a YAML string",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_empty_nfs_segment_system_prompt_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'narration_from_source:\n  segments:\n    "01":\n      system_prompt: ""\n',
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.raw["narration_from_source"]["segments"]["01"]["system_prompt"] == ""

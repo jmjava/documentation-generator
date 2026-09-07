@@ -1,7 +1,7 @@
 # Milestone: env_file / repo_root / dirs paths must be strings
 
-**Status:** Active  
-**PR:** [#109](https://github.com/jmjava/documentation-generator/pull/109)  
+**Status:** Shipped  
+**PR:** #109  
 **Depends on:** `milestones/visual-map-field-strings.md` (PR #108)
 
 ## Problem

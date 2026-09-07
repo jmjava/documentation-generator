@@ -78,6 +78,14 @@ def mapping_sub_block(
     return val
 
 
+def require_optional_yaml_string(value: Any, *, label: str, source: str) -> None:
+    """Allow missing/null; a present value must be a YAML string (empty OK)."""
+    if value is not None and not isinstance(value, str):
+        raise ConfigError(
+            f"{source}: {label} must be a YAML string, not {type(value).__name__}"
+        )
+
+
 def require_yaml_string(value: Any, *, label: str, source: str) -> str:
     """Require a YAML string so unquoted ``01`` is not silently coerced to ``\"1\"``."""
     if isinstance(value, str):
@@ -145,6 +153,27 @@ def require_hint_and_context_lists(
             raise ConfigError(
                 f"{source}: {prefix}.segments.{sid_s} must be a YAML mapping, "
                 f"not {type(spec).__name__}"
+            )
+        require_optional_yaml_string(
+            spec.get("system_prompt"),
+            label=f"{prefix}.segments.{sid_s}.system_prompt",
+            source=source,
+        )
+        require_optional_yaml_string(
+            spec.get("topic"),
+            label=f"{prefix}.segments.{sid_s}.topic",
+            source=source,
+        )
+        require_optional_yaml_string(
+            spec.get("scene_spec_system_prompt"),
+            label=f"{prefix}.segments.{sid_s}.scene_spec_system_prompt",
+            source=source,
+        )
+        if spec.get("class_name") is not None:
+            require_yaml_string(
+                spec["class_name"],
+                label=f"{prefix}.segments.{sid_s}.class_name",
+                source=source,
             )
         require_hint_and_context_lists(spec, prefix=f"{prefix}.segments.{sid_s}", source=source)
 
@@ -287,10 +316,9 @@ class Config:
                 f"{src}: tts.instructions must be a YAML string, "
                 f"not {type(inst).__name__}"
             )
-        if wiz.get("system_prompt") is not None and not isinstance(wiz["system_prompt"], str):
-            raise ConfigError(
-                f"{src}: wizard.system_prompt must be a YAML string, "
-                f"not {type(wiz['system_prompt']).__name__}"
+        if wiz.get("system_prompt") is not None:
+            require_optional_yaml_string(
+                wiz["system_prompt"], label="wizard.system_prompt", source=src
             )
         if wiz.get("llm_model") is not None:
             require_yaml_string(wiz["llm_model"], label="wizard.llm_model", source=src)
@@ -325,31 +353,28 @@ class Config:
             require_yaml_string(
                 nfs["model"], label="narration_from_source.model", source=src
             )
-        if nfs.get("system_prompt") is not None and not isinstance(
-            nfs["system_prompt"], str
-        ):
-            raise ConfigError(
-                f"{src}: narration_from_source.system_prompt must be a YAML string, "
-                f"not {type(nfs['system_prompt']).__name__}"
+        if nfs.get("system_prompt") is not None:
+            require_optional_yaml_string(
+                nfs["system_prompt"],
+                label="narration_from_source.system_prompt",
+                source=src,
             )
         msg = self._block("manim_scene_generation")
         if msg.get("model") is not None:
             require_yaml_string(
                 msg["model"], label="manim_scene_generation.model", source=src
             )
-        if msg.get("system_prompt") is not None and not isinstance(
-            msg["system_prompt"], str
-        ):
-            raise ConfigError(
-                f"{src}: manim_scene_generation.system_prompt must be a YAML string, "
-                f"not {type(msg['system_prompt']).__name__}"
+        if msg.get("system_prompt") is not None:
+            require_optional_yaml_string(
+                msg["system_prompt"],
+                label="manim_scene_generation.system_prompt",
+                source=src,
             )
-        if msg.get("scene_spec_system_prompt") is not None and not isinstance(
-            msg["scene_spec_system_prompt"], str
-        ):
-            raise ConfigError(
-                f"{src}: manim_scene_generation.scene_spec_system_prompt must be a "
-                f"YAML string, not {type(msg['scene_spec_system_prompt']).__name__}"
+        if msg.get("scene_spec_system_prompt") is not None:
+            require_optional_yaml_string(
+                msg["scene_spec_system_prompt"],
+                label="manim_scene_generation.scene_spec_system_prompt",
+                source=src,
             )
         if self.raw.get("env_file") is not None:
             require_yaml_string(self.raw["env_file"], label="env_file", source=src)
