@@ -1,7 +1,7 @@
 # Milestone: env_file / repo_root / dirs paths must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#109](https://github.com/jmjava/documentation-generator/pull/109)  
 **Depends on:** `milestones/visual-map-field-strings.md` (PR #108)
 
 ## Problem
@@ -27,9 +27,9 @@ use defaults (`narration/`, git-discovered repo root, no `env_file`).
 - [x] Present `dirs.narration` / `audio` / `animations` / `recordings` /
       `hints` must be non-empty YAML strings.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
