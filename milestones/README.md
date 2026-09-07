@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[visual-map-row-types.md](visual-map-row-types.md)** —
-`visual_map` rows and `pages.segments` entries must be mappings; unknown
-compose `type` must fail closed.
+**Active:** **[segment-id-strings.md](segment-id-strings.md)** —
+unquoted YAML `01` must not become integer segment ids.
 
 **Shipped:**
+- **[visual-map-row-types.md](visual-map-row-types.md)** — `visual_map` rows
+  and `pages.segments` entries must be mappings; unknown compose `type`
+  fails closed (#86).
 - **[timestamps-empty-words.md](timestamps-empty-words.md)** — heading-only
   / empty-word timestamps fail closed (#85).
 - **[concat-segment-lists.md](concat-segment-lists.md)** — concat targets
