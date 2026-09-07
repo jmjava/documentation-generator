@@ -171,6 +171,20 @@ def _load_timing(segment_key: str) -> list[dict]:
             raise TypeError(
                 f"timing.json[{segment_key!r}].segments[{i}] must be a JSON object, not {kind}"
             )
+        for time_key in ("start", "end"):
+            if time_key not in item or item[time_key] is None:
+                tkind = "missing" if time_key not in item else "null"
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].segments[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
+            val = item[time_key]
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                tkind = type(val).__name__
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].segments[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
     return list(segs)
 
 
@@ -204,6 +218,20 @@ def _load_timing_words(segment_key: str) -> list[dict]:
             raise TypeError(
                 f"timing.json[{segment_key!r}].words[{i}] must be a JSON object, not {kind}"
             )
+        for time_key in ("start", "end"):
+            if time_key not in item or item[time_key] is None:
+                tkind = "missing" if time_key not in item else "null"
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].words[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
+            val = item[time_key]
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                tkind = type(val).__name__
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].words[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
     return list(words)
 
 
@@ -1297,7 +1325,11 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
         if name in {"_load_timing", "_load_timing_words"} and isinstance(
             node, ast.FunctionDef
         ) and node.name == name:
-            return "must be a JSON object" not in ast.unparse(node)
+            src = ast.unparse(node)
+            return (
+                "must be a JSON object" not in src
+                or "must be a JSON number" not in src
+            )
         if name == "_image" and isinstance(node, ast.FunctionDef) and node.name == "_image":
             return False
     return False

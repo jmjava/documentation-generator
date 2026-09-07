@@ -810,6 +810,21 @@ def test_load_timing_helpers_accept_object_rows(tmp_path: Path) -> None:
     assert ns["_load_timing_words"]("missing") == []
 
 
+def test_load_timing_helpers_reject_non_numeric_start_end(tmp_path: Path) -> None:
+    ns = _exec_timing_loaders(
+        tmp_path,
+        {"01-x": {"words": [{"word": "hi", "start": True, "end": 0.1}]}},
+    )
+    with pytest.raises(TypeError, match=r"\.words\[0\].start must be a JSON number, not bool"):
+        ns["_load_timing_words"]("01-x")
+    ns2 = _exec_timing_loaders(
+        tmp_path,
+        {"01-x": {"segments": [{"text": "hi", "start": 0.0}]}},
+    )
+    with pytest.raises(TypeError, match=r"\.segments\[0\].end must be a JSON number, not missing"):
+        ns2["_load_timing"]("01-x")
+
+
 def test_refresh_bootstrap_helpers_upgrades_stale_timing_loaders(tmp_path: Path) -> None:
     p = tmp_path / "scenes.py"
     p.write_text(
@@ -828,7 +843,24 @@ def test_refresh_bootstrap_helpers_upgrades_stale_timing_loaders(tmp_path: Path)
     assert set(changed) == {"_load_timing", "_load_timing_words"}
     text = p.read_text(encoding="utf-8")
     assert "must be a JSON object" in text
+    assert "must be a JSON number" in text
     assert "data.get(segment_key, {}).get('segments'" not in text
+
+
+def test_refresh_bootstrap_helpers_upgrades_object_only_timing_loaders(tmp_path: Path) -> None:
+    """#130 bodies typed stems/rows but still coerced missing start to 0.0."""
+    p = tmp_path / "scenes.py"
+    p.write_text(
+        "from manim import *\n"
+        "def _load_timing(segment_key):\n"
+        "    raise TypeError('timing.json[k] must be a JSON object')\n"
+        "def _load_timing_words(segment_key):\n"
+        "    raise TypeError('timing.json[k] must be a JSON object')\n",
+        encoding="utf-8",
+    )
+    changed = refresh_bootstrap_helpers(p)
+    assert set(changed) == {"_load_timing", "_load_timing_words"}
+    assert "must be a JSON number" in p.read_text(encoding="utf-8")
 
 
 

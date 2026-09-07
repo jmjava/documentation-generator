@@ -227,6 +227,19 @@ def _load_timing_words(segment_key):
     assert any("_load_timing_words is stale" in i for i in issues)
 
 
+def test_helper_api_flags_object_only_timing_loaders() -> None:
+    stale = '''
+MANIM_FONT = "Liberation Sans"
+def _load_timing(segment_key):
+    raise TypeError("must be a JSON object")
+def _load_timing_words(segment_key):
+    raise TypeError("must be a JSON object")
+'''
+    issues = helper_api_violations(stale)
+    assert any("_load_timing is stale" in i for i in issues)
+    assert any("_load_timing_words is stale" in i for i in issues)
+
+
 def test_helper_api_clean_for_current_bootstrap() -> None:
     assert helper_api_violations(BOOTSTRAP_HEADER) == []
 
@@ -397,5 +410,25 @@ def test_non_array_timing_words_is_reported(tmp_path: Path) -> None:
     )
     issues = scene_asset_violations_for_segment(cfg, "01")
     assert any("timing.json['01-x'].words must be a JSON array, not str" in i for i in issues)
+
+
+def test_non_numeric_timing_start_is_reported(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    specs = cfg.animations_dir / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
+    (specs / "01-x.scene.yaml").write_text(
+        yaml.dump(_spec([_box("Alpha")])),
+        encoding="utf-8",
+    )
+    (cfg.animations_dir / "timing.json").write_text(
+        json.dumps({"01-x": {"words": [{"word": "hi", "start": True, "end": 0.1}]}})
+        + "\n",
+        encoding="utf-8",
+    )
+    issues = scene_asset_violations_for_segment(cfg, "01")
+    assert any(
+        "timing.json['01-x'].words[0].start must be a JSON number, not bool" in i
+        for i in issues
+    )
 
 

@@ -194,7 +194,12 @@ class TestExtractLocal:
         out = cfg.animations_dir / "timing.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(
-            json.dumps({"legacy-stem": {"text": "keep-me", "words": [{"word": "x"}]}}),
+            json.dumps({
+                "legacy-stem": {
+                    "text": "keep-me",
+                    "words": [{"word": "x", "start": 0.0, "end": 0.1}],
+                }
+            }),
             encoding="utf-8",
         )
         TimestampExtractor(cfg).extract_all()
@@ -332,4 +337,50 @@ class TestExtractLocal:
         with pytest.raises(TimestampError, match=r"timing.json\['legacy-stem'\].words must be a JSON array"):
             TimestampExtractor(cfg).extract_all()
         assert out.read_text(encoding="utf-8") == payload
+
+    def test_load_bundle_timing_rejects_non_numeric_start_end(self, cfg) -> None:
+        from docgen.timestamps import TimestampError, load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cases = (
+            (
+                {"01-x": {"words": [{"word": "hi", "end": 0.1}]}},
+                r"timing.json\['01-x'\].words\[0\].start must be a JSON number, not missing",
+            ),
+            (
+                {"01-x": {"words": [{"word": "hi", "start": None, "end": 0.1}]}},
+                r"timing.json\['01-x'\].words\[0\].start must be a JSON number, not null",
+            ),
+            (
+                {"01-x": {"words": [{"word": "hi", "start": True, "end": 0.1}]}},
+                r"timing.json\['01-x'\].words\[0\].start must be a JSON number, not bool",
+            ),
+            (
+                {"01-x": {"words": [{"word": "hi", "start": "0.0", "end": 0.1}]}},
+                r"timing.json\['01-x'\].words\[0\].start must be a JSON number, not str",
+            ),
+            (
+                {"01-x": {"segments": [{"text": "hi", "start": 0.0}]}},
+                r"timing.json\['01-x'\].segments\[0\].end must be a JSON number, not missing",
+            ),
+        )
+        for payload, match in cases:
+            out.write_text(json.dumps(payload), encoding="utf-8")
+            with pytest.raises(TimestampError, match=match):
+                load_bundle_timing(cfg)
+
+    def test_load_bundle_timing_accepts_numeric_start_end(self, cfg) -> None:
+        from docgen.timestamps import load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "01-x": {
+                "words": [{"word": "hi", "start": 0, "end": 0.25}],
+                "segments": [{"text": "hi", "start": 0.0, "end": 1}],
+            }
+        }
+        out.write_text(json.dumps(payload), encoding="utf-8")
+        assert load_bundle_timing(cfg) == payload
 

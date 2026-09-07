@@ -1,6 +1,6 @@
 # Milestone: wizard open-bundle path and tool/update ref must be strings
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#133](https://github.com/jmjava/documentation-generator/pull/133)  
 **Depends on:** `milestones/wizard-json-parse.md` (PR #132)
 
