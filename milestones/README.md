@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[visual-map-field-strings.md](visual-map-field-strings.md)** —
-`visual_map` type/scene/source and `segment_names` values must be YAML
-strings at config load.
+**Active:** **[path-config-strings.md](path-config-strings.md)** —
+`env_file` / `repo_root` / `dirs.*` must be YAML strings at config load.
 
 **Shipped:**
+- **[visual-map-field-strings.md](visual-map-field-strings.md)** —
+  `visual_map` type/scene/source and `segment_names` values must be YAML
+  strings (#108).
 - **[generation-model-strings.md](generation-model-strings.md)** —
   `narration_from_source` / `manim_scene_generation` model and prompt
   keys must be YAML strings (#107).

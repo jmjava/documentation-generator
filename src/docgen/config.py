@@ -164,7 +164,11 @@ class Config:
     hints_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
+        src = self._source_label()
         dirs = self._block("dirs")
+        for dkey in ("narration", "audio", "animations", "recordings", "hints"):
+            if dirs.get(dkey) is not None:
+                require_yaml_string(dirs[dkey], label=f"dirs.{dkey}", source=src)
         self.narration_dir = self.base_dir / dirs.get("narration", "narration")
         self.audio_dir = self.base_dir / dirs.get("audio", "audio")
         self.animations_dir = self.base_dir / dirs.get("animations", "animations")
@@ -347,6 +351,10 @@ class Config:
                 f"{src}: manim_scene_generation.scene_spec_system_prompt must be a "
                 f"YAML string, not {type(msg['scene_spec_system_prompt']).__name__}"
             )
+        if self.raw.get("env_file") is not None:
+            require_yaml_string(self.raw["env_file"], label="env_file", source=src)
+        if self.raw.get("repo_root") is not None:
+            require_yaml_string(self.raw["repo_root"], label="repo_root", source=src)
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(

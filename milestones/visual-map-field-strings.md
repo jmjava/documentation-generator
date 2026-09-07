@@ -1,7 +1,7 @@
 # Milestone: visual_map type/scene/source and segment_names values must be strings
 
-**Status:** Active  
-**PR:** [#108](https://github.com/jmjava/documentation-generator/pull/108)  
+**Status:** Shipped  
+**PR:** #108  
 **Depends on:** `milestones/generation-model-strings.md` (PR #107),
 `milestones/visual-map-row-types.md` (PR #86),
 `milestones/segment-id-strings.md` (PR #87)
