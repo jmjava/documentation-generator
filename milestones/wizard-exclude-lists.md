@@ -26,9 +26,9 @@ Fail closed at `Config.from_yaml` (`string_list_block`) and in `merge_defaults`
       YAML lists of strings.
 - [x] `merge_defaults` does not replace a string `exclude_patterns` with `[]`.
 - [x] Tests for string exclude_patterns and scan_extensions.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
