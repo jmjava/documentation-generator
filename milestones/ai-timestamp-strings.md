@@ -1,7 +1,7 @@
 # Milestone: leftover AI / timestamps / TTS language keys must be strings
 
-**Status:** Active  
-**PR:** [#105](https://github.com/jmjava/documentation-generator/pull/105)  
+**Status:** Shipped  
+**PR:** #105  
 **Depends on:** `milestones/image-generation-strings.md` (PR #104),
 `milestones/tts-empty-audio.md` (PR #99),
 `milestones/multi-host-ai-hardening.md`

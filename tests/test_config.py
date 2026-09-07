@@ -514,3 +514,24 @@ def test_from_yaml_list_tts_language_raises(tmp_path: Path) -> None:
     p.write_text("tts:\n  language:\n    - en\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="tts.language must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_font_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim:\n  font:\n    - Liberation Sans\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.font must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_quality_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim:\n  quality:\n    - 1080p30\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.quality must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_path_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim:\n  manim_path:\n    - /usr/bin/manim\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.manim_path must be a YAML string"):
+        Config.from_yaml(p)
