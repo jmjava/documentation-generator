@@ -116,6 +116,18 @@ def require_yaml_number(value: Any, *, label: str, source: str) -> float:
     return float(value)
 
 
+def require_yaml_number_list(value: Any, *, label: str, source: str) -> list[float]:
+    """Require a YAML list of numbers so bools/strings do not reach ``int()``."""
+    if not isinstance(value, list):
+        raise ConfigError(
+            f"{source}: {label} must be a YAML list, not {type(value).__name__}"
+        )
+    return [
+        require_yaml_number(x, label=f"{label}[{i}]", source=source)
+        for i, x in enumerate(value)
+    ]
+
+
 def require_yaml_string(value: Any, *, label: str, source: str) -> str:
     """Require a YAML string so unquoted ``01`` is not silently coerced to ``\"1\"``."""
     if isinstance(value, str):
@@ -203,6 +215,18 @@ def require_hint_and_context_lists(
             require_yaml_string(
                 spec["class_name"],
                 label=f"{prefix}.segments.{sid_s}.class_name",
+                source=source,
+            )
+        if spec.get("visual_beats") is not None:
+            require_yaml_number(
+                spec["visual_beats"],
+                label=f"{prefix}.segments.{sid_s}.visual_beats",
+                source=source,
+            )
+        if spec.get("pace_segment_indices") is not None:
+            require_yaml_number_list(
+                spec["pace_segment_indices"],
+                label=f"{prefix}.segments.{sid_s}.pace_segment_indices",
                 source=source,
             )
         require_hint_and_context_lists(spec, prefix=f"{prefix}.segments.{sid_s}", source=source)
@@ -541,6 +565,12 @@ class Config:
                     label=f"manim_scene_generation.{wkey}",
                     source=src,
                 )
+        if msg.get("default_visual_beats") is not None:
+            require_yaml_number(
+                msg["default_visual_beats"],
+                label="manim_scene_generation.default_visual_beats",
+                source=src,
+            )
         if self.raw.get("env_file") is not None:
             require_yaml_string(self.raw["env_file"], label="env_file", source=src)
         if self.raw.get("repo_root") is not None:

@@ -29,6 +29,7 @@ from docgen.manim_scene_support import (
     lint_generated_block,
     merged_scene_generation_settings,
     refresh_bootstrap_helpers,
+    resolve_pace_segment_indices,
     sync_audio_tail_waits_in_scenes,
 )
 
@@ -94,6 +95,24 @@ def test_build_timing_enrichment_segments_only_suggests_wait_segment(
     assert "| 0 | 0 |" in out
     assert "| 1 | 2 |" in out
     assert "| 2 | 3 |" in out
+    assert "manim_scene_generation.segments.<id>.visual_beats" in out
+
+
+def test_build_timing_enrichment_bool_beats_raises_scene_generation_error(
+    tmp_path: Path,
+) -> None:
+    cfg = Config.minimal(tmp_path)
+    cfg.raw["manim_scene_generation"] = {
+        "segments": {"08": {"visual_beats": True}},
+    }
+    segs = [
+        {"start": 0.0, "end": 1.0, "text": "alpha"},
+        {"start": 1.0, "end": 2.0, "text": "bravo"},
+        {"start": 2.0, "end": 3.0, "text": "charlie"},
+        {"start": 3.0, "end": 4.0, "text": "delta"},
+    ]
+    with pytest.raises(SceneGenerationError, match="must be a YAML number"):
+        build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
 
 
 def test_build_timing_enrichment_words_primary_and_no_pace_tuple(
@@ -126,6 +145,83 @@ def test_build_timing_enrichment_words_primary_and_no_pace_tuple(
     assert '"word_index": 0' in out
     assert "_DOCGEN_PACE_SEG" not in out
     assert "pace_to_beat" not in out
+
+
+def test_resolve_pace_bool_visual_beats_raises() -> None:
+    with pytest.raises(ValueError, match="must be a YAML number"):
+        resolve_pace_segment_indices(
+            num_segments=8,
+            seg_block={"visual_beats": True},
+            root={},
+        )
+
+
+def test_resolve_pace_list_visual_beats_raises() -> None:
+    with pytest.raises(ValueError, match="must be a YAML number"):
+        resolve_pace_segment_indices(
+            num_segments=8,
+            seg_block={"visual_beats": [10]},
+            root={},
+        )
+
+
+def test_resolve_pace_string_visual_beats_raises() -> None:
+    with pytest.raises(ValueError, match="must be a YAML number"):
+        resolve_pace_segment_indices(
+            num_segments=8,
+            seg_block={},
+            root={"default_visual_beats": "6"},
+        )
+
+
+def test_resolve_pace_invalid_pace_indices_raises() -> None:
+    with pytest.raises(ValueError, match="pace_segment_indices must be a non-empty YAML list"):
+        resolve_pace_segment_indices(
+            num_segments=8,
+            seg_block={"pace_segment_indices": [True]},
+            root={},
+        )
+
+
+def test_resolve_pace_empty_pace_indices_raises() -> None:
+    with pytest.raises(ValueError, match="pace_segment_indices must be a non-empty YAML list"):
+        resolve_pace_segment_indices(
+            num_segments=8,
+            seg_block={"pace_segment_indices": []},
+            root={},
+        )
+
+
+def test_resolve_pace_missing_visual_beats_auto_estimates() -> None:
+    indices, src = resolve_pace_segment_indices(
+        num_segments=8,
+        seg_block={},
+        root={},
+    )
+    assert src.startswith("auto")
+    assert len(indices) >= 4
+    assert indices[0] == 0
+    assert indices[-1] == 7
+
+
+def test_resolve_pace_valid_visual_beats() -> None:
+    indices, src = resolve_pace_segment_indices(
+        num_segments=4,
+        seg_block={"visual_beats": 3},
+        root={},
+    )
+    assert src == "manim_scene_generation.segments.<id>.visual_beats"
+    assert indices == [0, 2, 3]
+
+
+def test_resolve_pace_valid_pace_indices() -> None:
+    indices, src = resolve_pace_segment_indices(
+        num_segments=10,
+        seg_block={"pace_segment_indices": [0, 2, 5, 9]},
+        root={"default_visual_beats": 8},
+    )
+    assert src.endswith("pace_segment_indices")
+    assert indices == [0, 2, 5, 9]
 
 
 def test_settings_root_and_segment_overrides_merge(tmp_path: Path) -> None:
