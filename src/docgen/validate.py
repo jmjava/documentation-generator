@@ -651,7 +651,10 @@ class Validator:
             ]
             return CheckResult("layout", False, details)
         except Exception as exc:
-            return CheckResult("layout", True, [f"Layout check error (skipped): {exc}"])
+            # Same fail-closed contract as stream_presence / av_drift: an
+            # unexpected crash is a failed check, not a silent skip. Soft in
+            # ``validate --pre-push``; hard fail for plain ``docgen validate``.
+            return CheckResult("layout", False, [f"Layout check error: {exc}"])
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 

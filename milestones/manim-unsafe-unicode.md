@@ -1,7 +1,7 @@
 # Milestone: `manim.unsafe_unicode` must be a list at config load
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #96  
 **Depends on:** `milestones/validation-list-keys.md` (PR #95),
 `milestones/config-mapping-keys.md` (PR #83)
 

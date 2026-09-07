@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -346,3 +348,68 @@ def test_story_end_allows_pace_none_without_words(cfg) -> None:
     (specs / "01-x.scene.yaml").write_text(yaml.dump(raw), encoding="utf-8")
     check = Validator(cfg)._check_story_end("01")
     assert check.passed, check.details
+
+
+class TestLayoutCheckErrors:
+    """Layout OCR crashes must fail the check, not skip as success."""
+
+    def _fake_tesseract(self, monkeypatch, *, installed: bool) -> None:
+        pt = types.ModuleType("pytesseract")
+        if installed:
+            pt.get_tesseract_version = lambda: "5.0.0"
+        else:
+            def _missing() -> str:
+                raise RuntimeError("tesseract is not installed")
+
+            pt.get_tesseract_version = _missing
+        monkeypatch.setitem(sys.modules, "pytesseract", pt)
+
+    def test_unexpected_error_fails(self, cfg, monkeypatch) -> None:
+        rec = cfg.recordings_dir / "01-x.mp4"
+        rec.write_bytes(b"not a video")
+        self._fake_tesseract(monkeypatch, installed=True)
+
+        class Boom:
+            def __init__(self, _config: Config) -> None:
+                pass
+
+            def validate_video(self, _path: Path) -> None:
+                raise TypeError("conf is not int")
+
+        monkeypatch.setattr("docgen.manim_layout.LayoutValidator", Boom)
+        check = Validator(cfg)._check_layout(rec)
+        assert not check.passed
+        assert any("Layout check error" in d for d in check.details)
+        assert any("conf is not int" in d for d in check.details)
+        assert not any("(skipped)" in d for d in check.details)
+
+    def test_tesseract_missing_still_skips(self, cfg, monkeypatch) -> None:
+        rec = cfg.recordings_dir / "01-x.mp4"
+        rec.write_bytes(b"not a video")
+        self._fake_tesseract(monkeypatch, installed=False)
+        check = Validator(cfg)._check_layout(rec)
+        assert check.passed
+        assert any("tesseract not installed" in d for d in check.details)
+
+    def test_failed_report_still_fails(self, cfg, monkeypatch) -> None:
+        from docgen.manim_layout import LayoutIssue, LayoutReport
+
+        rec = cfg.recordings_dir / "01-x.mp4"
+        rec.write_bytes(b"not a video")
+        self._fake_tesseract(monkeypatch, installed=True)
+
+        class Fail:
+            def __init__(self, _config: Config) -> None:
+                pass
+
+            def validate_video(self, path: Path) -> LayoutReport:
+                return LayoutReport(
+                    path=str(path),
+                    passed=False,
+                    issues=[LayoutIssue(1.5, "overlap", "boxes overlap")],
+                )
+
+        monkeypatch.setattr("docgen.manim_layout.LayoutValidator", Fail)
+        check = Validator(cfg)._check_layout(rec)
+        assert not check.passed
+        assert any("overlap" in d for d in check.details)
