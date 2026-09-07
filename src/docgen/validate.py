@@ -931,7 +931,12 @@ class Validator:
 
         from docgen.av_sync import AVSyncValidator
 
-        report = AVSyncValidator(self.config).validate_segment_with_timing(seg_id, rec, block)
+        try:
+            report = AVSyncValidator(self.config).validate_segment_with_timing(
+                seg_id, rec, block
+            )
+        except Exception as exc:
+            return CheckResult("av_sync", False, [f"AV sync check error: {exc}"])
         if report.passed:
             details = [f"{len(report.anchors)} anchor keyword(s) visible near spoken time"]
             return CheckResult("av_sync", True, details)

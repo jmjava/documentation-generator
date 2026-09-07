@@ -5,10 +5,12 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[layout-check-errors.md](layout-check-errors.md)** —
-Manim layout check crashes must fail, not skip as success.
+**Active:** **[av-sync-scene-spec.md](av-sync-scene-spec.md)** —
+Unreadable `*.scene.yaml` must fail `av_sync`, not fall back to transcript nouns.
 
 **Shipped:**
+- **[layout-check-errors.md](layout-check-errors.md)** —
+  Manim layout check crashes must fail, not skip as success (#97).
 - **[manim-unsafe-unicode.md](manim-unsafe-unicode.md)** —
   `manim.unsafe_unicode` must be a YAML list at config load (#96).
 - **[validation-list-keys.md](validation-list-keys.md)** —
