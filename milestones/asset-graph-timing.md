@@ -27,9 +27,9 @@ and do not rewrite the file.
 - [x] `GET /api/segments` and `GET /api/segments/<id>/assets` map
       `TimestampError` to HTTP 500 with the parse message.
 - [x] Tests for corrupt JSON and a list root.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
