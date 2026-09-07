@@ -25,9 +25,9 @@ defaults (`gpt-image-1`, `1536x1024`, no quality).
 - [x] Present `image_generation.model` / `size` / `quality` must be
       non-empty YAML strings.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
