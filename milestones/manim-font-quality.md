@@ -27,9 +27,9 @@ Fail closed at `Config.from_yaml`. Missing keys still use defaults
 - [x] Present `manim.font` / `manim.quality` / `manim.manim_path` must be
       non-empty YAML strings.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
