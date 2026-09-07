@@ -1,6 +1,6 @@
 # Milestone: timing.json per-stem values must be objects
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#126](https://github.com/jmjava/documentation-generator/pull/126)  
 **Depends on:** `milestones/timing-json-parse.md` (PR #89),
 `milestones/cli-segments-all.md` (PR #125)

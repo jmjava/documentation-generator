@@ -122,7 +122,8 @@ def _timing_entry_exists(cfg: "Config", seg_name: str, audio: Path | None) -> bo
     """True when ``timing.json`` has a stem for this segment.
 
     A missing file is ``False`` (timestamps not run yet). Corrupt JSON, a
-    non-object root, or a non-object per-stem value raises
+    non-object root, a non-object per-stem value, or a present ``words`` /
+    ``segments`` field that is not an array of objects raises
     :class:`~docgen.timestamps.TimestampError` so the wizard cannot treat
     garbage as “no entry”.
     """

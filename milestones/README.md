@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[timing-stem-objects.md](timing-stem-objects.md)** —
-`timing.json` per-stem values must be JSON objects (not lists/scalars).
+**Active:** **[timing-inner-lists.md](timing-inner-lists.md)** —
+`timing.json` `words` / `segments` must be JSON arrays of objects.
 
 **Shipped:**
+- **[timing-stem-objects.md](timing-stem-objects.md)** —
+  `timing.json` per-stem values must be JSON objects (not lists/scalars)
+  (#126).
 - **[cli-segments-all.md](cli-segments-all.md)** —
   `narration-generate --all` / `scene-spec-generate --all` must use
   `Config.segments_all` (missing `all` falls back to `default`) (#125).

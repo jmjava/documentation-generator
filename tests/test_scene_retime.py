@@ -313,6 +313,37 @@ def test_linted_class_block_fails_on_non_object_timing_stem(tmp_path: Path) -> N
         linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
 
 
+def test_linted_class_block_fails_on_non_array_timing_words(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    (tmp_path / "animations" / "timing.json").write_text(
+        json.dumps({"01-demo": {"words": "not-a-list", "segments": []}}) + "\n",
+        encoding="utf-8",
+    )
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                        "pace": "none",
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match=r"timing.json\['01-demo'\].words must be a JSON array"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
+
 
 def test_retime_compile_spec_rewrites_scenes_py(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
