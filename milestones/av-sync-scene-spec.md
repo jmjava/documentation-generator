@@ -29,9 +29,9 @@ validator become `passed=False` (soft on `--pre-push`, same as layout).
 - [x] `_check_av_sync` maps validator exceptions to a failed check.
 - [x] Tests: corrupt YAML fails `_get_anchors` / `_check_av_sync`; valid
       spec still prefers scene-spec labels.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
