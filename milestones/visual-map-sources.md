@@ -1,7 +1,7 @@
 # Milestone: visual_map mixed sources must be a list of strings
 
-**Status:** Active  
-**PR:** [#112](https://github.com/jmjava/documentation-generator/pull/112)  
+**Status:** Shipped  
+**PR:** #112  
 **Depends on:** `milestones/visual-map-field-strings.md` (PR #108),
 `milestones/pages-config-strings.md` (PR #111)
 

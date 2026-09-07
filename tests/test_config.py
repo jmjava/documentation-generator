@@ -763,3 +763,20 @@ def test_from_yaml_list_visual_map_sources_item_raises(tmp_path: Path) -> None:
         ConfigError, match=r"visual_map.01.sources\[0\] must be a YAML string"
     ):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_wizard_default_guidance_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "wizard:\n  default_guidance:\n    - Keep it spoken\n    - No markdown\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="wizard.default_guidance must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_empty_wizard_default_guidance_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('wizard:\n  default_guidance: ""\n', encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.wizard_config["default_guidance"] == ""

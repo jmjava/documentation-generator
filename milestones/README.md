@@ -5,11 +5,12 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[visual-map-sources.md](visual-map-sources.md)** —
-`visual_map` mixed `sources` must be a YAML list of strings at config
-load.
+**Active:** **[wizard-default-guidance.md](wizard-default-guidance.md)** —
+`wizard.default_guidance` must be a YAML string at config load.
 
 **Shipped:**
+- **[visual-map-sources.md](visual-map-sources.md)** —
+  `visual_map` mixed `sources` must be a YAML list of strings (#112).
 - **[pages-config-strings.md](pages-config-strings.md)** —
   `pages.docs_dir` / title / extra_links must be typed (#111).
 - **[generation-segment-strings.md](generation-segment-strings.md)** —
