@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[config-mapping-keys.md](config-mapping-keys.md)** — nested
-`docgen.yaml` mapping/list keys must not traceback; lint/compose empty-all
-must not succeed.
+**Active:** **[concat-segment-lists.md](concat-segment-lists.md)** — concat
+targets must be lists of segment ids; pages extra_links items must be mappings.
 
 **Shipped:**
+- **[config-mapping-keys.md](config-mapping-keys.md)** — nested `docgen.yaml`
+  mapping/list keys must not traceback; lint/compose empty-all must not
+  succeed (#83).
 - **[manim-lint-config.md](manim-lint-config.md)** — missing `scenes.py`
   fails validate; invalid `docgen.yaml` is `ConfigError`; TTS empty-all
   fails (#82).

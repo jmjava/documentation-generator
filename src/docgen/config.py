@@ -154,6 +154,15 @@ class Config:
         # List-valued keys: a string must not be iterated as characters.
         _ = self.segments_all
         _ = self.manim_scenes
+        concat = self._block("concat")
+        for name, segs in concat.items():
+            if segs is None:
+                continue
+            if not isinstance(segs, list):
+                raise ConfigError(
+                    f"{self._source_label()}: concat.{name} must be a YAML list, "
+                    f"not {type(segs).__name__}"
+                )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"

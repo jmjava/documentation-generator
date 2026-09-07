@@ -34,7 +34,12 @@ class ConcatBuilder:
         else:
             targets = concat_map
         for out_name, seg_ids in targets.items():
-            self._build_one(out_name, seg_ids)
+            if not isinstance(seg_ids, list):
+                raise ConcatError(
+                    f"[concat] {out_name}: segment list must be a YAML list, "
+                    f"not {type(seg_ids).__name__}"
+                )
+            self._build_one(out_name, [str(s) for s in seg_ids])
 
     def _build_one(self, out_name: str, seg_ids: list[str]) -> None:
         recordings_dir = self.config.recordings_dir

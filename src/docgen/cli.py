@@ -1325,8 +1325,10 @@ def pages(ctx: click.Context, force: bool) -> None:
     from docgen.pages import PagesGenerator
 
     cfg = _require_config(ctx)
-    gen = PagesGenerator(cfg)
-    gen.generate_all(force=force)
+    try:
+        PagesGenerator(cfg).generate_all(force=force)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command("generate-all")
