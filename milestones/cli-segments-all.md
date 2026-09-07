@@ -1,7 +1,7 @@
 # Milestone: CLI --all must use Config.segments_all
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#125](https://github.com/jmjava/documentation-generator/pull/125)  
 **Depends on:** `milestones/empty-segments-all.md` (PR #124)
 
 ## Problem
@@ -21,12 +21,12 @@ Both commands use ``cfg.segments_all``. Missing ``all`` uses
 
 ## Done when
 
-- [ ] ``--all`` with only ``default`` processes those ids.
-- [ ] ``--all`` with ``all: []`` still errors even if ``default`` has
+- [x] ``--all`` with only ``default`` processes those ids.
+- [x] ``--all`` with ``all: []`` still errors even if ``default`` has
       ids.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (717 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
