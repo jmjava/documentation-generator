@@ -818,3 +818,73 @@ def test_from_yaml_discovery_bools_allowed(tmp_path: Path) -> None:
     c = Config.from_yaml(p)
     assert c.raw["discovery"]["auto_visual_map"] is False
     assert c.raw["discovery"]["merge_hint_segments"] is True
+
+
+def test_from_yaml_list_silence_noise_db_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("timestamps:\n  silence_noise_db:\n    - -35\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="timestamps.silence_noise_db must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_min_silence_sec_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('timestamps:\n  min_silence_sec: "0.3"\n', encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="timestamps.min_silence_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_ffmpeg_timeout_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("compose:\n  ffmpeg_timeout_sec: true\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="compose.ffmpeg_timeout_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_min_font_size_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim:\n  min_font_size: true\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim.min_font_size must be a YAML number"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_max_drift_sec_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  max_drift_sec:\n    - 2.75\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="validation.max_drift_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_max_freeze_ratio_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  max_freeze_ratio:\n    - 0.25\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="validation.max_freeze_ratio must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_numeric_tunables_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "timestamps:\n  silence_noise_db: -40\n  min_silence_sec: 0.25\n"
+        "manim:\n  min_font_size: 16\n"
+        "compose:\n  ffmpeg_timeout_sec: 120\n"
+        "validation:\n  max_drift_sec: 3.0\n  max_freeze_ratio: 0.4\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.timestamps_config["silence_noise_db"] == -40
+    assert c.timestamps_config["min_silence_sec"] == 0.25
+    assert c.manim_min_font_size == 16
+    assert c.ffmpeg_timeout_sec == 120
+    assert c.max_drift_sec == 3.0
+    assert c.max_freeze_ratio == 0.4
