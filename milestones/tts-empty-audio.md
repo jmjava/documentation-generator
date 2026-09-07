@@ -1,7 +1,7 @@
 # Milestone: TTS must not succeed with empty audio or list-valued strings
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #99  
 **Depends on:** `milestones/av-sync-scene-spec.md` (PR #98),
 `milestones/manim-lint-config.md` (PR #82)
 
