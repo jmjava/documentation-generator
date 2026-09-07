@@ -147,7 +147,31 @@ def _load_timing(segment_key: str) -> list[dict]:
     if not timing_path.exists():
         return []
     data = json.loads(timing_path.read_text())
-    return data.get(segment_key, {}).get("segments", [])
+    if not isinstance(data, dict):
+        raise TypeError(
+            f"timing.json root must be a JSON object, not {type(data).__name__}"
+        )
+    block = data.get(segment_key)
+    if block is None:
+        return []
+    if not isinstance(block, dict):
+        raise TypeError(
+            f"timing.json[{segment_key!r}] must be a JSON object, not {type(block).__name__}"
+        )
+    segs = block.get("segments")
+    if segs is None:
+        return []
+    if not isinstance(segs, list):
+        raise TypeError(
+            f"timing.json[{segment_key!r}].segments must be a JSON array, not {type(segs).__name__}"
+        )
+    for i, item in enumerate(segs):
+        kind = "null" if item is None else type(item).__name__
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"timing.json[{segment_key!r}].segments[{i}] must be a JSON object, not {kind}"
+            )
+    return list(segs)
 
 
 def _load_timing_words(segment_key: str) -> list[dict]:
@@ -156,9 +180,31 @@ def _load_timing_words(segment_key: str) -> list[dict]:
     if not timing_path.exists():
         return []
     data = json.loads(timing_path.read_text())
-    block = data.get(segment_key) or {}
+    if not isinstance(data, dict):
+        raise TypeError(
+            f"timing.json root must be a JSON object, not {type(data).__name__}"
+        )
+    block = data.get(segment_key)
+    if block is None:
+        return []
+    if not isinstance(block, dict):
+        raise TypeError(
+            f"timing.json[{segment_key!r}] must be a JSON object, not {type(block).__name__}"
+        )
     words = block.get("words")
-    return list(words) if isinstance(words, list) else []
+    if words is None:
+        return []
+    if not isinstance(words, list):
+        raise TypeError(
+            f"timing.json[{segment_key!r}].words must be a JSON array, not {type(words).__name__}"
+        )
+    for i, item in enumerate(words):
+        kind = "null" if item is None else type(item).__name__
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"timing.json[{segment_key!r}].words[{i}] must be a JSON object, not {kind}"
+            )
+    return list(words)
 
 
 def _box(label, color, w=2.2, h=0.75, fs=18, subtitle="", shape="rounded"):
@@ -1248,6 +1294,10 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
             if timed is None:
                 return True
             return "not_past" not in _fn_arg_names(timed)
+        if name in {"_load_timing", "_load_timing_words"} and isinstance(
+            node, ast.FunctionDef
+        ) and node.name == name:
+            return "must be a JSON object" not in ast.unparse(node)
         if name == "_image" and isinstance(node, ast.FunctionDef) and node.name == "_image":
             return False
     return False
@@ -1267,7 +1317,7 @@ def _replace_top_level_def(text: str, node: ast.AST, new_src: str) -> str:
 
 
 def refresh_bootstrap_helpers(scenes_path: Path) -> list[str]:
-    """Replace stale ``_box`` / ``_arrow`` / ``_TimedScene`` with canonical bodies.
+    """Replace stale ``_box`` / ``_arrow`` / ``_TimedScene`` / timing loaders.
 
     Does not touch generated scene classes. Missing ``_image`` is still handled
     by :func:`ensure_image_helper`. Returns the names that were rewritten.
@@ -1287,7 +1337,12 @@ def refresh_bootstrap_helpers(scenes_path: Path) -> list[str]:
     # Replace from the bottom of the file so earlier line numbers stay valid.
     nodes: list[tuple[int, str, ast.AST]] = []
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name in {"_box", "_arrow"}:
+        if isinstance(node, ast.FunctionDef) and node.name in {
+            "_box",
+            "_arrow",
+            "_load_timing",
+            "_load_timing_words",
+        }:
             if helper_needs_refresh(tree, node.name):
                 nodes.append((node.lineno, node.name, node))
         elif isinstance(node, ast.ClassDef) and node.name == "_TimedScene":

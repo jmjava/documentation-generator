@@ -203,7 +203,7 @@ def helper_api_violations(scenes_text: str) -> list[str]:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             defined.add(node.name)
-    if not defined.intersection({"_box", "_arrow", "_TimedScene"}):
+    if not defined.intersection({"_box", "_arrow", "_TimedScene", "_load_timing", "_load_timing_words"}):
         return []
     issues: list[str] = []
     if "MANIM_FONT" not in scenes_text:
@@ -211,11 +211,11 @@ def helper_api_violations(scenes_text: str) -> list[str]:
             "font: scenes.py is missing MANIM_FONT — run `docgen scene-compile` "
             "to refresh helpers (Pango default fonts drift across machines)"
         )
-    for name in ("_box", "_arrow", "_TimedScene"):
+    for name in ("_box", "_arrow", "_TimedScene", "_load_timing", "_load_timing_words"):
         if name in defined and helper_needs_refresh(tree, name):
             issues.append(
-                f"helpers: {name} is stale (missing shape / edge-to-edge / not_past) — "
-                "run `docgen scene-compile` to refresh helper bodies"
+                f"helpers: {name} is stale (missing shape / edge-to-edge / not_past / "
+                "typed timing.json loaders) — run `docgen scene-compile` to refresh helper bodies"
             )
     return issues
 
