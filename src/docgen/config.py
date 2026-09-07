@@ -375,6 +375,10 @@ class Config:
             require_optional_yaml_string(
                 wiz["system_prompt"], label="wizard.system_prompt", source=src
             )
+        if wiz.get("default_guidance") is not None:
+            require_optional_yaml_string(
+                wiz["default_guidance"], label="wizard.default_guidance", source=src
+            )
         if wiz.get("llm_model") is not None:
             require_yaml_string(wiz["llm_model"], label="wizard.llm_model", source=src)
         ig = self._block("image_generation")
