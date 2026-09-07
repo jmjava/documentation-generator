@@ -1,7 +1,7 @@
 # Milestone: timing.json word/segment start and end must be numbers
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#134](https://github.com/jmjava/documentation-generator/pull/134)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127),
 `milestones/bootstrap-timing-helpers.md` (PR #130),
 `milestones/wizard-path-ref.md` (PR #133)
@@ -26,12 +26,12 @@ rows fail closed in ``load_bundle_timing`` and in Manim ``_load_timing`` /
 
 ## Done when
 
-- [ ] ``load_bundle_timing`` rejects missing / null / bool / string ``start`` / ``end``
-- [ ] Bootstrap loaders reject the same at Manim render
-- [ ] Stale object-only loaders are refreshed
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (helper change; meets baseline, no bump)
+- [x] ``load_bundle_timing`` rejects missing / null / bool / string ``start`` / ``end``
+- [x] Bootstrap loaders reject the same at Manim render
+- [x] Stale object-only loaders are refreshed
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (766 passed, 1 skipped)
+- [x] `docgen benchmark` (helper change; meets baseline, no bump)
 
 ## Out of scope
 
