@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[generation-model-strings.md](generation-model-strings.md)** —
-`narration_from_source` / `manim_scene_generation` model and prompt keys
-must be YAML strings at config load.
+**Active:** **[visual-map-field-strings.md](visual-map-field-strings.md)** —
+`visual_map` type/scene/source and `segment_names` values must be YAML
+strings at config load.
 
 **Shipped:**
+- **[generation-model-strings.md](generation-model-strings.md)** —
+  `narration_from_source` / `manim_scene_generation` model and prompt
+  keys must be YAML strings (#107).
 - **[manim-font-quality.md](manim-font-quality.md)** —
   `manim.font` / `quality` / `manim_path` must be YAML strings (#106).
 - **[ai-timestamp-strings.md](ai-timestamp-strings.md)** —

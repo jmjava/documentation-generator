@@ -219,8 +219,9 @@ class Config:
                 )
             for i, item in enumerate(segs):
                 require_yaml_string(item, label=f"concat.{name}[{i}]", source=src)
-        for key in self._block("segment_names"):
-            require_yaml_string(key, label="segment_names key", source=src)
+        for key, val in self._block("segment_names").items():
+            sid = require_yaml_string(key, label="segment_names key", source=src)
+            require_yaml_string(val, label=f"segment_names.{sid}", source=src)
         pages_segs = self._block("pages").get("segments")
         if pages_segs is not None and not isinstance(pages_segs, dict):
             raise ConfigError(
@@ -249,6 +250,13 @@ class Config:
                     f"{src}: visual_map.{sid_s} must be a YAML mapping, "
                     f"not {type(spec).__name__}"
                 )
+            for field in ("type", "scene", "class", "source"):
+                val = spec.get(field)
+                if val is not None and not isinstance(val, str):
+                    raise ConfigError(
+                        f"{src}: visual_map.{sid_s}.{field} must be a YAML string, "
+                        f"not {type(val).__name__}"
+                    )
         wiz = self._block("wizard")
         if wiz.get("exclude_patterns") is not None:
             string_list_block(

@@ -590,3 +590,44 @@ def test_from_yaml_list_scene_spec_system_prompt_raises(tmp_path: Path) -> None:
         match="manim_scene_generation.scene_spec_system_prompt must be a YAML string",
     ):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_visual_map_type_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('visual_map:\n  "01":\n    type:\n      - manim\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="visual_map.01.type must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_visual_map_scene_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'visual_map:\n  "01":\n    type: manim\n    scene:\n      - OverviewScene\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="visual_map.01.scene must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_visual_map_source_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'visual_map:\n  "01":\n    type: still\n    source:\n      - slide.png\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="visual_map.01.source must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_empty_visual_map_type_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('visual_map:\n  "01":\n    type: ""\n', encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.visual_map["01"]["type"] == ""
+
+
+def test_from_yaml_list_segment_names_value_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('segment_names:\n  "01":\n    - 01-intro\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="segment_names.01 must be a YAML string"):
+        Config.from_yaml(p)
