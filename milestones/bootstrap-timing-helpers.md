@@ -1,7 +1,7 @@
 # Milestone: Manim bootstrap timing loaders must type timing.json
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#130](https://github.com/jmjava/documentation-generator/pull/130)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127),
 `milestones/wizard-json-object.md` (PR #129)
 
@@ -29,12 +29,12 @@ the old bodies as stale.
 
 ## Done when
 
-- [ ] New helpers reject list stems and non-array ``words`` / ``segments``
-- [ ] ``refresh_bootstrap_helpers`` rewrites stale loaders
-- [ ] ``helper_api_violations`` flags stale loaders
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (helper change; meets baseline, no bump)
+- [x] New helpers reject list stems and non-array ``words`` / ``segments``
+- [x] ``refresh_bootstrap_helpers`` rewrites stale loaders
+- [x] ``helper_api_violations`` flags stale loaders
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (750 passed, 1 skipped)
+- [x] `docgen benchmark` (helper change; meets baseline, no bump)
 
 ## Out of scope
 
