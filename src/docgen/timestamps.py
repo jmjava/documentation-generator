@@ -32,10 +32,27 @@ def _json_kind(value: Any) -> str:
     return "null" if value is None else type(value).__name__
 
 
+def _json_number_kind(row: dict[str, Any], time_key: str) -> str | None:
+    """Return a kind label when *time_key* is not a JSON number; ``None`` when ok.
+
+    ``bool`` is a subclass of ``int``: ``start: true`` used to become ``1.0s``.
+    """
+    if time_key not in row:
+        return "missing"
+    value = row[time_key]
+    if value is None:
+        return "null"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return _json_kind(value)
+    return None
+
+
 def _require_timing_object_list(
     path_name: str, stem: str, payload: dict[str, Any], key: str
 ) -> None:
-    """Require ``words`` / ``segments`` (when present and not null) to be object arrays."""
+    """Require ``words`` / ``segments`` (when present and not null) to be object arrays
+    whose ``start`` / ``end`` are JSON numbers.
+    """
     if key not in payload:
         return
     value = payload[key]
@@ -51,15 +68,23 @@ def _require_timing_object_list(
                 f"{path_name}[{stem!r}].{key}[{i}] must be a JSON object, "
                 f"not {_json_kind(item)}"
             )
+        for time_key in ("start", "end"):
+            kind = _json_number_kind(item, time_key)
+            if kind is not None:
+                raise TimestampError(
+                    f"{path_name}[{stem!r}].{key}[{i}].{time_key} must be a JSON "
+                    f"number, not {kind}"
+                )
 
 
 def load_bundle_timing(config: "Config") -> dict[str, Any]:
     """Load ``animations/timing.json``.
 
     A missing file is ``{}``. Corrupt JSON, a non-object root, a non-object
-    per-stem value, or a present ``words`` / ``segments`` field that is not an
-    array of objects raises :class:`TimestampError` so compile/validate cannot
-    treat garbage as empty ``words``.
+    per-stem value, a present ``words`` / ``segments`` field that is not an
+    array of objects, or a row whose ``start`` / ``end`` is not a JSON number
+    raises :class:`TimestampError` so compile/validate cannot treat garbage as
+    empty ``words`` or wait until ``0.0``.
     """
     path = config.animations_dir / "timing.json"
     if not path.is_file():
@@ -168,7 +193,8 @@ class TimestampExtractor:
         Successful runs **merge** stems into the existing file (same as the
         wizard per-segment timestamps step) so extra keys not in
         ``segments.all`` are not wiped. Corrupt JSON, a non-object root, a
-        non-object stem, or a non-array ``words`` / ``segments`` field raises
+        non-object stem, a non-array ``words`` / ``segments`` field, or a row
+        whose ``start`` / ``end`` is not a JSON number raises
         :class:`TimestampError` and the file is not rewritten.
         """
         chosen = self.resolve_engine(engine)
