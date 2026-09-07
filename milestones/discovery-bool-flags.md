@@ -1,6 +1,6 @@
 # Milestone: discovery flags must be YAML booleans
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#114](https://github.com/jmjava/documentation-generator/pull/114)  
 **Depends on:** `milestones/wizard-default-guidance.md` (PR #113),
 `milestones/yaml-generate-mappings.md` (PR #91)

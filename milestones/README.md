@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[discovery-bool-flags.md](discovery-bool-flags.md)** —
-`discovery.auto_visual_map` / `merge_hint_segments` must be YAML
-booleans (`0` / `"false"` used to fail open).
+**Active:** **[numeric-config-tunables.md](numeric-config-tunables.md)** —
+timestamps / compose / manim / validation numeric tunables must be YAML
+numbers (`true` used to become `int` 1).
 
 **Shipped:**
+- **[discovery-bool-flags.md](discovery-bool-flags.md)** —
+  `discovery.auto_visual_map` / `merge_hint_segments` must be YAML
+  booleans (#114).
 - **[wizard-default-guidance.md](wizard-default-guidance.md)** —
   `wizard.default_guidance` must be a YAML string at config load (#113).
 - **[visual-map-sources.md](visual-map-sources.md)** —

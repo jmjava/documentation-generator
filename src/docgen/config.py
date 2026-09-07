@@ -101,6 +101,21 @@ def require_yaml_bool(value: Any, *, label: str, source: str) -> bool:
     )
 
 
+def require_yaml_number(value: Any, *, label: str, source: str) -> float:
+    """Require a YAML number so lists/strings/bools do not reach ``int()``/``float()``.
+
+    ``bool`` is a subclass of ``int``: ``compose.ffmpeg_timeout_sec: true``
+    used to become timeout ``1`` (second), and ``manim.min_font_size: true``
+    became font size ``1``.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(
+            f"{source}: {label} must be a YAML number, not {type(value).__name__} "
+            f"({value!r})"
+        )
+    return float(value)
+
+
 def require_yaml_string(value: Any, *, label: str, source: str) -> str:
     """Require a YAML string so unquoted ``01`` is not silently coerced to ``\"1\"``."""
     if isinstance(value, str):
@@ -413,6 +428,18 @@ class Config:
         ts = self._block("timestamps")
         if ts.get("engine") is not None:
             require_yaml_string(ts["engine"], label="timestamps.engine", source=src)
+        if ts.get("silence_noise_db") is not None:
+            require_yaml_number(
+                ts["silence_noise_db"],
+                label="timestamps.silence_noise_db",
+                source=src,
+            )
+        if ts.get("min_silence_sec") is not None:
+            require_yaml_number(
+                ts["min_silence_sec"],
+                label="timestamps.min_silence_sec",
+                source=src,
+            )
         if tts.get("language") is not None:
             require_yaml_string(tts["language"], label="tts.language", source=src)
         manim = self._block("manim")
@@ -422,6 +449,31 @@ class Config:
             require_yaml_string(manim["quality"], label="manim.quality", source=src)
         if manim.get("manim_path") is not None:
             require_yaml_string(manim["manim_path"], label="manim.manim_path", source=src)
+        if manim.get("min_font_size") is not None:
+            require_yaml_number(
+                manim["min_font_size"],
+                label="manim.min_font_size",
+                source=src,
+            )
+        compose = self._block("compose")
+        if compose.get("ffmpeg_timeout_sec") is not None:
+            require_yaml_number(
+                compose["ffmpeg_timeout_sec"],
+                label="compose.ffmpeg_timeout_sec",
+                source=src,
+            )
+        if validation.get("max_drift_sec") is not None:
+            require_yaml_number(
+                validation["max_drift_sec"],
+                label="validation.max_drift_sec",
+                source=src,
+            )
+        if validation.get("max_freeze_ratio") is not None:
+            require_yaml_number(
+                validation["max_freeze_ratio"],
+                label="validation.max_freeze_ratio",
+                source=src,
+            )
         nfs = self._block("narration_from_source")
         if nfs.get("model") is not None:
             require_yaml_string(
