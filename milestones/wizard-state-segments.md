@@ -1,6 +1,6 @@
 # Milestone: wizard state segments must be objects
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#128](https://github.com/jmjava/documentation-generator/pull/128)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127)
 

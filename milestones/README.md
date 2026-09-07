@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-state-segments.md](wizard-state-segments.md)** —
-wizard `.docgen-state.json` `segments` must be a mapping of objects.
+**Active:** **[wizard-json-object.md](wizard-json-object.md)** —
+wizard POST/PUT bodies must be JSON objects; bool fields must be booleans.
 
 **Shipped:**
+- **[wizard-state-segments.md](wizard-state-segments.md)** —
+  wizard `.docgen-state.json` `segments` must be a mapping of objects
+  (#128).
 - **[timing-inner-lists.md](timing-inner-lists.md)** —
   `timing.json` `words` / `segments` must be JSON arrays of objects
   (#127).

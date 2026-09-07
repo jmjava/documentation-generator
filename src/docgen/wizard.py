@@ -37,6 +37,32 @@ def require_state_segments(data: dict[str, Any], *, label: str) -> dict[str, Any
     return segs
 
 
+def request_json_object() -> dict[str, Any]:
+    """Return the JSON request body as an object. A missing body is ``{}``.
+
+    A JSON array, string, number, bool, or ``null`` raises :class:`WizardError`
+    so handlers cannot ``.get`` on a list.
+    """
+    raw = request.get_json(silent=True)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise WizardError(
+            f"request body must be a JSON object, not {_json_kind(raw)}"
+        )
+    return raw
+
+
+def require_json_bool(data: dict[str, Any], key: str, *, default: bool) -> bool:
+    """Return ``data[key]`` when present; reject non-bool JSON (including ``\"false\"``)."""
+    if key not in data or data[key] is None:
+        return default
+    val = data[key]
+    if not isinstance(val, bool):
+        raise WizardError(f"{key} must be a JSON boolean, not {_json_kind(val)}")
+    return val
+
+
 def session_payload(config: Any | None) -> dict[str, Any]:
     """GUI session: frozen shell vs pip CLI, and whether a bundle is attached."""
     from docgen.resources import is_frozen
@@ -477,7 +503,10 @@ def create_app(config: Any | None = None) -> Flask:
 
     @app.route("/api/open-bundle", methods=["POST"])
     def api_open_bundle():
-        data = request.get_json(silent=True) or {}
+        try:
+            data = request_json_object()
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         try:
             cfg = open_bundle_config(str(data.get("path") or ""))
         except ValueError as exc:
@@ -514,10 +543,13 @@ def create_app(config: Any | None = None) -> Flask:
         if blocked is not None:
             return blocked
         cfg = _cfg()
-        data = request.json or {}
+        try:
+            data = request_json_object()
+            with_manim = require_json_bool(data, "with_manim", default=False)
+            update_req = require_json_bool(data, "update_requirements", default=True)
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         ref = str(data.get("ref") or "main")
-        with_manim = bool(data.get("with_manim", False))
-        update_req = bool(data.get("update_requirements", True))
         bundle = cfg.base_dir if cfg else None
         try:
             result = update_docgen_install(
@@ -577,7 +609,10 @@ def create_app(config: Any | None = None) -> Flask:
         if blocked is not None:
             return blocked
         cfg = _cfg()
-        data = request.json or {}
+        try:
+            data = request_json_object()
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         source_paths: list[str] = list(data.get("source_paths") or [])
         guidance: str = data.get("guidance", "")
         segment_name: str = data.get("segment_name", "untitled")
@@ -686,12 +721,8 @@ def create_app(config: Any | None = None) -> Flask:
     def api_set_state():
         cfg = _cfg()
         base = cfg.base_dir if cfg else Path.cwd()
-        raw = request.get_json(silent=True)
-        if raw is None:
-            raw = {}
-        if not isinstance(raw, dict):
-            return jsonify({"error": "state must be a JSON object"}), 400
         try:
+            raw = request_json_object()
             segs = require_state_segments(raw, label="state")
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
@@ -792,12 +823,15 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
-        data = request.json or {}
+        try:
+            data = request_json_object()
+            also_manim = require_json_bool(data, "also_manim", default=True)
+            do_yaml = require_json_bool(data, "yaml_generate", default=True)
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         paths = data.get("paths")
         if not isinstance(paths, list):
             return jsonify({"error": "paths must be a list of repo-root-relative strings"}), 400
-        also_manim = data.get("also_manim", True)
-        do_yaml = data.get("yaml_generate", True)
 
         root = cfg.repo_root.resolve()
         clean: list[str] = []
@@ -879,7 +913,10 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
-        data = request.json or {}
+        try:
+            data = request_json_object()
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         text = data.get("text", "")
         seg_name = cfg.resolve_segment_name(segment_id)
         found = _find_asset(cfg.narration_dir, seg_name, segment_id, ".md")
@@ -1056,8 +1093,11 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         if not cfg:
             return jsonify({"error": "no config"}), 400
-        data = request.json or {}
-        llm_scene = bool(data.get("llm_scene_spec", False))
+        try:
+            data = request_json_object()
+            llm_scene = require_json_bool(data, "llm_scene_spec", default=False)
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
         from docgen.asset_graph import cascade_steps
 
         try:
