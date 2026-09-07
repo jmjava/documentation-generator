@@ -319,3 +319,17 @@ def test_from_yaml_list_manim_scene_generation_raises(tmp_path: Path) -> None:
     p.write_text("manim_scene_generation: []\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="manim_scene_generation must be a YAML mapping"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_wizard_exclude_patterns_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("wizard:\n  exclude_patterns: archive\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="wizard.exclude_patterns must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_wizard_scan_extensions_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("wizard:\n  scan_extensions: .md\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="wizard.scan_extensions must be a YAML list"):
+        Config.from_yaml(p)

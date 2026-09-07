@@ -94,6 +94,13 @@ def test_merge_defaults_idempotent_archive(tmp_path: Path) -> None:
     assert not any("archive" in x and "added" in x for x in ch)
 
 
+def test_merge_defaults_rejects_string_wizard_exclude_patterns(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {"wizard": {"exclude_patterns": "**/archive/**"}, "discovery": {"auto_visual_map": False}}
+    with pytest.raises(ValueError, match="wizard.exclude_patterns must be a YAML list"):
+        merge_defaults(raw, cfg)
+
+
 def test_merge_defaults_syncs_manim_segments_from_visual_map(tmp_path: Path) -> None:
     raw = {
         "repo_root": ".",

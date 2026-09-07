@@ -109,10 +109,14 @@ def merge_defaults(
         raw["wizard"] = wiz
     else:
         wiz = _require_yaml_mapping(wiz, label="wizard")
-    ex = wiz.setdefault("exclude_patterns", [])
-    if not isinstance(ex, list):
+    ex = wiz.get("exclude_patterns")
+    if ex is None:
         ex = []
         wiz["exclude_patterns"] = ex
+    elif not isinstance(ex, list):
+        raise ValueError(
+            f"wizard.exclude_patterns must be a YAML list, not {type(ex).__name__}"
+        )
     if ARCHIVE_EXCLUDE not in ex:
         ex.append(ARCHIVE_EXCLUDE)
         changes.append(f"wizard.exclude_patterns: added {ARCHIVE_EXCLUDE!r}")

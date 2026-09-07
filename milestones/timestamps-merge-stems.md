@@ -1,7 +1,7 @@
 # Milestone: CLI timestamps must merge stems, not wipe `timing.json`
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #93  
 **Depends on:** `milestones/timestamps-fail-closed.md` (PR #78),
 `milestones/timing-json-parse.md` (PR #89)
 
