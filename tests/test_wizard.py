@@ -133,7 +133,7 @@ def test_api_state_post_rejects_list_body(tmp_path):
     client, _cfg = _wizard_client(tmp_path)
     res = client.post("/api/state", json=["not", "an", "object"])
     assert res.status_code == 400
-    assert res.get_json()["error"] == "state must be a JSON object"
+    assert res.get_json()["error"] == "request body must be a JSON object"
 
 
 def test_api_state_post_rejects_list_segments(tmp_path):
@@ -156,6 +156,47 @@ def test_api_state_roundtrip_object_segments(tmp_path):
     assert segs.status_code == 200
     assert segs.get_json()["segments"][0]["status"] == "ready"
     assert (cfg.base_dir / ".docgen-state.json").is_file()
+
+
+def test_api_post_rejects_list_json_bodies(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    endpoints = (
+        ("POST", "/api/open-bundle"),
+        ("POST", "/api/tool/update"),
+        ("POST", "/api/generate-narration"),
+        ("POST", "/api/run-from/tts/01"),
+        ("PUT", "/api/narration/01"),
+        ("PUT", "/api/segments/01/focus"),
+    )
+    for method, path in endpoints:
+        res = client.open(path, method=method, json=["not", "an", "object"])
+        assert res.status_code == 400, path
+        assert res.get_json()["error"] == "request body must be a JSON object"
+
+
+def test_api_tool_update_rejects_string_with_manim(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post("/api/tool/update", json={"with_manim": "false"})
+    assert res.status_code == 400
+    assert "with_manim must be a JSON boolean" in res.get_json()["error"]
+
+
+def test_api_run_from_rejects_string_llm_scene_spec(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post("/api/run-from/tts/01", json={"llm_scene_spec": "true"})
+    assert res.status_code == 400
+    assert "llm_scene_spec must be a JSON boolean" in res.get_json()["error"]
+
+
+def test_api_put_focus_rejects_string_yaml_generate(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.put(
+        "/api/segments/01/focus",
+        json={"paths": ["README.md"], "yaml_generate": "true"},
+    )
+    assert res.status_code == 400
+    assert "yaml_generate must be a JSON boolean" in res.get_json()["error"]
+
 
 
 def test_api_file_rejects_prefix_escape(tmp_path):
