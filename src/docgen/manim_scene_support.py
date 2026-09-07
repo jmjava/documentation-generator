@@ -595,13 +595,12 @@ def format_pacing_schedule_markdown(segments: list[dict], pace_indices: list[int
 
 def _load_timing_words_from_cfg(cfg: "Config", seg_name: str) -> list[dict]:
     """Return the ``words`` list from ``animations/timing.json`` for ``seg_name``."""
-    timing_path = cfg.animations_dir / "timing.json"
-    if not timing_path.is_file():
-        return []
+    from docgen.timestamps import TimestampError, load_bundle_timing
+
     try:
-        data = json.loads(timing_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+        data = load_bundle_timing(cfg)
+    except TimestampError as exc:
+        raise SceneGenerationError(str(exc)) from exc
     block = data.get(seg_name)
     if not isinstance(block, dict):
         return []
@@ -1140,10 +1139,12 @@ def sync_audio_tail_waits_in_scenes(cfg: "Config") -> list[str]:
     timing_path = cfg.animations_dir / "timing.json"
     if not scenes_path.is_file() or not timing_path.is_file():
         return []
+    from docgen.timestamps import TimestampError, load_bundle_timing
+
     try:
-        timing = json.loads(timing_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+        timing = load_bundle_timing(cfg)
+    except TimestampError as exc:
+        raise SceneGenerationError(str(exc)) from exc
 
     text = scenes_path.read_text(encoding="utf-8")
     changes: list[str] = []
@@ -1350,11 +1351,14 @@ def _load_narration(cfg: "Config", seg_id: str, seg_name: str) -> str:
 
 
 def _load_timing_segments(cfg: "Config", seg_name: str) -> list[dict]:
-    timing_path = cfg.animations_dir / "timing.json"
-    if not timing_path.exists():
-        return []
+    from docgen.timestamps import TimestampError, load_bundle_timing
+
     try:
-        data = json.loads(timing_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = load_bundle_timing(cfg)
+    except TimestampError as exc:
+        raise SceneGenerationError(str(exc)) from exc
+    block = data.get(seg_name)
+    if not isinstance(block, dict):
         return []
-    return list(data.get(seg_name, {}).get("segments", []))
+    segs = block.get("segments")
+    return list(segs) if isinstance(segs, list) else []

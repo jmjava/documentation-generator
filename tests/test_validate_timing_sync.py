@@ -81,6 +81,13 @@ class TestTimingSync:
         assert not check.passed
         assert any("docgen timestamps" in d for d in check.details)
 
+    def test_corrupt_timing_json_fails_for_manim(self, cfg, monkeypatch) -> None:
+        (cfg.animations_dir / "timing.json").write_text("{not json", encoding="utf-8")
+        _patch_audio_duration(monkeypatch, 10.0)
+        check = Validator(cfg)._check_timing_sync("01")
+        assert not check.passed
+        assert any("not valid JSON" in d for d in check.details)
+
     def test_missing_timing_entry_skips_for_non_manim(self, tmp_path, monkeypatch) -> None:
         cfg = _bundle(tmp_path, visual_type="still")
         (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake mp3 bytes")
