@@ -115,6 +115,19 @@ def merge_defaults(
         ai["provider"] = "openai"
         changes.append("ai.provider: defaulted to openai")
 
+    ig = raw.get("image_generation")
+    if ig is None:
+        raw["image_generation"] = {
+            "model": "gpt-image-1",
+            "size": "1536x1024",
+        }
+        changes.append(
+            "image_generation: added model gpt-image-1 (Cursor/OpenAI Images; override with --model)"
+        )
+    elif isinstance(ig, dict) and not str(ig.get("model") or "").strip():
+        ig["model"] = "gpt-image-1"
+        changes.append("image_generation.model: defaulted to gpt-image-1")
+
     nf_existing = raw.get("narration_from_source")
     if nf_existing is None:
         ctx_paths: list[str] = []
@@ -851,8 +864,10 @@ def write_docgen_yaml(path: Path, raw: dict[str, Any], *, header: str | None = N
 
 
 def default_header(path: Path) -> str:
+    # Use path.name only — path.resolve() would bake Cloud cache paths into
+    # consumer git when yaml-generate runs with --repo.
     return (
-        f"# docgen.yaml — updated by docgen yaml-generate\n"
-        f"# Source: {path.resolve()}\n"
-        f"# Note: PyYAML rewrite drops comments; review diff in Git.\n\n"
+        "# docgen.yaml — updated by docgen yaml-generate\n"
+        f"# File: {path.name}\n"
+        "# Note: PyYAML rewrite drops comments; review diff in Git.\n\n"
     )
