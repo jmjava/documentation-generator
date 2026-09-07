@@ -299,6 +299,42 @@ class TestAvSyncCheckWiring:
         assert "unrelatedlongword" not in keys
         assert "anotherlongtoken" not in keys
 
+    def test_unreadable_scene_spec_fails_get_anchors(self, cfg) -> None:
+        from docgen.av_sync import AVSyncValidator
+
+        words = [
+            {"word": "unrelatedlongword", "start": 1.0, "end": 1.5},
+            {"word": "Flask", "start": 5.0, "end": 5.3},
+        ]
+        specs = cfg.animations_dir / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-x.scene.yaml").write_text("{not yaml", encoding="utf-8")
+        with pytest.raises(ValueError, match="Cannot load scene spec 01-x.scene.yaml"):
+            AVSyncValidator(cfg)._get_anchors("01", {"words": words})
+
+    def test_unreadable_scene_spec_fails_av_sync_check(self, cfg, monkeypatch) -> None:
+        words = [
+            {"word": "unrelatedlongword", "start": 1.0, "end": 1.5},
+            {"word": "Flask", "start": 5.0, "end": 5.3},
+        ]
+        (cfg.animations_dir / "timing.json").write_text(
+            json.dumps({"01-x": {"words": words}}), encoding="utf-8"
+        )
+        specs = cfg.animations_dir / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-x.scene.yaml").write_text("{not yaml", encoding="utf-8")
+        rec = cfg.recordings_dir / "01-x.mp4"
+        rec.write_bytes(b"not a video")
+
+        pt = types.ModuleType("pytesseract")
+        pt.get_tesseract_version = lambda: "5.0.0"
+        monkeypatch.setitem(sys.modules, "pytesseract", pt)
+
+        check = Validator(cfg)._check_av_sync("01", rec)
+        assert not check.passed
+        assert any("Cannot load scene spec" in d for d in check.details)
+        assert any("AV sync check error" in d for d in check.details)
+
 
 def test_narration_lint_fails_when_file_missing(tmp_path: Path) -> None:
     cfg = _bundle(tmp_path)

@@ -1,7 +1,7 @@
 # Milestone: layout check crashes must not skip as success
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #97  
 **Depends on:** `milestones/validate-fail-closed.md`,
 `milestones/manim-unsafe-unicode.md` (PR #96)
 

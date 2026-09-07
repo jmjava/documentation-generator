@@ -176,8 +176,10 @@ class AVSyncValidator:
         for path in paths:
             try:
                 spec = load_scene_spec(path)
-            except Exception:
-                continue
+            except Exception as exc:
+                # Fail closed: do not drop the spec and fall back to transcript
+                # nouns (that can still pass OCR with unrelated words).
+                raise ValueError(f"Cannot load scene spec {path.name}: {exc}") from exc
             for label, spoken_at in iter_paced_label_anchors(spec, word_dicts):
                 keyword = _ocr_keyword_from_label(label)
                 if not keyword or keyword.lower() in seen:
