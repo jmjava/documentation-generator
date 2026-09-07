@@ -137,6 +137,33 @@ def test_chat_completion_uses_remapped_model(
     assert captured["model"] == DEFAULT_GROK_CHAT_MODEL
 
 
+def test_openai_empty_chat_content_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+
+    class _Msg:
+        content = "   "
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+    fake = MagicMock()
+    fake.chat.completions.create.return_value = _Resp()
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with pytest.raises(AIError, match="no text content"):
+            chat_completion(
+                system_prompt="sys",
+                user_message="user",
+                model="gpt-4o-mini",
+                temperature=0.1,
+                cfg=_cfg(tmp_path, {}),
+            )
+
+
 def test_grok_tts_posts_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
     monkeypatch.setenv("XAI_API_KEY", "xai-test")

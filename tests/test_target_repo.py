@@ -40,7 +40,9 @@ def test_normalize_git_url() -> None:
 
 
 def test_repo_cache_name() -> None:
-    assert repo_cache_name("https://github.com/acme/app.git") == "app"
+    assert repo_cache_name("https://github.com/acme/app.git") == "acme-app"
+    assert repo_cache_name("https://github.com/other/app.git") == "other-app"
+    assert repo_cache_name("git@github.com:acme/app.git") == "acme-app"
 
 
 def test_resolve_repo_local_path(tmp_path: Path) -> None:
@@ -54,7 +56,7 @@ def test_resolve_repo_missing_local_raises(tmp_path: Path) -> None:
 
 
 def test_resolve_repo_reuses_existing_clone(tmp_path: Path) -> None:
-    dest = tmp_path / "cache" / "app"
+    dest = tmp_path / "cache" / "acme-app"
     dest.mkdir(parents=True)
     (dest / ".git").mkdir()
     out = resolve_repo("https://github.com/acme/app.git", cache_dir=tmp_path / "cache")
@@ -71,7 +73,7 @@ def test_resolve_repo_clones_when_missing(tmp_path: Path) -> None:
 
     with patch("docgen.target_repo.clone_git_repo", side_effect=_fake_clone):
         out = resolve_repo("acme/app", cache_dir=cache)
-    assert out == (cache / "app").resolve()
+    assert out == (cache / "acme-app").resolve()
     assert (out / "README.md").read_text(encoding="utf-8").endswith("acme/app.git")
 
 
@@ -222,3 +224,54 @@ def test_clone_git_repo_preserves_existing_git_config_slots(
     assert "ghs_secret_token" in env["GIT_CONFIG_KEY_1"]
     assert env["GIT_CONFIG_VALUE_1"] == "https://github.com/"
     assert "ghs_secret_token" not in " ".join(captured["cmd"])
+
+
+def test_missing_nested_path_is_not_github_shorthand(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "docs").mkdir()
+    monkeypatch.chdir(tmp_path)
+    with patch("docgen.target_repo.clone_git_repo") as clone:
+        with pytest.raises(TargetRepoError, match="does not exist"):
+            resolve_repo("docs/demos")
+        clone.assert_not_called()
+
+
+def test_cached_clone_resets_working_tree_to_fetch_head(tmp_path: Path) -> None:
+    import subprocess
+
+    dest = tmp_path / "cache" / "acme-app"
+    dest.mkdir(parents=True)
+    (dest / ".git").mkdir()
+    cmds: list[list[str]] = []
+
+    def _run(cmd, **kwargs):  # noqa: ANN003
+        cmds.append(list(cmd))
+        if "get-url" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "https://github.com/acme/app.git\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    with patch("docgen.target_repo.subprocess.run", side_effect=_run):
+        out = resolve_repo("https://github.com/acme/app.git", cache_dir=tmp_path / "cache")
+    assert out == dest.resolve()
+    assert any("fetch" in c for c in cmds)
+    assert any("FETCH_HEAD" in c for c in cmds)
+
+
+def test_cached_clone_rejects_different_origin(tmp_path: Path) -> None:
+    import subprocess
+
+    dest = tmp_path / "cache" / "acme-app"
+    dest.mkdir(parents=True)
+    (dest / ".git").mkdir()
+
+    def _run(cmd, **kwargs):  # noqa: ANN003
+        if "get-url" in cmd:
+            return subprocess.CompletedProcess(
+                cmd, 0, "https://github.com/other/app.git\n", ""
+            )
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    with patch("docgen.target_repo.subprocess.run", side_effect=_run):
+        with pytest.raises(TargetRepoError, match="is origin"):
+            resolve_repo("https://github.com/acme/app.git", cache_dir=tmp_path / "cache")

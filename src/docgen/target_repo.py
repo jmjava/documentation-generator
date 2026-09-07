@@ -74,10 +74,22 @@ def default_cache_dir() -> Path:
 
 
 def repo_cache_name(url: str) -> str:
-    name = url.rstrip("/").split("/")[-1]
-    if name.endswith(".git"):
-        name = name[: -len(".git")]
-    return name or "repo"
+    """Directory name for a cached clone.
+
+    Uses ``owner-repo`` so ``acme/app`` and ``other/app`` do not share a folder.
+    """
+    raw = url.rstrip("/")
+    if raw.endswith(".git"):
+        raw = raw[: -len(".git")]
+    if "://" in raw:
+        raw = raw.split("://", 1)[1]
+        raw = raw.split("/", 1)[-1] if "/" in raw else raw
+    elif ":" in raw:
+        raw = raw.split(":", 1)[-1]
+    bits = [p for p in raw.replace("\\", "/").split("/") if p]
+    if len(bits) >= 2:
+        return f"{bits[-2]}-{bits[-1]}"
+    return bits[-1] if bits else "repo"
 
 
 def find_bundle_yaml(repo_root: Path) -> Path | None:
@@ -127,7 +139,7 @@ def resolve_repo(
     local = Path(raw).expanduser()
     if local.exists():
         return local.resolve()
-    if not looks_like_git_url(raw):
+    if _looks_like_missing_local_path(raw, local) or not looks_like_git_url(raw):
         raise TargetRepoError(
             f"repo path does not exist: {local}. Pass a local checkout or a "
             "git URL / GitHub org/repo."
@@ -137,6 +149,12 @@ def resolve_repo(
     url = normalize_git_url(raw)
     dest = (cache_dir or default_cache_dir()) / repo_cache_name(url)
     if (dest / ".git").exists():
+        origin = _git_origin_url(dest)
+        if origin and _remote_urls_differ(origin, url):
+            raise TargetRepoError(
+                f"clone cache {dest} is origin {origin!r}, not {url!r}; "
+                "set DOCGEN_REPO_CACHE or remove the directory."
+            )
         _try_update_cached_clone(dest, url)
         return dest.resolve()
     if dest.exists() and any(dest.iterdir()):
@@ -146,6 +164,43 @@ def resolve_repo(
         )
     clone_git_repo(url, dest)
     return dest.resolve()
+
+
+def _looks_like_missing_local_path(raw: str, local: Path) -> bool:
+    """True when ``raw`` is a filesystem path, not GitHub ``org/repo`` shorthand.
+
+    ``docs/demos`` matches the shorthand regex, but if ``docs/`` exists it is a
+    typo'd local path — do not clone ``github.com/docs/demos``.
+    """
+    s = raw.strip()
+    if s.startswith(("./", "../", ".\\", "~")) or local.is_absolute():
+        return True
+    parent = local.parent
+    return parent != Path(".") and parent.exists()
+
+
+def _git_origin_url(dest: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(dest), "remote", "get-url", "origin"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    url = (result.stdout or "").strip()
+    return url or None
+
+
+def _remote_urls_differ(left: str, right: str) -> bool:
+    def _canon(url: str) -> str:
+        return normalize_git_url(url).rstrip("/").lower().removesuffix(".git")
+
+    return _canon(left) != _canon(right)
 
 
 def _git_auth_env(url: str) -> dict[str, str]:
@@ -171,15 +226,26 @@ def _git_auth_env(url: str) -> dict[str, str]:
 
 
 def _try_update_cached_clone(dest: Path, url: str) -> None:
-    """Best-effort ``git fetch`` so a reused ``DOCGEN_REPO_CACHE`` is not forever stale."""
+    """Best-effort fetch + hard reset so a reused cache is not stuck on an old SHA."""
+    env = _git_auth_env(url)
     try:
-        subprocess.run(
+        fetched = subprocess.run(
             ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin"],
             check=False,
             capture_output=True,
             text=True,
             timeout=120,
-            env=_git_auth_env(url),
+            env=env,
+        )
+        if fetched.returncode != 0:
+            return
+        subprocess.run(
+            ["git", "-C", str(dest), "reset", "--hard", "--quiet", "FETCH_HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return

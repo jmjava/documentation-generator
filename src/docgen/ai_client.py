@@ -361,7 +361,13 @@ def chat_completion(
         raise AIError(
             f"{_vendor(settings)} connection error: {exc} — re-run when connectivity is restored."
         ) from exc
-    return response.choices[0].message.content or ""
+    try:
+        text = (response.choices[0].message.content or "").strip()
+    except (IndexError, AttributeError):
+        text = ""
+    if not text:
+        raise AIError(f"{_vendor(settings)} chat returned no text content.")
+    return text
 
 
 def synthesize_speech(
@@ -671,6 +677,11 @@ def _http_with_retries(
             if exc.code in _RETRYABLE_HTTP_CODES and attempt < _MAX_HTTP_ATTEMPTS - 1:
                 retry_after = exc.headers.get("Retry-After") if exc.headers else None
                 delay = _retry_delay_sec(retry_after, attempt)
+                try:
+                    if exc.fp is not None:
+                        exc.fp.close()
+                except OSError:
+                    pass
                 time.sleep(delay)
                 continue
             detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
