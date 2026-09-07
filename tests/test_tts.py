@@ -119,6 +119,18 @@ def test_tts_finds_named_stem_not_substring_id(tmp_path: Path) -> None:
     TTSGenerator(cfg).generate(segment="01", dry_run=True)
 
 
+def test_tts_empty_segments_all_raises(tmp_path: Path) -> None:
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": [], "default": []},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(p)
+    with pytest.raises(TTSError, match="segments.all is empty"):
+        TTSGenerator(cfg).generate(dry_run=True)
+
+
 def test_probe_duration_returns_none_for_missing_file(tmp_path):
     result = _probe_duration(tmp_path / "nonexistent.mp3")
     assert result is None

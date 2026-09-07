@@ -175,3 +175,34 @@ def test_cli_generate_all_does_not_swallow_systemexit(
         ],
     )
     assert result.exit_code == 1
+
+
+def test_cli_invalid_yaml_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segments: [\n  unclosed\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(p), "lint"])
+    assert result.exit_code != 0
+    combined = result.output + result.stderr
+    assert "valid YAML" in combined
+    assert "Traceback" not in combined
+    assert not isinstance(result.exception, yaml.YAMLError)
+
+
+def test_cli_list_root_yaml_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text("- not a mapping\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(p), "yaml-generate", "--dry-run"])
+    assert result.exit_code != 0
+    combined = result.output + result.stderr
+    assert "mapping" in combined
+    assert "AttributeError" not in combined

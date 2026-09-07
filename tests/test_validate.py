@@ -446,6 +446,20 @@ class Demo(Scene):
         assert check["passed"]
         assert "skipped" in " ".join(check["details"]).lower()
 
+    def test_missing_scenes_py_fails(self, cfg_dir):
+        config = self._configure_manim(
+            cfg_dir,
+            "from manim import *\n\nclass Demo(Scene):\n    def construct(self):\n        pass\n",
+        )
+        (cfg_dir / "animations" / "scenes.py").unlink()
+        v = Validator(config)
+        report = v.validate_segment("01")
+        check = next(c for c in report["checks"] if c["name"] == "manim_scene_lint")
+        assert not check["passed"]
+        details = " ".join(check["details"])
+        assert "scenes.py" in details
+        assert "missing" in details.lower()
+
     def test_flags_small_font_size(self, cfg_dir):
         """Font sizes below the configured minimum should be flagged."""
         config = self._configure_manim(

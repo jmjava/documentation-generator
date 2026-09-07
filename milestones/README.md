@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-narration-paths.md](wizard-narration-paths.md)** — wizard
-generate-narration must not drop missing sources; timestamps must not wipe
-corrupt `timing.json`.
+**Active:** **[manim-lint-config.md](manim-lint-config.md)** — missing
+`scenes.py` must fail `validate`; invalid `docgen.yaml` must not traceback
+or be rewritten as `{}`; TTS empty-all must not succeed.
 
 **Shipped:**
+- **[wizard-narration-paths.md](wizard-narration-paths.md)** — wizard
+  generate-narration must not drop missing sources; timestamps must not wipe
+  corrupt `timing.json` (#81).
 - **[validate-fail-closed.md](validate-fail-closed.md)** — validate
   narration/timing skips, empty Manim lists, missing context paths.
 - **[scene-compile-pace.md](scene-compile-pace.md)** — paced `scene-compile`

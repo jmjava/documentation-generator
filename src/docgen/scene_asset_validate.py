@@ -282,8 +282,16 @@ def scene_asset_violations_for_segment(cfg: "Config", seg_id: str) -> list[str]:
 
         try:
             data = json.loads(timing_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            data = {}
+        except (OSError, json.JSONDecodeError) as exc:
+            issues.append(
+                f"timing.json is not valid JSON ({exc}) — run `docgen timestamps`"
+            )
+            data = None
+        if data is not None and not isinstance(data, dict):
+            issues.append(
+                f"timing.json root must be a JSON object, not {type(data).__name__}"
+            )
+            data = None
         raw_block = data.get(stem) if isinstance(data, dict) else None
         if isinstance(raw_block, dict):
             block = raw_block

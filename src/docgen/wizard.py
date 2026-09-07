@@ -780,19 +780,15 @@ def create_app(config: Any | None = None) -> Flask:
             try:
                 import copy
 
-                import yaml as _yaml
-
+                from docgen.config import Config, load_yaml_mapping
                 from docgen.yaml_generate import default_header, merge_defaults, write_docgen_yaml
 
-                raw = _yaml.safe_load(cfg.yaml_path.read_text(encoding="utf-8")) or {}
-                if not isinstance(raw, dict):
-                    raw = {}
+                raw = load_yaml_mapping(cfg.yaml_path)
                 # Work on a deep copy so a failed merge never leaves half-mutated state
                 # in memory before we rewrite the file.
                 working = copy.deepcopy(raw)
                 yaml_changes.extend(merge_defaults(working, cfg))
                 write_docgen_yaml(cfg.yaml_path, working, header=default_header(cfg.yaml_path))
-                from docgen.config import Config
                 app.config["DOCGEN"] = Config.from_yaml(cfg.yaml_path)
             except Exception as exc:
                 return jsonify({
