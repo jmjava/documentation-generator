@@ -155,6 +155,16 @@ def test_segments_in_config_reads_all_alias(tmp_path: Path) -> None:
     assert segments_in_config(raw) == {"03", "04"}
 
 
+def test_segments_in_config_empty_all_does_not_fall_through_to_default() -> None:
+    raw = {"segments": {"all": [], "default": ["01", "02"]}}
+    assert segments_in_config(raw) == set()
+
+
+def test_segments_in_config_missing_all_uses_default() -> None:
+    raw = {"segments": {"default": ["01", "02"]}}
+    assert segments_in_config(raw) == {"01", "02"}
+
+
 def test_manim_scene_class_names_in_order(tmp_path: Path) -> None:
     ad = tmp_path / "animations"
     ad.mkdir()
@@ -210,6 +220,51 @@ def test_discover_visual_map_manim_classes_in_order(tmp_path: Path) -> None:
     assert raw["visual_map"]["01"]["type"] == "manim"
     assert raw["visual_map"]["01"]["scene"] == "FirstScene"
     assert raw["visual_map"]["02"]["scene"] == "SecondScene"
+
+
+def test_discover_visual_map_empty_all_does_not_use_default(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class IntroScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": [], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "visual_map": {},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    assert discover_visual_map(raw, cfg) == []
+    assert raw["visual_map"] == {}
+
+
+def test_merge_defaults_empty_all_does_not_sync_manim_scenes_from_default(
+    tmp_path: Path,
+) -> None:
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": [], "default": ["01"]},
+        "visual_map": {"01": {"type": "manim", "scene": "IntroScene"}},
+        "manim": {"scenes": ["IntroScene"]},
+    }
+    (tmp_path / "animations").mkdir()
+    cfg = _cfg(tmp_path, raw)
+    merge_defaults(raw, cfg)
+    assert raw["manim"]["scenes"] == []
 
 
 def test_discover_visual_map_manim_assigns_only_when_classes_available(tmp_path: Path) -> None:

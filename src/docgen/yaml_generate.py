@@ -99,10 +99,26 @@ def segments_in_config(raw: dict[str, Any]) -> set[str]:
     seg = raw.get("segments") or {}
     if not isinstance(seg, dict):
         return set()
-    all_ids = seg.get("all") or seg.get("default") or []
-    if not isinstance(all_ids, list):
-        return set()
+    all_ids = _segment_all_ids(seg)
     return {str(x) for x in all_ids}
+
+
+def _segment_all_ids(seg: dict[str, Any]) -> list[Any]:
+    """Return ``segments.all`` when the key is present (including an empty list).
+
+    Fall back to ``segments.default`` only when ``all`` is missing or null.
+    ``all: [] or default`` used to treat an explicit empty ``all`` as missing
+    and rewrite ``visual_map`` / ``manim.scenes`` from ``default``.
+    """
+    if "all" in seg and seg.get("all") is not None:
+        raw_ids = seg.get("all")
+    else:
+        raw_ids = seg.get("default")
+    if raw_ids is None:
+        return []
+    if not isinstance(raw_ids, list):
+        return []
+    return list(raw_ids)
 
 
 def narration_not_in_segments(raw: dict[str, Any], narration_dir: Path) -> list[tuple[str, str]]:
@@ -760,8 +776,8 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     if seg_block is None:
         return []
     seg_block = _require_yaml_mapping(seg_block, label="segments")
-    all_ids = seg_block.get("all") or seg_block.get("default") or []
-    if not isinstance(all_ids, list) or not all_ids:
+    all_ids = _segment_all_ids(seg_block)
+    if not all_ids:
         return []
 
     scenes_py = cfg.animations_dir / "scenes.py"
@@ -855,9 +871,7 @@ def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
         all_ids: list[Any] = []
     else:
         seg_block = _require_yaml_mapping(seg_block, label="segments")
-        all_ids = seg_block.get("all") or seg_block.get("default") or []
-        if not isinstance(all_ids, list):
-            all_ids = []
+        all_ids = _segment_all_ids(seg_block)
     scenes: list[str] = []
     seen: set[str] = set()
     for sid in all_ids:
