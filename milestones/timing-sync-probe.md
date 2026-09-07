@@ -1,7 +1,7 @@
 # Milestone: timing_sync must fail when the mp3 duration cannot be probed
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#136](https://github.com/jmjava/documentation-generator/pull/136)  
 **Depends on:** `milestones/ffprobe-returncode.md` (PR #135)
 
 ## Problem
@@ -23,11 +23,11 @@ If audio is present (not an LFS pointer) and a timing block has
 
 ## Done when
 
-- [ ] Probe ``None`` fails ``timing_sync`` (does not skip as passed)
-- [ ] Missing audio still skips
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Probe ``None`` fails ``timing_sync`` (does not skip as passed)
+- [x] Missing audio still skips
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (771 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
