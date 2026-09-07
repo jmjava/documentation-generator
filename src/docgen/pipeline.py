@@ -90,8 +90,14 @@ class Pipeline:
         print("\n=== Stage: Compose ===")
         from docgen.compose import ComposeError, Composer
         composer = Composer(self.config)
+        mapped = self._mapped_visual_ids()
+        if self.config.segments_all and not mapped:
+            raise ComposeError(
+                "no visual_map entries for segments.all — add Manim/still/image "
+                "wiring (docgen yaml-generate) before compose."
+            )
         try:
-            composer.compose_segments(self.config.segments_all)
+            composed = composer.compose_segments(self.config.segments_all)
         except ComposeError as exc:
             if self._should_retry_manim(exc, skip_manim, retry_manim_on_freeze):
                 print("\n=== Compose FREEZE GUARD detected; retrying Manim + compose once ===")
@@ -102,15 +108,18 @@ class Pipeline:
                     from docgen.manim_runner import ManimRunner
                     ManimRunner(self.config).render(scenes=scene_list)
                 print("\n=== Stage: Compose (retry) ===")
-                composer.compose_segments(self.config.segments_all)
+                composed = composer.compose_segments(self.config.segments_all)
             else:
                 raise
+        if composed < len(mapped):
+            raise ComposeError(
+                f"compose produced {composed}/{len(mapped)} mapped segment videos "
+                "(missing audio or visuals). Run TTS / Manim first, or fix visual_map."
+            )
 
         print("\n=== Stage: Validate ===")
         from docgen.validate import Validator
-        validator = Validator(self.config)
-        reports = validator.run_all()
-        validator.print_report(reports)
+        Validator(self.config).run_pre_push()
 
         print("\n=== Stage: Concat ===")
         from docgen.concat import ConcatBuilder
@@ -118,7 +127,7 @@ class Pipeline:
 
         print("\n=== Stage: Pages ===")
         from docgen.pages import PagesGenerator
-        PagesGenerator(self.config).generate_all(force=True)
+        PagesGenerator(self.config).generate_all(force=True, force_workflow=False)
 
         print("\n=== Pipeline complete ===")
 
@@ -139,6 +148,15 @@ class Pipeline:
                 f"`docgen scene-compile --retime` before Manim:\n  {shown}{more}"
             )
         print("[pipeline] scene assets ok (stuck / overlap / font / compile sync)")
+
+    def _mapped_visual_ids(self) -> list[str]:
+        """Segment ids in ``segments.all`` that have a non-empty ``visual_map`` type."""
+        ids: list[str] = []
+        for seg_id in self.config.segments_all:
+            vm = self.config.visual_map.get(seg_id)
+            if isinstance(vm, dict) and str(vm.get("type", "")).strip():
+                ids.append(str(seg_id))
+        return ids
 
     def _manim_segment_ids(self) -> list[str]:
         ids: list[str] = []

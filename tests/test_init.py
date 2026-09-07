@@ -100,6 +100,7 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     bundle_readme = (tmp_path / "demos" / "README.md").read_text(encoding="utf-8")
     assert "external" in bundle_readme.lower()
     assert "pip install -r requirements-docgen.txt" in bundle_readme
+    assert "cd demos" in bundle_readme
 
     cfg_text = (tmp_path / "demos" / "docgen.yaml").read_text()
     cfg = yaml.safe_load(cfg_text.split("\n\n", 1)[-1])
@@ -129,6 +130,19 @@ def test_generate_files_preserves_existing_narration(tmp_path: Path) -> None:
     generate_files(plan)
 
     assert (narr / "01-intro.md").read_text() == "My custom narration."
+
+
+def test_bundle_readme_cd_is_relative_to_repo_root(tmp_path: Path) -> None:
+    plan = InitPlan(
+        project_name="test",
+        demo_dir=tmp_path / "docs" / "demos",
+        repo_root=tmp_path,
+        segments=[{"id": "01", "name": "01-intro"}],
+    )
+    generate_files(plan)
+    readme = (tmp_path / "docs" / "demos" / "README.md").read_text(encoding="utf-8")
+    assert "cd docs/demos" in readme
+    assert "cd demos\n" not in readme
 
 
 def test_generate_files_scripts_executable(tmp_path: Path) -> None:

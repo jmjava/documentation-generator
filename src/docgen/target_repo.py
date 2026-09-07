@@ -15,6 +15,38 @@ from pathlib import Path
 
 _GIT_URL_PREFIX = re.compile(r"^(?:https?://|git@|ssh://|git://)", re.I)
 _GITHUB_SHORTHAND = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+# First path segment of a missing relative path that should not be cloned as
+# GitHub ``org/repo`` shorthand (``docs/demos`` when ``docs/`` exists).
+_LOCAL_PATH_FIRST_SEGMENTS = frozenset(
+    {
+        "docs",
+        "src",
+        "tests",
+        "test",
+        "dist",
+        "build",
+        "lib",
+        "app",
+        "packages",
+        "pkg",
+        "bin",
+        "scripts",
+        "hints",
+        "narration",
+        "audio",
+        "animations",
+        "recordings",
+        "demos",
+        "tmp",
+        "temp",
+        "out",
+        "output",
+        "vendor",
+        "node_modules",
+        "workspace",
+    }
+)
+
 _SKIP_DIR_NAMES = frozenset(
     {
         ".git",
@@ -193,13 +225,20 @@ def _looks_like_missing_local_path(raw: str, local: Path) -> bool:
     """True when ``raw`` is a filesystem path, not GitHub ``org/repo`` shorthand.
 
     ``docs/demos`` matches the shorthand regex, but if ``docs/`` exists it is a
-    typo'd local path — do not clone ``github.com/docs/demos``.
+    typo'd local path — do not clone ``github.com/docs/demos``. A local directory
+    named like a GitHub org (``acme/`` next to ``acme/app``) must still clone.
     """
     s = raw.strip()
     if s.startswith(("./", "../", ".\\", "~")) or local.is_absolute():
         return True
+    if not looks_like_git_url(s):
+        return True
     parent = local.parent
-    return parent != Path(".") and parent.exists()
+    if parent == Path(".") or not parent.exists():
+        return False
+    parts = Path(s.replace("\\", "/")).parts
+    first = parts[0].lower() if parts else ""
+    return first in _LOCAL_PATH_FIRST_SEGMENTS
 
 
 def _git_origin_url(dest: Path) -> str | None:

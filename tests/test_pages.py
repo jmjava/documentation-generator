@@ -35,6 +35,7 @@ def _write_pages_cfg(
 ) -> Config:
     seg_all = segments_all if segments_all is not None else []
     cfg = {
+        "repo_root": ".",
         "dirs": {
             "animations": "animations",
             "audio": "audio",
@@ -112,6 +113,22 @@ def test_find_recording_prefers_segment_name_stem(tmp_path: Path) -> None:
     found = PagesGenerator(cfg)._find_recording("18")
     assert found is not None
     assert found.name == "18-roadmap-forward.mp4"
+
+
+def test_generate_all_does_not_overwrite_pages_workflow_when_force_workflow_false(
+    tmp_path: Path,
+) -> None:
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {"title": "Demos", "demos_subdir": "demos", "docs_dir": "docs"},
+    )
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    existing = wf / "pages.yml"
+    existing.write_text("# custom workflow\n", encoding="utf-8")
+    PagesGenerator(cfg).generate_all(force=True, force_workflow=False)
+    assert existing.read_text(encoding="utf-8") == "# custom workflow\n"
+    assert (tmp_path / "docs" / "index.html").is_file()
 
 
 def test_index_html_segment_titles_escape_user_strings(tmp_path: Path) -> None:

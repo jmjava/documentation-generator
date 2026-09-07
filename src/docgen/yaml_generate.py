@@ -5,9 +5,10 @@ This does **not** replace an entire ``docgen.yaml`` in one shot. It:
 1. **Merges safe defaults** into an in-memory dict (wizard archive excludes, optional
    skeleton blocks for ``narration_from_source`` / ``manim_scene_generation``).
 2. **Discovers** ``visual_map`` from the bundle tree (Manim ``*Scene`` classes from
-   ``animations/scenes.py`` in file order—**only when those assets exist**). Segments
-   stay **unmapped** until a scene class is available (no invented ``SceneNN``
-   placeholders), unless ``discovery.auto_visual_map: false``.
+   ``animations/scenes.py`` in file order, assigned to manim-eligible segments only—
+   still/recording/mixed/image rows are preserved). Segments stay **unmapped** until a
+   scene class is available (no invented ``SceneNN`` placeholders), unless
+   ``discovery.auto_visual_map: false``.
 3. **Syncs** ``manim.scenes`` and ``manim_scene_generation.segments`` from ``visual_map``.
 4. **Reports gaps** between ``narration/*.md`` and ``segments.all`` (opt-in list).
 5. **Declares segments** from maintainer ``hints/*.md`` files that include YAML front matter
@@ -631,11 +632,21 @@ def manim_scene_class_names_in_order(scenes_py: Path) -> list[str]:
     return [n for n in _MANIM_CLASS_RE.findall(text) if not n.startswith("_")]
 
 
-def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
-    """Rebuild ``visual_map`` from ``animations/scenes.py`` Manim classes (file order).
+def _visual_entry_type(spec: Any) -> str:
+    if not isinstance(spec, dict):
+        return ""
+    return str(spec.get("type") or "").strip().lower()
 
-    A segment is only wired when a ``class …Scene`` remains for it; otherwise it is
-    **left out** so greenfield repos are not given fake wiring.
+
+def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
+    """Fill manim ``visual_map`` slots from ``animations/scenes.py`` (file order).
+
+    Non-manim rows (still / recording / mixed / image) are **preserved**. Scene
+    classes are assigned only to manim-eligible segments so a still cannot be
+    retargeted by positional zip with ``segments.all``.
+
+    A manim-eligible segment is only wired when a ``class …Scene`` remains for
+    it; otherwise it is **left out** so greenfield repos are not given fake wiring.
 
     Set ``discovery: { auto_visual_map: false }`` to skip and keep existing ``visual_map``.
     """
@@ -651,12 +662,40 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     scenes_py = cfg.animations_dir / "scenes.py"
     manim_classes = manim_scene_class_names_in_order(scenes_py)
 
+    existing = raw.get("visual_map")
+    if not isinstance(existing, dict):
+        existing = {}
+
     new_vm: dict[str, Any] = {}
-    for idx, seg_id in enumerate(all_ids):
+    leftover_non_manim: dict[str, Any] = {}
+    for key, spec in existing.items():
+        if _visual_entry_type(spec) not in ("", "manim"):
+            leftover_non_manim[str(key)] = spec
+
+    eligible: list[str] = []
+    for seg_id in all_ids:
+        sid = str(seg_id)
+        spec = existing.get(sid, existing.get(seg_id))
+        vt = _visual_entry_type(spec)
+        if vt and vt != "manim":
+            new_vm[sid] = spec
+            leftover_non_manim.pop(sid, None)
+            continue
+        eligible.append(sid)
+
+    for idx, sid in enumerate(eligible):
         if idx >= len(manim_classes):
             break
         scene = manim_classes[idx]
-        new_vm[str(seg_id)] = {"type": "manim", "scene": scene, "source": f"{scene}.mp4"}
+        prev = existing.get(sid)
+        row: dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
+        row["type"] = "manim"
+        row["scene"] = scene
+        row["source"] = f"{scene}.mp4"
+        new_vm[sid] = row
+
+    for key, spec in leftover_non_manim.items():
+        new_vm.setdefault(key, spec)
 
     vm = raw.get("visual_map")
     if not isinstance(vm, dict):
@@ -716,7 +755,11 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
     if not isinstance(mg, dict):
         return []
 
-    synced: dict[str, dict[str, str]] = {}
+    old = mg.get("segments")
+    if not isinstance(old, dict):
+        old = {}
+
+    synced: dict[str, dict[str, Any]] = {}
     for seg_id, spec in sorted(vm.items(), key=lambda x: str(x[0])):
         if not isinstance(spec, dict):
             continue
@@ -726,9 +769,12 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
         if not cn_raw:
             continue
         cn = str(cn_raw).strip()
-        synced[str(seg_id)] = {"class_name": str(cn)}
+        sid = str(seg_id)
+        prev = old.get(sid, old.get(seg_id))
+        row: dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
+        row["class_name"] = str(cn)
+        synced[sid] = row
 
-    old = mg.get("segments")
     mg["segments"] = synced
     if old != synced:
         return ["manim_scene_generation.segments: synced from visual_map (manim entries)"]

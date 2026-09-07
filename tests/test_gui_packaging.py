@@ -209,6 +209,15 @@ def test_open_bundle_config_helper(tmp_path: Path) -> None:
         open_bundle_config("")
 
 
+def test_open_bundle_loads_env_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("DOCGEN_TEST_BUNDLE_KEY", raising=False)
+    (tmp_path / ".env").write_text("DOCGEN_TEST_BUNDLE_KEY=from-file\n", encoding="utf-8")
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text("env_file: .env\nsegments:\n  default: ['01']\n", encoding="utf-8")
+    open_bundle_config(str(tmp_path))
+    assert os.environ["DOCGEN_TEST_BUNDLE_KEY"] == "from-file"
+
+
 def test_frozen_blocks_pipeline(monkeypatch) -> None:
     app = create_app(None)
     monkeypatch.setattr("docgen.resources.is_frozen", lambda: True)

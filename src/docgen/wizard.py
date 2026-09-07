@@ -58,6 +58,7 @@ def _frozen_pipeline_response():
 
 def open_bundle_config(raw_path: str):
     """Load ``docgen.yaml`` from a file or bundle directory path."""
+    from docgen.cli import _load_env
     from docgen.config import Config
 
     text = (raw_path or "").strip()
@@ -68,7 +69,9 @@ def open_bundle_config(raw_path: str):
         path = path / "docgen.yaml"
     if not path.is_file():
         raise ValueError(f"no docgen.yaml at {path}")
-    return Config.from_yaml(path)
+    cfg = Config.from_yaml(path)
+    _load_env(cfg)
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +108,14 @@ def _is_ignored(rel_path: str, gitignore: list[str], extra_excludes: list[str]) 
     return False
 
 
-# Default extensions the wizard can offer as narration / scene focus context.
+def _is_under_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 DEFAULT_SCAN_EXTENSIONS = (
     ".md",
     ".py",
@@ -213,9 +223,13 @@ def _state_path(base_dir: Path) -> Path:
 
 def load_state(base_dir: Path) -> dict[str, Any]:
     p = _state_path(base_dir)
-    if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
-    return {"segments": {}}
+    if not p.exists():
+        return {"segments": {}}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return {"segments": {}}
+    return data if isinstance(data, dict) else {"segments": {}}
 
 
 def save_state(base_dir: Path, state: dict[str, Any]) -> None:
@@ -353,7 +367,10 @@ def _strip_segment_prefix(segment_name: str) -> str:
 
 
 def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path | None:
-    """Find an asset file by segment name, then segment ID prefix, then glob."""
+    """Find an asset file by segment name, then ``{id}{ext}``, then ``{id}-*{ext}``.
+
+    Does not use ``*{id}*`` (that matches ``101`` when looking up ``01``).
+    """
     if not directory.exists():
         return None
     exact = directory / f"{seg_name}{ext}"
@@ -362,11 +379,8 @@ def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path |
     exact_id = directory / f"{seg_id}{ext}"
     if exact_id.exists():
         return exact_id
-    for f in directory.glob(f"{seg_id}-*{ext}"):
-        return f
-    for f in directory.glob(f"{seg_id}*{ext}"):
-        return f
-    return None
+    prefixed = sorted(p for p in directory.glob(f"{seg_id}-*{ext}") if p.is_file())
+    return prefixed[0] if prefixed else None
 
 
 def create_app(config: Any | None = None) -> Flask:
@@ -516,8 +530,8 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         root = cfg.repo_root if cfg else Path.cwd()
         rel = request.args.get("path", "")
-        fpath = root / rel
-        if not fpath.exists() or not str(fpath.resolve()).startswith(str(root.resolve())):
+        fpath = (root / rel).resolve()
+        if not fpath.is_file() or not _is_under_root(fpath, root):
             return jsonify({"error": "not found"}), 404
         return jsonify({"content": fpath.read_text(encoding="utf-8", errors="replace")})
 

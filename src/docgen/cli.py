@@ -82,6 +82,16 @@ def _load_env(cfg: Config | None) -> None:
         os.environ.setdefault(k, v)
 
 
+def _require_config(ctx: click.Context) -> Config:
+    cfg = (ctx.obj or {}).get("config")
+    if cfg is None:
+        raise click.ClickException(
+            "No docgen.yaml found. Pass `--config PATH`, `--repo PATH_OR_URL`, "
+            "or `cd` to your demos bundle directory."
+        )
+    return cfg
+
+
 def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
         return
@@ -375,7 +385,7 @@ def wizard(ctx: click.Context, port: int) -> None:
     """Launch the production wizard (local web GUI)."""
     from docgen.wizard import create_app
 
-    cfg = ctx.obj["config"]
+    cfg = (ctx.obj or {}).get("config")
     app = create_app(cfg)
     click.echo(f"Starting docgen wizard on http://localhost:{port}")
     app.run(host="127.0.0.1", port=port, debug=False)
@@ -387,13 +397,16 @@ def wizard(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
     """Generate TTS audio from narration markdown."""
-    from docgen.tts import TTSGenerator
+    from docgen.tts import TTSError, TTSGenerator
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     if not dry_run:
         _echo_ai_status(cfg)
     gen = TTSGenerator(cfg)
-    gen.generate(segment=segment, dry_run=dry_run)
+    try:
+        gen.generate(segment=segment, dry_run=dry_run)
+    except TTSError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
@@ -412,7 +425,7 @@ def timestamps(ctx: click.Context, engine: str | None) -> None:
     """Extract word/segment timestamps from TTS audio -> timing.json."""
     from docgen.timestamps import TimestampExtractor
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     try:
         TimestampExtractor(cfg).extract_all(engine=engine)
     except RuntimeError as exc:
@@ -426,7 +439,7 @@ def manim(ctx: click.Context, scene: str | None) -> None:
     """Render Manim animations."""
     from docgen.manim_runner import ManimRunner
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     runner = ManimRunner(cfg)
     runner.render(scene=scene)
 
@@ -462,7 +475,7 @@ def compose(
     """
     from docgen.compose import Composer, filter_segments_by_visual_types
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
     target = list(segments) if segments else list(cfg.segments_default)
     target = filter_segments_by_visual_types(cfg, target, only_visual_types)
@@ -483,7 +496,7 @@ def validate(ctx: click.Context, max_drift: float | None, pre_push: bool) -> Non
     """Run validation checks on composed videos (streams, drift, narration lint)."""
     from docgen.validate import Validator
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     v = Validator(cfg)
     if pre_push:
         v.run_pre_push()
@@ -499,26 +512,19 @@ def lint(ctx: click.Context, segment: str | None) -> None:
     """Run narration lint on all (or one) segment narration files."""
     from docgen.narration_lint import NarrationLinter
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     linter = NarrationLinter(cfg)
     segments = [segment] if segment else cfg.segments_all
     issues_total = 0
 
     for seg_id in segments:
-        seg_name = cfg.resolve_segment_name(seg_id)
-        narr_dir = cfg.narration_dir
-        if not narr_dir.exists():
-            continue
-        path = narr_dir / f"{seg_name}.md"
-        if not path.exists():
-            candidates = list(narr_dir.glob(f"{seg_id}-*.md"))
-            path = candidates[0] if candidates else None
-        if not path or not path.exists():
+        path = cfg.find_segment_asset(cfg.narration_dir, seg_id, ".md")
+        if not path:
             click.echo(f"  [{seg_id}] no narration file")
             continue
         result = linter.lint_text(path.read_text(encoding="utf-8"))
         status = "PASS" if result.passed else "FAIL"
-        click.echo(f"  [{seg_id}] {status} {seg_name}")
+        click.echo(f"  [{seg_id}] {status} {path.stem}")
         for issue in result.issues:
             click.echo(f"    {issue}")
             issues_total += 1
@@ -599,8 +605,6 @@ def narration_generate(
     ``--revise`` reads the current narration file and applies ``--revision-notes``
     with minimal edits (same contract as the wizard Revise button).
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
     if all_segments and segment:
         raise click.ClickException("--all and --segment are mutually exclusive")
     if not all_segments and not segment:
@@ -610,7 +614,7 @@ def narration_generate(
 
     from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     _echo_ai_status(cfg)
     mode = "revise" if revise else "generate"
     # Revising always overwrites the existing script.
@@ -696,8 +700,6 @@ def scene_compile(
     ``generate-all``, which retimes existing specs automatically) so beat sync
     uses fresh ``timing.json`` without calling OpenAI.
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
     if all_specs and spec_path is not None:
         raise click.ClickException("Pass SPEC_PATH or --all, not both.")
     if not all_specs and spec_path is None:
@@ -707,7 +709,7 @@ def scene_compile(
     from docgen.scene_retime import list_scene_spec_paths, retime_compile_spec
     from docgen.scene_spec import SceneSpecError
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     # --retime is the same compile path (label sync + pacing gate); the flag
     # documents intent and is the recommended post-timestamps invocation.
     _ = retime
@@ -825,8 +827,6 @@ def scene_spec_generate_cmd(
     The model outputs YAML only (see :mod:`docgen.scene_spec`); layout is
     deterministic in :func:`docgen.scene_spec.compile_scene_class`.
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
     if dry_run and print_only:
         raise click.ClickException("--dry-run and --print-only are mutually exclusive")
     if all_segments and segment:
@@ -845,7 +845,7 @@ def scene_spec_generate_cmd(
         linted_class_block_from_spec,
     )
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     if not dry_run:
         _echo_ai_status(cfg)
 
@@ -901,10 +901,8 @@ def scene_spec_generate_cmd(
         for seg_id in ids:
             sid = str(seg_id)
             name = names.get(sid) or names.get(seg_id) or sid
-            script_match = (
-                list(scripts_dir.glob(f"*{sid}*.py")) if scripts_dir.is_dir() else []
-            )
-            if script_match:
+            script_path = cfg.find_segment_asset(scripts_dir, sid, ".py")
+            if script_path:
                 click.echo(
                     f"[scene-spec-generate --all] skip {sid} ({name}): existing capture script"
                 )
@@ -1034,8 +1032,6 @@ def image_generate_cmd(
     box). This command writes the referenced PNG under the bundle directory so
     ``docgen manim`` can render them. Existing assets are kept unless --force.
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
     chosen = [bool(segment), all_segments, spec_path is not None]
     if sum(chosen) != 1:
         raise click.ClickException("provide exactly one of --segment, --all, or --spec")
@@ -1047,7 +1043,7 @@ def image_generate_cmd(
     )
     from docgen.scene_spec import SceneSpecError
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     if not dry_run:
         _echo_ai_status(cfg)
 
@@ -1143,12 +1139,9 @@ def yaml_generate_cmd(
 
     Rewrites the config file with PyYAML (comments are not preserved). Use Git to review.
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
-
     from docgen import yaml_generate as yg
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     path = cfg.yaml_path
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
@@ -1232,9 +1225,7 @@ def clean_bundle(
     Typical fresh start: ``docgen --config docgen.yaml clean-bundle -y --delete-config [--keep-narration]``,
     then ``docgen init …`` and ``docgen yaml-generate``.
     """
-    if ctx.obj.get("config") is None:
-        raise click.ClickException("No docgen.yaml found (use --config PATH).")
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     if not yes:
         click.confirm(
             "Delete bundle outputs"
@@ -1265,7 +1256,7 @@ def concat(ctx: click.Context, concat_name: str | None) -> None:
     """Concatenate full demo files from composed segments."""
     from docgen.concat import ConcatBuilder
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     builder = ConcatBuilder(cfg)
     builder.build(name=concat_name)
 
@@ -1277,7 +1268,7 @@ def pages(ctx: click.Context, force: bool) -> None:
     """Generate index.html, pages.yml, .gitattributes, .gitignore."""
     from docgen.pages import PagesGenerator
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     gen = PagesGenerator(cfg)
     gen.generate_all(force=force)
 
@@ -1323,7 +1314,7 @@ def generate_all(
     """
     from docgen.pipeline import Pipeline
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     _echo_ai_status(cfg)
     pipeline = Pipeline(cfg)
     pipeline.run(
@@ -1346,7 +1337,7 @@ def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
     """Rebuild after new audio: timestamps → scene retime → Manim → compose → validate."""
     from docgen.pipeline import Pipeline
 
-    cfg = ctx.obj["config"]
+    cfg = _require_config(ctx)
     pipeline = Pipeline(cfg)
     pipeline.run(skip_tts=True, regen_scene_specs=regen_scene_specs)
 

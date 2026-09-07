@@ -486,6 +486,11 @@ def _write_requirements_docgen(plan: InitPlan) -> str:
 
 def _write_bundle_readme(plan: InitPlan) -> str:
     """Short bundle README: install docgen as a tool, keep only this bundle in-repo."""
+    try:
+        demo_rel = plan.demo_dir.resolve().relative_to(plan.repo_root.resolve())
+        cd_dir = demo_rel.as_posix() or "."
+    except ValueError:
+        cd_dir = str(plan.demo_dir)
     content = textwrap.dedent(f"""\
         # {plan.project_name} demos (docgen bundle)
 
@@ -537,7 +542,7 @@ def _write_bundle_readme(plan: InitPlan) -> str:
         ## Run from this bundle
 
         ```bash
-        cd {plan.demo_dir.name if plan.demo_dir.name else "."}
+        cd {cd_dir}
         docgen wizard
         docgen generate-all
         docgen validate --pre-push

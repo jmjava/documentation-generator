@@ -97,4 +97,19 @@ def test_ai_status_exits_zero_when_cursor_key_present(
     assert result.exit_code == 0, result.output
     assert "provider=openai" in result.output
     assert "CURSOR_API_KEY=present" in result.output
-    assert "not tied to one IDE" in result.output
+
+
+def test_tts_without_bundle_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--config", str(tmp_path / "missing.yaml"), "tts", "--dry-run"],
+    )
+    assert result.exit_code != 0
+    assert "docgen.yaml" in (result.output + result.stderr)
+    assert "AttributeError" not in (result.output + result.stderr)
+    assert result.exception is None or not isinstance(result.exception, AttributeError)

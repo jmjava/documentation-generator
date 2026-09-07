@@ -952,42 +952,11 @@ class Validator:
     # ── Helpers ────────────────────────────────────────────────────────
 
     def _find_audio(self, seg_id: str) -> Path | None:
-        d = self.config.audio_dir
-        if not d.exists():
-            return None
-        seg_name = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{seg_name}.mp3"
-        if exact.exists():
-            return exact
-        for mp3 in d.glob(f"{seg_id}-*.mp3"):
-            return mp3
-        for mp3 in d.glob(f"*{seg_id}*.mp3"):
-            return mp3
-        return None
+        return self.config.find_segment_asset(self.config.audio_dir, seg_id, ".mp3")
 
     def _find_narration(self, seg_id: str) -> Path | None:
-        d = self.config.narration_dir
-        if not d.exists():
-            return None
-        seg_name = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{seg_name}.md"
-        if exact.exists():
-            return exact
-        for md in d.glob(f"{seg_id}-*.md"):
-            return md
-        for md in d.glob(f"*{seg_id}*.md"):
-            return md
-        return None
+        return self.config.find_segment_asset(self.config.narration_dir, seg_id, ".md")
 
     def _find_recording(self, seg_id: str) -> Path | None:
-        d = self.config.recordings_dir
-        if not d.exists():
-            return None
-        seg_name = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{seg_name}.mp4"
-        if exact.exists():
-            return exact
-        for mp4 in d.glob(f"*{seg_id}*.mp4"):
-            return mp4
-        return None
+        return self.config.find_segment_asset(self.config.recordings_dir, seg_id, ".mp4")
 

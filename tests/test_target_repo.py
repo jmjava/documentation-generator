@@ -249,6 +249,22 @@ def test_missing_nested_path_is_not_github_shorthand(
         clone.assert_not_called()
 
 
+def test_github_shorthand_clones_even_if_org_named_dir_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "acme").mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    def _fake_clone(url: str, dest: Path) -> None:
+        dest.mkdir(parents=True)
+        (dest / ".git").mkdir()
+
+    with patch("docgen.target_repo.clone_git_repo", side_effect=_fake_clone) as clone:
+        out = resolve_repo("acme/app", cache_dir=tmp_path / "cache")
+    clone.assert_called_once()
+    assert out == (tmp_path / "cache" / "acme-app").resolve()
+
+
 def test_cached_clone_resets_working_tree_to_fetch_head(tmp_path: Path) -> None:
     import subprocess
 

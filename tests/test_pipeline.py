@@ -36,6 +36,11 @@ def _patch_pipeline_stages(monkeypatch, composer_cls, calls: list[str]) -> None:
         def print_report(self, _reports) -> None:
             calls.append("print-report")
 
+        def run_pre_push(self) -> None:
+            calls.append("validate-pre-push")
+            self.run_all()
+            self.print_report([])
+
     class FakeConcatBuilder:
         def __init__(self, _config) -> None:
             pass
@@ -47,7 +52,7 @@ def _patch_pipeline_stages(monkeypatch, composer_cls, calls: list[str]) -> None:
         def __init__(self, _config) -> None:
             pass
 
-        def generate_all(self, force=False) -> None:
+        def generate_all(self, force=False, **_kwargs) -> None:
             calls.append(f"pages:{force}")
 
     import docgen.concat as concat_module
@@ -255,3 +260,60 @@ def test_pipeline_auto_regens_scene_specs_when_missing(tmp_path, monkeypatch) ->
     assert "inject" in calls
     assert calls.index("timestamps") < calls.index("scene-spec:01")
     assert calls.index("scene-spec:01") < calls.index("manim")
+    assert "validate-pre-push" in calls
+    assert calls.index("compose") < calls.index("validate-pre-push")
+    assert calls.index("validate-pre-push") < calls.index("concat")
+
+
+def test_pipeline_fails_when_compose_skips_mapped_segments(tmp_path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    class SkipComposer:
+        def __init__(self, _config) -> None:
+            pass
+
+        def compose_segments(self, _segments) -> int:
+            calls.append("compose")
+            return 0
+
+    _patch_pipeline_stages(monkeypatch, SkipComposer, calls)
+
+    cfg = SimpleNamespace(
+        animations_dir=tmp_path / "animations",
+        segments_all=["01"],
+        visual_map={"01": {"type": "manim", "scene": "Scene01"}},
+        pipeline_manim_scene_names=lambda: ["Scene01"],
+    )
+    (cfg.animations_dir).mkdir(parents=True)
+
+    with pytest.raises(ComposeError, match="0/1 mapped"):
+        Pipeline(cfg).run(skip_tts=True, skip_manim=True, skip_scene_retime=True)
+
+    assert "concat" not in calls
+    assert "pages:True" not in calls
+
+
+def test_pipeline_fails_when_segments_have_no_visual_map(tmp_path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    class OkComposer:
+        def __init__(self, _config) -> None:
+            pass
+
+        def compose_segments(self, _segments) -> int:
+            calls.append("compose")
+            return 0
+
+    _patch_pipeline_stages(monkeypatch, OkComposer, calls)
+    cfg = SimpleNamespace(
+        animations_dir=tmp_path / "animations",
+        segments_all=["01"],
+        visual_map={},
+        pipeline_manim_scene_names=lambda: [],
+    )
+    (cfg.animations_dir).mkdir(parents=True)
+
+    with pytest.raises(ComposeError, match="no visual_map"):
+        Pipeline(cfg).run(skip_tts=True, skip_manim=True, skip_scene_retime=True)
+
+    assert "compose" not in calls

@@ -54,6 +54,27 @@ class Config:
         """Return the full name for a segment, falling back to the ID itself."""
         return self.segment_names.get(seg_id, seg_id)
 
+    def find_segment_asset(self, directory: Path, seg_id: str, suffix: str) -> Path | None:
+        """Resolve a per-segment file without substring glob collisions (``01`` vs ``101``).
+
+        Prefers ``segment_names[id]`` stem, then ``{id}{suffix}``, then ``{id}-*{suffix}``.
+        Does not use ``*{id}*``.
+        """
+        if not directory.is_dir():
+            return None
+        sid = str(seg_id)
+        ext = suffix if suffix.startswith(".") else f".{suffix}"
+        stem = str(self.resolve_segment_name(sid))
+        exact = directory / f"{stem}{ext}"
+        if exact.is_file():
+            return exact
+        if stem != sid:
+            by_id = directory / f"{sid}{ext}"
+            if by_id.is_file():
+                return by_id
+        prefixed = sorted(p for p in directory.glob(f"{sid}-*{ext}") if p.is_file())
+        return prefixed[0] if prefixed else None
+
     def narration_topic_label(self, seg_id: str) -> str:
         """Human-facing focus line for narration LLM prompts (no numeric segment ids).
 
