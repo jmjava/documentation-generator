@@ -5,11 +5,12 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[timestamps-merge-stems.md](timestamps-merge-stems.md)** — CLI
-`timestamps` must merge stems into existing `timing.json`, not wipe extra keys
-or overwrite garbage JSON.
+**Active:** **[wizard-exclude-lists.md](wizard-exclude-lists.md)** —
+`wizard.exclude_patterns` / `scan_extensions` must be string lists, not scalars.
 
 **Shipped:**
+- **[timestamps-merge-stems.md](timestamps-merge-stems.md)** — CLI `timestamps`
+  merges stems into existing `timing.json` instead of wiping extra keys (#93).
 - **[asset-graph-timing.md](asset-graph-timing.md)** — wizard freshness must
   not treat corrupt `timing.json` as a missing timestamps entry (#92).
 - **[yaml-generate-mappings.md](yaml-generate-mappings.md)** — `yaml-generate`

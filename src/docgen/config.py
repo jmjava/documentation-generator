@@ -248,6 +248,21 @@ class Config:
                     f"{src}: visual_map.{sid_s} must be a YAML mapping, "
                     f"not {type(spec).__name__}"
                 )
+        wiz = self._block("wizard")
+        if wiz.get("exclude_patterns") is not None:
+            string_list_block(
+                wiz,
+                "exclude_patterns",
+                label="wizard.exclude_patterns",
+                source=src,
+            )
+        if wiz.get("scan_extensions") is not None:
+            string_list_block(
+                wiz,
+                "scan_extensions",
+                label="wizard.scan_extensions",
+                source=src,
+            )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"
