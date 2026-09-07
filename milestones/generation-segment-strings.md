@@ -1,7 +1,7 @@
 # Milestone: per-segment generation prompts must be strings
 
-**Status:** Active  
-**PR:** [#110](https://github.com/jmjava/documentation-generator/pull/110)  
+**Status:** Shipped  
+**PR:** #110  
 **Depends on:** `milestones/generation-model-strings.md` (PR #107),
 `milestones/path-config-strings.md` (PR #109)
 

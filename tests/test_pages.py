@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 from docgen.pages import PagesGenerator, _esc
 
 
@@ -154,27 +154,25 @@ def test_index_html_segment_titles_escape_user_strings(tmp_path: Path) -> None:
 
 
 def test_index_html_extra_links_rejects_non_mapping_items(tmp_path: Path) -> None:
-    cfg = _write_pages_cfg(
-        tmp_path,
-        {
-            "title": "Demos",
-            "demos_subdir": "demos",
-            "extra_links": ["https://example.com"],
-        },
-    )
-    with pytest.raises(RuntimeError, match="extra_links items must be mappings"):
-        PagesGenerator(cfg).generate_index_html(force=True)
+    with pytest.raises(ConfigError, match=r"pages.extra_links\[0\] must be a YAML mapping"):
+        _write_pages_cfg(
+            tmp_path,
+            {
+                "title": "Demos",
+                "demos_subdir": "demos",
+                "extra_links": ["https://example.com"],
+            },
+        )
 
 
 def test_index_html_rejects_non_mapping_pages_segments(tmp_path: Path) -> None:
-    cfg = _write_pages_cfg(
-        tmp_path,
-        {
-            "title": "Demos",
-            "demos_subdir": "demos",
-            "segments": {"01": "Overview"},
-        },
-        segments_all=["01"],
-    )
-    with pytest.raises(RuntimeError, match="pages.segments.01 must be a YAML mapping"):
-        PagesGenerator(cfg).generate_index_html(force=True)
+    with pytest.raises(ConfigError, match="pages.segments.01 must be a YAML mapping"):
+        _write_pages_cfg(
+            tmp_path,
+            {
+                "title": "Demos",
+                "demos_subdir": "demos",
+                "segments": {"01": "Overview"},
+            },
+            segments_all=["01"],
+        )
