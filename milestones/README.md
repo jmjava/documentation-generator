@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[validation-list-keys.md](validation-list-keys.md)** —
-`validation.ocr.error_patterns`, `av_sync.visual_types`, and narration-lint
-deny pattern lists must be YAML lists, not scalars.
+**Active:** **[manim-unsafe-unicode.md](manim-unsafe-unicode.md)** —
+`manim.unsafe_unicode` must be a YAML list at config load, not a scalar.
 
 **Shipped:**
+- **[validation-list-keys.md](validation-list-keys.md)** —
+  `validation.ocr.error_patterns`, `av_sync.visual_types`, and narration-lint
+  deny pattern lists must be YAML lists (#95).
 - **[wizard-exclude-lists.md](wizard-exclude-lists.md)** —
   `wizard.exclude_patterns` / `scan_extensions` must be string lists (#94).
 - **[timestamps-merge-stems.md](timestamps-merge-stems.md)** — CLI `timestamps`

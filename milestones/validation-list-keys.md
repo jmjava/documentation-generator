@@ -1,7 +1,7 @@
 # Milestone: validation list keys must not be scalars
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #95  
 **Depends on:** `milestones/wizard-exclude-lists.md` (PR #94),
 `milestones/config-mapping-keys.md` (PR #83)
 
