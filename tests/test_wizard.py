@@ -66,6 +66,98 @@ def test_load_state_corrupt_json_returns_empty(tmp_path):
     assert load_state(tmp_path) == {"segments": {}}
 
 
+def test_load_state_rejects_non_object_segments(tmp_path):
+    import json
+
+    from docgen.wizard import WizardError, load_state
+
+    (tmp_path / ".docgen-state.json").write_text(
+        json.dumps({"segments": ["01"]}), encoding="utf-8"
+    )
+    with pytest.raises(WizardError, match=r"\.docgen-state.json segments must be a JSON object, not list"):
+        load_state(tmp_path)
+
+
+def test_load_state_rejects_non_object_segment_row(tmp_path):
+    import json
+
+    from docgen.wizard import WizardError, load_state
+
+    (tmp_path / ".docgen-state.json").write_text(
+        json.dumps({"segments": {"01": "draft"}}), encoding="utf-8"
+    )
+    with pytest.raises(
+        WizardError,
+        match=r"\.docgen-state.json segments\['01'\] must be a JSON object, not str",
+    ):
+        load_state(tmp_path)
+
+
+def test_load_state_null_segments_is_empty(tmp_path):
+    import json
+
+    from docgen.wizard import load_state
+
+    (tmp_path / ".docgen-state.json").write_text(
+        json.dumps({"segments": None, "extra": 1}), encoding="utf-8"
+    )
+    assert load_state(tmp_path) == {"segments": {}, "extra": 1}
+
+
+def _wizard_client(tmp_path):
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    return create_app(cfg).test_client(), cfg
+
+
+def test_api_segments_rejects_list_state_segments(tmp_path):
+    import json
+
+    client, cfg = _wizard_client(tmp_path)
+    (cfg.base_dir / ".docgen-state.json").write_text(
+        json.dumps({"segments": []}), encoding="utf-8"
+    )
+    res = client.get("/api/segments")
+    assert res.status_code == 500
+    assert "segments must be a JSON object" in res.get_json()["error"]
+
+
+def test_api_state_post_rejects_list_body(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post("/api/state", json=["not", "an", "object"])
+    assert res.status_code == 400
+    assert res.get_json()["error"] == "state must be a JSON object"
+
+
+def test_api_state_post_rejects_list_segments(tmp_path):
+    client, cfg = _wizard_client(tmp_path)
+    res = client.post("/api/state", json={"segments": ["01"]})
+    assert res.status_code == 400
+    assert "segments must be a JSON object" in res.get_json()["error"]
+    assert not (cfg.base_dir / ".docgen-state.json").exists()
+
+
+def test_api_state_roundtrip_object_segments(tmp_path):
+    client, cfg = _wizard_client(tmp_path)
+    payload = {"segments": {"01": {"status": "ready", "revision_notes": "n"}}}
+    res = client.post("/api/state", json=payload)
+    assert res.status_code == 200
+    got = client.get("/api/state")
+    assert got.status_code == 200
+    assert got.get_json()["segments"]["01"]["status"] == "ready"
+    segs = client.get("/api/segments")
+    assert segs.status_code == 200
+    assert segs.get_json()["segments"][0]["status"] == "ready"
+    assert (cfg.base_dir / ".docgen-state.json").is_file()
+
+
 def test_api_file_rejects_prefix_escape(tmp_path):
     from docgen.config import Config
     from docgen.wizard import create_app
