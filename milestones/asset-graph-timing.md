@@ -1,7 +1,7 @@
 # Milestone: wizard freshness must not treat corrupt `timing.json` as missing
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #92  
 **Depends on:** `milestones/timing-json-parse.md` (PR #89),
 `milestones/wizard-narration-paths.md` (PR #81)
 

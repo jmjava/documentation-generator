@@ -131,6 +131,11 @@ class TimestampExtractor:
         Walks configured segment ids via :meth:`Config.find_segment_asset` (no
         ``*.mp3`` glob). Missing audio for a listed segment is an error. With
         no ``segments.all`` entries, existing ``timing.json`` is left unchanged.
+
+        Successful runs **merge** stems into the existing file (same as the
+        wizard per-segment timestamps step) so extra keys not in
+        ``segments.all`` are not wiped. Corrupt JSON / a non-object root raises
+        :class:`TimestampError` and the file is not rewritten.
         """
         chosen = self.resolve_engine(engine)
         print(f"[timestamps] engine: {chosen}")
@@ -166,7 +171,7 @@ class TimestampExtractor:
                 + ". Run `docgen tts` first."
             )
 
-        timing: dict[str, Any] = {}
+        timing = dict(load_bundle_timing(self.config))
         for sid, mp3 in jobs:
             key = mp3.stem
             print(f"[timestamps] Extracting timestamps for {sid} ({key})")
