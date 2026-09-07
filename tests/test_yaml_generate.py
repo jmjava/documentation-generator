@@ -436,6 +436,36 @@ def test_parse_hint_segment_declaration_requires_create_true(tmp_path: Path) -> 
     assert parse_hint_segment_declaration(h / "ok.md") == ("05", "05-from-hints")
 
 
+def test_parse_hint_segment_declaration_string_create_false_raises(tmp_path: Path) -> None:
+    h = tmp_path / "seg.md"
+    h.write_text(
+        "---\ndocgen:\n  segment:\n    create: \"false\"\n    id: \"05\"\n    stem: 05-x\n---\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="docgen.segment.create must be a YAML boolean"):
+        parse_hint_segment_declaration(h)
+
+
+def test_parse_hint_segment_declaration_list_stem_raises(tmp_path: Path) -> None:
+    h = tmp_path / "seg.md"
+    h.write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"05\"\n    stem:\n      - 05-x\n---\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="docgen.segment.stem must be a YAML string"):
+        parse_hint_segment_declaration(h)
+
+
+def test_parse_hint_segment_declaration_list_id_raises(tmp_path: Path) -> None:
+    h = tmp_path / "seg.md"
+    h.write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id:\n      - \"05\"\n    stem: 05-x\n---\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="docgen.segment.id must be a YAML string or integer"):
+        parse_hint_segment_declaration(h)
+
+
 def test_merge_hint_declared_segments_inserts_sorted_id(tmp_path: Path) -> None:
     hints = tmp_path / "hints"
     hints.mkdir()
