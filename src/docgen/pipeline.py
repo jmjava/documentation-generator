@@ -38,11 +38,11 @@ class Pipeline:
         skip_scene_retime: bool = False,
     ) -> None:
         if not skip_tts:
-            from docgen.ai_client import resolve_ai_settings
+            from docgen.ai_client import AIError, resolve_ai_settings
 
             st = resolve_ai_settings(self.config)
             if not st.supports_tts:
-                raise RuntimeError(
+                raise AIError(
                     f"generate-all needs TTS; provider {st.provider!r} has no speech API. "
                     "Pass --skip-tts for chat-only, or set OPENAI_API_KEY / CURSOR_API_KEY "
                     f"(or ai.provider: grok). {st.auth_help()}"

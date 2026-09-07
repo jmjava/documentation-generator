@@ -90,6 +90,27 @@ def test_find_bundle_yaml_skips_venv(tmp_path: Path) -> None:
     assert find_bundle_yaml(tmp_path) is None
 
 
+def test_find_bundle_yaml_skips_vendor_and_recordings(tmp_path: Path) -> None:
+    junk = tmp_path / "node_modules" / "pkg" / "docgen.yaml"
+    junk.parent.mkdir(parents=True)
+    junk.write_text("nope: true\n", encoding="utf-8")
+    rec = tmp_path / "docs" / "demos" / "recordings" / "docgen.yaml"
+    rec.parent.mkdir(parents=True)
+    rec.write_text("nope: true\n", encoding="utf-8")
+    real = tmp_path / "docs" / "demos" / "nested" / "docgen.yaml"
+    real.parent.mkdir(parents=True)
+    real.write_text("ok: true\n", encoding="utf-8")
+    assert find_bundle_yaml(tmp_path) == real
+
+
+def test_find_bundle_yaml_prefers_demos_dir(tmp_path: Path) -> None:
+    (tmp_path / "demos").mkdir()
+    demos = tmp_path / "demos" / "docgen.yaml"
+    demos.write_text("segments: {}\n", encoding="utf-8")
+    (tmp_path / "docgen.yaml").write_text("wrong: true\n", encoding="utf-8")
+    assert find_bundle_yaml(tmp_path) == demos
+
+
 def test_build_defaults_plan_repo_root_does_not_use_cwd_library(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -172,3 +193,32 @@ def test_clone_git_repo_keeps_github_token_off_argv(
     assert "ghs_secret_token" not in joined
     assert captured["env"]["GIT_CONFIG_VALUE_0"] == "https://github.com/"
     assert "ghs_secret_token" in captured["env"]["GIT_CONFIG_KEY_0"]
+
+
+def test_clone_git_repo_preserves_existing_git_config_slots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    from docgen.target_repo import clone_git_repo
+
+    captured: dict = {}
+
+    def _run(cmd, **kwargs):  # noqa: ANN003
+        captured["cmd"] = list(cmd)
+        captured["env"] = kwargs.get("env") or {}
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghs_secret_token")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.name")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "bot")
+    with patch("docgen.target_repo.subprocess.run", side_effect=_run):
+        clone_git_repo("https://github.com/acme/app.git", tmp_path / "app")
+    env = captured["env"]
+    assert env["GIT_CONFIG_COUNT"] == "2"
+    assert env["GIT_CONFIG_KEY_0"] == "user.name"
+    assert env["GIT_CONFIG_VALUE_0"] == "bot"
+    assert "ghs_secret_token" in env["GIT_CONFIG_KEY_1"]
+    assert env["GIT_CONFIG_VALUE_1"] == "https://github.com/"
+    assert "ghs_secret_token" not in " ".join(captured["cmd"])

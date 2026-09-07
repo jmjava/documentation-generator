@@ -37,10 +37,17 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 if TYPE_CHECKING:
     from docgen.config import Config
+
+ProviderName: TypeAlias = Literal["openai", "grok", "anthropic"]
+
+
+class AIError(RuntimeError):
+    """Auth, HTTP, or capability failure from an AI provider call."""
+
 
 GROK_BASE_URL = "https://api.x.ai/v1"
 ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
@@ -57,26 +64,6 @@ _ANTHROPIC_PROVIDERS = frozenset({"anthropic", "claude", "claude-code"})
 _OPENAI_PROVIDERS = frozenset({"openai", "oai", ""})
 
 # Existing yaml/init defaults keep OpenAI model names; remap at call time.
-_GROK_CHAT_ALIASES = {
-    "gpt-4o": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-4o-mini": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-4.1": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-4.1-mini": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-4.1-nano": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-4": DEFAULT_GROK_CHAT_MODEL,
-    "gpt-3.5-turbo": DEFAULT_GROK_CHAT_MODEL,
-}
-
-_ANTHROPIC_CHAT_ALIASES = {
-    "gpt-4o": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-4o-mini": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-4.1": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-4.1-mini": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-4.1-nano": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-4": DEFAULT_ANTHROPIC_CHAT_MODEL,
-    "gpt-3.5-turbo": DEFAULT_ANTHROPIC_CHAT_MODEL,
-}
-
 _GROK_IMAGE_ALIASES = {
     "gpt-image-1": DEFAULT_GROK_IMAGE_MODEL,
     "gpt-image-1-mini": DEFAULT_GROK_IMAGE_MODEL,
@@ -104,11 +91,13 @@ _CURSOR_CLOUD_PROXY_PREFIX = "crsr_"
 _MAX_HTTP_ATTEMPTS = 10
 _BASE_DELAY_SEC = 1.0
 _MAX_BACKOFF_SEC = 120.0
+_RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+ANTHROPIC_MAX_TOKENS = 8192
 
 
 @dataclass(frozen=True)
 class AISettings:
-    provider: str  # "openai" | "grok" | "anthropic"
+    provider: ProviderName
     base_url: str | None
     api_key: str | None
     api_key_env: str
@@ -142,7 +131,7 @@ class AISettings:
         )
 
 
-def normalize_provider(raw: str | None) -> str:
+def normalize_provider(raw: str | None) -> ProviderName:
     value = (raw or "").strip().lower()
     if value in _GROK_PROVIDERS:
         return "grok"
@@ -175,7 +164,7 @@ def _usable_secret(name: str) -> str | None:
     return value
 
 
-def _pick_api_key(provider: str, *, explicit_env: str) -> tuple[str | None, str]:
+def _pick_api_key(provider: ProviderName, *, explicit_env: str) -> tuple[str | None, str]:
     """Return ``(api_key, env_name)`` for the resolved provider."""
     if explicit_env:
         key = _usable_secret(explicit_env)
@@ -203,7 +192,7 @@ def _pick_api_key(provider: str, *, explicit_env: str) -> tuple[str | None, str]
     return None, "OPENAI_API_KEY"
 
 
-def _implicit_provider() -> str:
+def _implicit_provider() -> ProviderName:
     """When yaml/env omit provider: OpenAI if a Cursor/OpenAI key exists, else Anthropic."""
     if _usable_secret("CURSOR_API_KEY") or _usable_secret("OPENAI_API_KEY"):
         return "openai"
@@ -269,7 +258,7 @@ def require_api_key(settings: AISettings) -> str:
     """Return the resolved secret, or raise before the SDK can pick a ``crsr_`` env fallback."""
     if settings.api_key:
         return settings.api_key
-    raise RuntimeError(
+    raise AIError(
         f"No usable API key for provider {settings.provider!r} "
         f"(looked at {settings.api_key_env}). {settings.auth_help()}"
     )
@@ -281,7 +270,7 @@ def openai_client(cfg: "Config | None" = None) -> Any:
 
     settings = resolve_ai_settings(cfg)
     if settings.is_anthropic:
-        raise RuntimeError(
+        raise AIError(
             "The OpenAI SDK is not used for Anthropic. Call chat_completion() "
             f"for Claude chat. {settings.auth_help()}"
         )
@@ -294,24 +283,11 @@ def openai_client(cfg: "Config | None" = None) -> Any:
 def resolve_chat_model(model: str, settings: AISettings | None = None, *, cfg: "Config | None" = None) -> str:
     chosen = (model or "").strip()
     st = settings or resolve_ai_settings(cfg)
-    if st.is_grok:
-        if not chosen:
-            return DEFAULT_GROK_CHAT_MODEL
-        aliased = _GROK_CHAT_ALIASES.get(chosen)
-        if aliased:
-            return aliased
-        if chosen.lower().startswith("gpt-"):
-            return DEFAULT_GROK_CHAT_MODEL
+    if st.provider == "openai":
         return chosen
-    if st.is_anthropic:
-        if not chosen:
-            return DEFAULT_ANTHROPIC_CHAT_MODEL
-        aliased = _ANTHROPIC_CHAT_ALIASES.get(chosen)
-        if aliased:
-            return aliased
-        if chosen.lower().startswith("gpt-"):
-            return DEFAULT_ANTHROPIC_CHAT_MODEL
-        return chosen
+    default = DEFAULT_GROK_CHAT_MODEL if st.is_grok else DEFAULT_ANTHROPIC_CHAT_MODEL
+    if not chosen or chosen.lower().startswith("gpt-"):
+        return default
     return chosen
 
 
@@ -373,16 +349,16 @@ def chat_completion(
             temperature=float(temperature),
         )
     except openai.AuthenticationError as exc:
-        raise RuntimeError(
+        raise AIError(
             f"{_vendor(settings)} rejected {settings.api_key_env} (authentication failed): {exc}. "
             f"{settings.auth_help()}"
         ) from exc
     except openai.PermissionDeniedError as exc:
-        raise RuntimeError(
+        raise AIError(
             f"{_vendor(settings)} permission denied for model {resolved!r}: {exc}."
         ) from exc
     except openai.APIConnectionError as exc:
-        raise RuntimeError(
+        raise AIError(
             f"{_vendor(settings)} connection error: {exc} — re-run when connectivity is restored."
         ) from exc
     return response.choices[0].message.content or ""
@@ -400,7 +376,7 @@ def synthesize_speech(
     """Write MP3 bytes for ``text`` using OpenAI TTS or xAI ``/v1/tts``."""
     settings = resolve_ai_settings(cfg)
     if settings.is_anthropic:
-        raise RuntimeError(
+        raise AIError(
             "Anthropic has no TTS API. Use OPENAI_API_KEY / CURSOR_API_KEY "
             "(ai.provider: openai) or XAI_API_KEY (ai.provider: grok) for "
             f"`docgen tts`. {settings.auth_help()}"
@@ -435,7 +411,7 @@ def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> 
     """Return Whisper-shaped ``{text, segments, words}`` from OpenAI or xAI STT."""
     settings = resolve_ai_settings(cfg)
     if settings.is_anthropic:
-        raise RuntimeError(
+        raise AIError(
             "Anthropic has no speech-to-text API. Keep timestamps.engine: local "
             f"(offline) or use OpenAI/Grok for whisper. {settings.auth_help()}"
         )
@@ -513,10 +489,10 @@ def _anthropic_chat(
     settings: AISettings,
 ) -> str:
     if not settings.api_key:
-        raise RuntimeError(f"Anthropic chat needs ANTHROPIC_API_KEY. {settings.auth_help()}")
+        raise AIError(f"Anthropic chat needs ANTHROPIC_API_KEY. {settings.auth_help()}")
     payload = {
         "model": model,
-        "max_tokens": 8192,
+        "max_tokens": ANTHROPIC_MAX_TOKENS,
         "temperature": float(temperature),
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_message}],
@@ -536,12 +512,12 @@ def _anthropic_chat(
     try:
         data = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Anthropic chat returned non-JSON: {raw[:200]!r}") from exc
+        raise AIError(f"Anthropic chat returned non-JSON: {raw[:200]!r}") from exc
     blocks = data.get("content") or []
     texts = [b.get("text") or "" for b in blocks if isinstance(b, dict)]
     text = "".join(texts).strip()
     if not text:
-        raise RuntimeError("Anthropic chat returned no text content.")
+        raise AIError("Anthropic chat returned no text content.")
     return text
 
 
@@ -554,9 +530,9 @@ def _grok_tts(
     settings: AISettings,
 ) -> None:
     if not settings.api_key:
-        raise RuntimeError(f"xAI TTS needs an API key. {settings.auth_help()}")
+        raise AIError(f"xAI TTS needs an API key. {settings.auth_help()}")
     if len(text) > GROK_TTS_MAX_CHARS:
-        raise RuntimeError(
+        raise AIError(
             f"xAI TTS accepts at most {GROK_TTS_MAX_CHARS} characters "
             f"({len(text)} in this segment). Split the narration or shorten it."
         )
@@ -570,6 +546,7 @@ def _grok_tts(
         payload,
         settings=settings,
         accept="audio/mpeg",
+        error_label="xAI",
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(body)
@@ -577,7 +554,7 @@ def _grok_tts(
 
 def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     if not settings.api_key:
-        raise RuntimeError(f"xAI STT needs an API key. {settings.auth_help()}")
+        raise AIError(f"xAI STT needs an API key. {settings.auth_help()}")
     data = _http_multipart(
         f"{(settings.base_url or GROK_BASE_URL).rstrip('/')}/stt",
         fields={"language": settings.tts_language or DEFAULT_GROK_TTS_LANGUAGE},
@@ -586,7 +563,10 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
         content_type="audio/mpeg",
         settings=settings,
     )
-    parsed = json.loads(data.decode("utf-8"))
+    try:
+        parsed = json.loads(data.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise AIError(f"xAI STT returned non-JSON: {data[:200]!r}") from exc
     text = str(parsed.get("text") or "")
     raw_words = parsed.get("words") or []
     words: list[dict[str, Any]] = []
@@ -632,7 +612,7 @@ def _http_json(
     accept: str = "application/json",
     extra_headers: dict[str, str] | None = None,
     skip_bearer: bool = False,
-    error_label: str = "xAI",
+    error_label: str = "API",
 ) -> bytes:
     data = json.dumps(payload).encode("utf-8")
     headers = {
@@ -678,7 +658,7 @@ def _http_multipart(
 
 
 def _http_with_retries(
-    url: str, *, data: bytes, headers: dict[str, str], error_label: str = "xAI"
+    url: str, *, data: bytes, headers: dict[str, str], error_label: str = "API"
 ) -> bytes:
     last_exc: BaseException | None = None
     for attempt in range(_MAX_HTTP_ATTEMPTS):
@@ -688,18 +668,18 @@ def _http_with_retries(
                 return resp.read()
         except urllib.error.HTTPError as exc:
             last_exc = exc
-            if exc.code == 429 and attempt < _MAX_HTTP_ATTEMPTS - 1:
+            if exc.code in _RETRYABLE_HTTP_CODES and attempt < _MAX_HTTP_ATTEMPTS - 1:
                 retry_after = exc.headers.get("Retry-After") if exc.headers else None
                 delay = _retry_delay_sec(retry_after, attempt)
                 time.sleep(delay)
                 continue
             detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-            raise RuntimeError(
+            raise AIError(
                 f"{error_label} HTTP {exc.code} for {url}: {detail or exc.reason}"
             ) from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(f"{error_label} connection error for {url}: {exc}") from exc
-    raise RuntimeError(f"{error_label} request failed after retries: {last_exc}")
+            raise AIError(f"{error_label} connection error for {url}: {exc}") from exc
+    raise AIError(f"{error_label} request failed after retries: {last_exc}")
 
 
 def _retry_delay_sec(retry_after: str | None, attempt: int) -> float:
