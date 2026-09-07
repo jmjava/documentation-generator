@@ -1,7 +1,7 @@
 # Milestone: empty segments.all must not fall through to default
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#124](https://github.com/jmjava/documentation-generator/pull/124)  
 **Depends on:** `milestones/concat-ffmpeg-timeout.md` (PR #123),
 `milestones/yaml-generate-mappings.md` (PR #91)
 
@@ -24,13 +24,13 @@ must use that list. Fall back to ``segments.default`` only when
 
 ## Done when
 
-- [ ] Empty ``all: []`` does not discover/sync from ``default``.
-- [ ] Missing ``all`` still uses ``default``.
-- [ ] Tests cover segments_in_config, discover_visual_map, and
+- [x] Empty ``all: []`` does not discover/sync from ``default``.
+- [x] Missing ``all`` still uses ``default``.
+- [x] Tests cover segments_in_config, discover_visual_map, and
       manim.scenes sync.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (713 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
