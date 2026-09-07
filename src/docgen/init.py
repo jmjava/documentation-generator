@@ -75,12 +75,21 @@ def build_defaults_plan(
     target_dir: Path | None,
     *,
     segments_file: Path | None = None,
+    repo_root: Path | None = None,
 ) -> InitPlan:
     """Non-interactive plan: git root, demo dir, segments from a segments file,
-    existing narration filenames, or a single starter (in that order)."""
+    existing narration filenames, or a single starter (in that order).
+
+    ``repo_root`` (from ``docgen --repo``) is the consumer checkout. docgen is
+    not copied into that tree; only ``docs/demos`` (or ``target_dir``) is written.
+    """
     plan = InitPlan()
-    git_root = detect_git_root(target_dir)
-    plan.repo_root = git_root.resolve() if git_root else (target_dir or Path.cwd()).resolve()
+    if repo_root is not None:
+        explicit = Path(repo_root).resolve()
+        plan.repo_root = detect_git_root(explicit) or explicit
+    else:
+        git_root = detect_git_root(target_dir)
+        plan.repo_root = git_root.resolve() if git_root else (target_dir or Path.cwd()).resolve()
     if target_dir is not None:
         plan.demo_dir = Path(target_dir).resolve()
     else:
@@ -149,7 +158,10 @@ def scan_existing_assets(demo_dir: Path) -> dict[str, int]:
     return counts
 
 
-def run_wizard(target_dir: Path | None = None) -> InitPlan:
+def run_wizard(
+    target_dir: Path | None = None,
+    repo_root: Path | None = None,
+) -> InitPlan:
     """Interactive wizard that collects project info and returns an InitPlan."""
     plan = InitPlan()
 
@@ -158,11 +170,14 @@ def run_wizard(target_dir: Path | None = None) -> InitPlan:
     click.secho("  " + "=" * 22, fg="cyan")
     click.echo()
 
-    # Detect git root
-    git_root = detect_git_root(target_dir)
+    # Detect git root (prefer --repo consumer checkout over cwd / this library).
+    git_root = detect_git_root(repo_root or target_dir)
     if git_root:
         click.echo(f"  Git root: {git_root}")
-    plan.repo_root = git_root or (target_dir or Path.cwd()).resolve()
+    if repo_root is not None:
+        plan.repo_root = Path(repo_root).resolve()
+    else:
+        plan.repo_root = git_root or (target_dir or Path.cwd()).resolve()
 
     # Project name
     default_name = plan.repo_root.name
@@ -175,6 +190,8 @@ def run_wizard(target_dir: Path | None = None) -> InitPlan:
         default_demo = str(target_dir.resolve())
     elif git_root:
         default_demo = str(git_root / "docs" / "demos")
+    elif repo_root is not None:
+        default_demo = str(Path(repo_root).resolve() / "docs" / "demos")
     else:
         default_demo = str(Path.cwd() / "docs" / "demos")
 
@@ -199,7 +216,7 @@ def run_wizard(target_dir: Path | None = None) -> InitPlan:
         click.echo(f"  Found .env: {plan.env_file_rel}")
     else:
         env_input = click.prompt(
-            "  Path to .env (for OPENAI_API_KEY, blank to skip)",
+            "  Path to .env (for OPENAI_API_KEY / XAI_API_KEY, blank to skip)",
             default="", type=str,
         )
         if env_input:
@@ -315,6 +332,9 @@ def _write_config(plan: InitPlan) -> str:
         },
         "segment_names": segment_names,
         "visual_map": {},
+        "ai": {
+            "provider": "openai",  # openai | grok (xAI; set XAI_API_KEY)
+        },
         "compose": {
             "ffmpeg_timeout_sec": 300,
         },
@@ -487,6 +507,19 @@ def _write_bundle_readme(plan: InitPlan) -> str:
         ```
 
         Verify: ``docgen --version``
+
+        ## API keys
+
+        Default provider is OpenAI (``OPENAI_API_KEY``). To use Grok / xAI instead:
+
+        ```bash
+        export DOCGEN_AI_PROVIDER=grok
+        export XAI_API_KEY=...
+        ```
+
+        or set ``ai.provider: grok`` in ``docgen.yaml``. Existing OpenAI model
+        names in YAML are remapped (chat to ``grok-4.6``, images to
+        ``grok-imagine-image-2.0``, TTS voice ``coral`` to ``eve``).
 
         ## Run from this bundle
 

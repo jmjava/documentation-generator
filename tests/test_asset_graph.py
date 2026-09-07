@@ -221,7 +221,7 @@ def test_revise_mode_includes_current_narration(monkeypatch: pytest.MonkeyPatch)
     class _FakeClient:
         chat = _FakeChat()
 
-    monkeypatch.setattr("openai.OpenAI", lambda: _FakeClient())
+    monkeypatch.setattr("openai.OpenAI", lambda **kwargs: _FakeClient())
 
     out = generate_narration_via_llm(
         source_texts=["## File: a.md\nsource"],

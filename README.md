@@ -1,8 +1,8 @@
 # docgen — documentation generator
 
 Reusable Python library and CLI for **narrated demo videos** built around **Manim**,
-**OpenAI TTS**, and **ffmpeg** composition. Aimed at long-form, scripted explainers
-that walk through how a system works.
+**TTS** (OpenAI or xAI Grok), and **ffmpeg** composition. Aimed at long-form,
+scripted explainers that walk through how a system works.
 
 ## Suite handbook (Courseforge)
 
@@ -31,12 +31,12 @@ If you still need the legacy behaviour, pin a pre-removal commit
 ## What docgen does today
 
 - **TTS narration** — generate MP3 audio from Markdown scripts via OpenAI
-  `gpt-4o-mini-tts`.
+  `gpt-4o-mini-tts`, or xAI `/v1/tts` when `ai.provider` is `grok`.
 - **Word-level timestamps without Whisper** — the default `local` engine aligns
   the known narration text against the TTS mp3 offline (ffmpeg `silencedetect`
-  + proportional interpolation); no API call or transcription. OpenAI
-  `whisper-1` remains available via `timestamps.engine: whisper` /
-  `docgen timestamps --engine whisper`. Both engines write the same
+  + proportional interpolation); no API call or transcription. Network
+  transcription (`timestamps.engine: whisper`) uses OpenAI `whisper-1` or xAI
+  `/v1/stt` when the provider is Grok. Both engines write the same
   `timing.json` shape.
 - **Manim animations (default: declarative scene specs)** — primary visual surface.
   Prefer **`animations/specs/*.scene.yaml`** via **`docgen scene-spec-generate`**
@@ -47,11 +47,12 @@ If you still need the legacy behaviour, pin a pre-removal commit
   map each paced label to a **`wait_word`** index. Hand-maintained custom Manim classes
   may still live in `animations/scenes.py` outside `BEGIN/END GENERATED SCENE` markers
   (use **`--skip-scene-retime`** to bypass the declarative stage).
-- **OpenAI image assets in Manim scenes** — a scene-spec box may be an **image
+- **Image assets in Manim scenes** — a scene-spec box may be an **image
   element** (`image: images/<name>.png` + `prompt:`); `docgen image-generate`
-  renders the prompt via the OpenAI Images API (default `gpt-image-1`) and the
-  compiled scene shows it with the `_image` helper (`ImageMobject`, `Group`
-  rows). `generate-all` fills in missing assets automatically.
+  renders the prompt via OpenAI Images (default `gpt-image-1`) or xAI Imagine
+  (`grok-imagine-image-2.0` when `ai.provider` is `grok`). The compiled scene
+  shows it with the `_image` helper. `generate-all` fills in missing assets
+  automatically.
 - **ffmpeg composition** — combine narration audio and Manim video into final
   segments, with a freeze-tail guard.
 - **Validation** — A/V drift, freeze ratio, OCR error scan, layout, narration lint,
@@ -65,8 +66,56 @@ If you still need the legacy behaviour, pin a pre-removal commit
   docs.
 
 **No IDE lock-in:** maintenance workflows are `docgen` CLI + YAML + shell/CI (and
-OpenAI where a command calls the API). The wizard is a local Flask app, not a
-plugin tied to one editor.
+an LLM/TTS provider where a command calls the API). The wizard is a local Flask
+app, not a plugin tied to one editor.
+
+### Run against another repo (do not vendor)
+
+Install docgen once (venv / pipx / this Cloud environment). Pass the **consumer**
+checkout or clone URL; nothing from this library is copied into that project's
+`src/`.
+
+```bash
+# Local checkout of the product repo
+docgen --repo /path/to/course-builder init --defaults
+docgen --repo /path/to/course-builder yaml-generate
+docgen --repo /path/to/course-builder generate-all
+
+# GitHub URL or org/repo shorthand (shallow clone into DOCGEN_REPO_CACHE)
+docgen --repo github.com/acme/course-builder generate-all
+# equivalent: DOCGEN_REPO=acme/course-builder docgen generate-all
+```
+
+`--repo` looks for `docs/demos/docgen.yaml` (then any other `docgen.yaml` under
+the checkout). `repo_root` in that yaml still points at the consumer so
+narration/scene prompts read *their* sources.
+
+### OpenAI or Grok (xAI)
+
+Default provider is **OpenAI** (`OPENAI_API_KEY`). To substitute **Grok** for
+chat, TTS, Whisper, and image calls:
+
+```yaml
+ai:
+  provider: grok          # openai | grok
+```
+
+```bash
+export DOCGEN_AI_PROVIDER=grok    # overrides yaml
+export XAI_API_KEY=xai-...
+docgen --repo /path/to/consumer generate-all
+```
+
+Existing OpenAI model names in YAML are remapped at call time (`gpt-4o` →
+`grok-4.6`, `gpt-image-1` → `grok-imagine-image-2.0`, TTS voice `coral` →
+`eve`). Chat and images use the OpenAI SDK at `https://api.x.ai/v1`. TTS and
+STT use xAI `POST /v1/tts` and `POST /v1/stt`. Keep `timestamps.engine: local`
+unless you specifically want network STT.
+
+A Cursor Cloud environment that already has ffmpeg / tesseract / Manim build
+deps can run the full pipeline: add `XAI_API_KEY` or `OPENAI_API_KEY` as an
+environment secret (and grant the consumer as a repository dependency if you
+clone by URL).
 
 ## Install (external tool — do not vendor into project `src/`)
 
@@ -115,6 +164,8 @@ CI also installs `ffmpeg` and `tesseract` via apt for unit tests — see `.githu
 
 ## Quick start (in a consumer repo)
 
+From **inside** the consumer bundle (library already on PATH):
+
 ```bash
 cd your-project/docs/demos          # bundle only — library is on PATH via pip
 pip install -r requirements-docgen.txt   # after docgen init, or use the pip line above
@@ -123,10 +174,18 @@ docgen generate-all        # TTS → timestamps → scene retime → Manim → c
 docgen validate --pre-push
 ```
 
+From a machine / Cloud environment that has **docgen installed** but is not the
+consumer repo:
+
+```bash
+docgen --repo /path/to/your-project generate-all
+```
+
 ## CLI commands
 
 | Command | Description |
 |---------|-------------|
+| `docgen --repo PATH_OR_URL …` | Target a consumer checkout or clone URL (also `DOCGEN_REPO`). Finds `docs/demos/docgen.yaml`. Does **not** copy this library into the consumer `src/` |
 | `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
 | `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, Vue **Benchmark** view, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
@@ -169,14 +228,15 @@ your IDE or CI) is **not** replaced by the file. To make the file win, set
 environment, or **`DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY,OTHER_KEY`** for specific
 keys only.
 
-When `OPENAI_API_KEY` is present in both the shell and `env_file`, docgen prints a
-one-line hint to stderr so a silent 401 from the wrong key is easier to diagnose.
+When `OPENAI_API_KEY` or `XAI_API_KEY` is present in both the shell and `env_file`,
+docgen prints a one-line hint to stderr so a silent 401 from the wrong key is
+easier to diagnose.
 
 ### Narration from source (owner hints)
 
 Under `narration_from_source` in `docgen.yaml`, the **project owner** lists
 optional `hints` (strings) that steer the model (audience, terminology, what to
-avoid). OpenAI generates the narration `.md` from your repo context
+avoid). The chat model generates the narration `.md` from your repo context
 (`context.paths` / `context.globs`, relative to `repo_root`) plus those hints; the
 result is what `docgen tts` reads. See `docgen.narrate_from_source`.
 
@@ -222,8 +282,12 @@ validation:
     prefer_scene_spec_labels: true  # OCR anchors from paced box labels when specs exist
     visual_types: [manim]    # only check types with on-screen text
 
+```yaml
+ai:
+  provider: openai           # openai | grok (xAI). Override with DOCGEN_AI_PROVIDER.
+
 timestamps:
-  engine: local              # local (default, offline) or whisper (OpenAI whisper-1)
+  engine: local              # local (default, offline) or whisper (OpenAI whisper-1 / xAI STT)
   silence_noise_db: -35.0    # ffmpeg silencedetect threshold for the local engine
   min_silence_sec: 0.3
 

@@ -1,4 +1,4 @@
-"""OpenAI image generation for scene-spec **image elements**.
+"""Image generation for scene-spec **image elements** (OpenAI or xAI Imagine).
 
 A ``*.scene.yaml`` box may be an image element::
 
@@ -9,8 +9,8 @@ A ``*.scene.yaml`` box may be an image element::
         prompt: "Clean flat diagram of ..."   # used by `docgen image-generate`
         label: architecture                    # optional Whisper timing anchor
 
-``docgen image-generate`` scans specs, calls the OpenAI Images API for
-elements whose asset is missing (or ``--force``), and writes PNG bytes to
+``docgen image-generate`` scans specs, calls the Images API (OpenAI or xAI Imagine)
+for elements whose asset is missing (or ``--force``), and writes PNG bytes to
 ``<bundle>/<image path>``. ``docgen manim`` then loads the asset via the
 ``_image`` helper in ``scenes.py``.
 """
@@ -50,43 +50,66 @@ def generate_image_bytes(
     model: str,
     size: str,
     quality: str | None = None,
+    cfg: "Config | None" = None,
 ) -> bytes:
-    """Call the OpenAI Images API and return decoded PNG bytes."""
+    """Call the Images API (OpenAI or xAI Imagine) and return decoded PNG bytes."""
     import openai
 
-    client = openai.OpenAI()
-    kwargs: dict = {"model": model, "prompt": prompt, "size": size, "n": 1}
-    if quality:
-        kwargs["quality"] = quality
-    # dall-e models return URLs unless b64 is requested; gpt-image-1 is b64-only.
-    if model.startswith("dall-e"):
-        kwargs["response_format"] = "b64_json"
+    from docgen.ai_client import (
+        fetch_url_bytes,
+        openai_client,
+        resolve_ai_settings,
+        resolve_image_model,
+    )
+
+    settings = resolve_ai_settings(cfg)
+    resolved = resolve_image_model(model, settings)
+    client = openai_client(cfg)
+    kwargs: dict = {"model": resolved, "prompt": prompt, "n": 1}
+    if not settings.is_grok:
+        kwargs["size"] = size
+        if quality:
+            kwargs["quality"] = quality
+        # dall-e models return URLs unless b64 is requested; gpt-image-1 is b64-only.
+        if resolved.startswith("dall-e"):
+            kwargs["response_format"] = "b64_json"
 
     try:
         response = call_with_rate_limit_retries(lambda: client.images.generate(**kwargs))
     except openai.AuthenticationError as exc:
         raise ImageGenerationError(
-            f"OpenAI rejected OPENAI_API_KEY (authentication failed): {exc}. "
-            "Set a valid key or use --dry-run to inspect prompts only."
+            f"{'xAI' if settings.is_grok else 'OpenAI'} rejected {settings.api_key_env} "
+            f"(authentication failed): {exc}. {settings.auth_help()} "
+            "Or use --dry-run to inspect prompts only."
         ) from exc
     except openai.PermissionDeniedError as exc:
         raise ImageGenerationError(
-            f"OpenAI permission denied for image model {model!r}: {exc}. "
-            "Pick a model your account may use, or set image_generation.model in docgen.yaml."
+            f"{'xAI' if settings.is_grok else 'OpenAI'} permission denied for image model "
+            f"{resolved!r}: {exc}. Pick a model your account may use, or set "
+            "image_generation.model in docgen.yaml."
         ) from exc
     except openai.APIConnectionError as exc:
         raise ImageGenerationError(
-            f"OpenAI connection error: {exc} — re-run when connectivity is restored."
+            f"{'xAI' if settings.is_grok else 'OpenAI'} connection error: {exc} — "
+            "re-run when connectivity is restored."
         ) from exc
 
     data = response.data[0] if response.data else None
     b64 = getattr(data, "b64_json", None) if data is not None else None
-    if not b64:
-        raise ImageGenerationError(
-            f"OpenAI image response for model {model!r} had no b64_json payload; "
-            "cannot write the asset."
-        )
-    return base64.b64decode(b64)
+    if b64:
+        return base64.b64decode(b64)
+    url = getattr(data, "url", None) if data is not None else None
+    if url:
+        try:
+            return fetch_url_bytes(str(url))
+        except Exception as exc:
+            raise ImageGenerationError(
+                f"Image model {resolved!r} returned a URL but download failed: {exc}."
+            ) from exc
+    raise ImageGenerationError(
+        f"Image response for model {resolved!r} had neither b64_json nor url; "
+        "cannot write the asset."
+    )
 
 
 def _resolve_asset_path(cfg: "Config", relpath: str) -> Path:
@@ -144,7 +167,9 @@ def generate_images_for_spec(
             continue
 
         fn = image_fn or (
-            lambda p: generate_image_bytes(prompt=p, model=model, size=size, quality=quality)
+            lambda p: generate_image_bytes(
+                prompt=p, model=model, size=size, quality=quality, cfg=cfg
+            )
         )
         data = fn(prompt)
         out.parent.mkdir(parents=True, exist_ok=True)

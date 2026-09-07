@@ -231,8 +231,9 @@ def generate_narration_via_llm(
     topic_label: str | None = None,
     current_narration: str = "",
     mode: str = "generate",
+    cfg: Any | None = None,
 ) -> str:
-    """Call OpenAI to generate or revise a narration draft.
+    """Call chat completions (OpenAI or Grok) to generate or revise a narration draft.
 
     ``guidance`` is **caller-supplied** (e.g. project-owner hints from ``docgen.yaml``), not
     text returned from a prior model call. ``topic_label`` is a human-facing focus
@@ -243,8 +244,6 @@ def generate_narration_via_llm(
     both non-empty) edits the existing script in place: address feedback, keep
     structure/phrasing that still work, do not rewrite from scratch unless needed.
     """
-    import openai
-
     focus = (topic_label or "").strip() or _strip_segment_prefix(segment_name)
     notes = (revision_notes or "").strip()
     current = (current_narration or "").strip()
@@ -322,16 +321,15 @@ def generate_narration_via_llm(
             ]
         sys_prompt = system_prompt
 
-    client = openai.OpenAI()
-    response = client.chat.completions.create(
+    from docgen.ai_client import chat_completion
+
+    return chat_completion(
+        system_prompt=sys_prompt,
+        user_message="\n".join(user_parts),
         model=model,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": "\n".join(user_parts)},
-        ],
         temperature=float(temperature),
+        cfg=cfg,
     )
-    return response.choices[0].message.content or ""
 
 
 # ---------------------------------------------------------------------------
@@ -578,6 +576,7 @@ def create_app(config: Any | None = None) -> Flask:
                 topic_label=topic_label,
                 current_narration=current_narration,
                 mode=mode,
+                cfg=cfg,
             )
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400

@@ -1,4 +1,4 @@
-"""Hybrid ``docgen yaml-generate``: structural defaults from disk + OpenAI prose blocks.
+"""Hybrid ``docgen yaml-generate``: structural defaults from disk + LLM prose blocks.
 
 This does **not** replace an entire ``docgen.yaml`` in one shot. It:
 
@@ -19,7 +19,7 @@ This does **not** replace an entire ``docgen.yaml`` in one shot. It:
    ``project-context.md``) merge ``env_file``, top-level ``narration_from_source`` /
    ``manim_scene_generation`` blocks, optional ``concat``, and ``discovery`` (see
    ``merge_hint_project``).
-7. Optionally calls **OpenAI** to draft ``tts.instructions`` and ``wizard.system_prompt``.
+7. Optionally calls **OpenAI or Grok** to draft ``tts.instructions`` and ``wizard.system_prompt``.
 
 Writing the file uses PyYAML: **YAML comments and key order in the original file are
 not preserved.** Prefer version control for review; keep hand-maintained prose in Git
@@ -104,6 +104,16 @@ def merge_defaults(
     if ARCHIVE_EXCLUDE not in ex:
         ex.append(ARCHIVE_EXCLUDE)
         changes.append(f"wizard.exclude_patterns: added {ARCHIVE_EXCLUDE!r}")
+
+    ai = raw.get("ai")
+    if ai is None:
+        raw["ai"] = {"provider": "openai"}
+        changes.append(
+            "ai: added provider openai (set grok / DOCGEN_AI_PROVIDER=grok to use xAI)"
+        )
+    elif isinstance(ai, dict) and not str(ai.get("provider") or "").strip():
+        ai["provider"] = "openai"
+        changes.append("ai.provider: defaulted to openai")
 
     nf_existing = raw.get("narration_from_source")
     if nf_existing is None:
@@ -750,8 +760,9 @@ def _llm_yaml_hints_json(
     existing_tts: str,
     existing_wizard: str,
     model: str,
+    cfg: "Config | None" = None,
 ) -> dict[str, str]:
-    import openai
+    from docgen.ai_client import chat_completion
 
     parts = [
         f"Project: {project_label}",
@@ -768,23 +779,13 @@ def _llm_yaml_hints_json(
         parts.append(f"FILE: {label}\n```\n{body}\n```")
     user = "\n".join(parts)
 
-    client = openai.OpenAI()
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.35,
-        )
-    except openai.AuthenticationError as exc:
-        raise RuntimeError(
-            f"OpenAI rejected OPENAI_API_KEY: {exc}. Set a valid key or omit --llm."
-        ) from exc
-    except openai.APIConnectionError as exc:
-        raise RuntimeError(f"OpenAI connection error: {exc}") from exc
-    text = (resp.choices[0].message.content or "").strip()
+    text = (chat_completion(
+        system_prompt=DEFAULT_SYSTEM_PROMPT,
+        user_message=user,
+        model=model,
+        temperature=0.35,
+        cfg=cfg,
+    ) or "").strip()
     # tolerate markdown code fence
     m = re.match(r"^```(?:json)?\s*\n(?P<body>[\s\S]*?)\n```\s*$", text)
     if m:
@@ -800,7 +801,7 @@ def _llm_yaml_hints_json(
 
 
 def generate_llm_hints(cfg: "Config", *, model: str | None = None) -> dict[str, str]:
-    """Call OpenAI; return ``tts_instructions`` and ``wizard_system_prompt``."""
+    """Call chat completions; return ``tts_instructions`` and ``wizard_system_prompt``."""
     raw = cfg.raw
     tts = raw.get("tts") if isinstance(raw.get("tts"), dict) else {}
     wiz = raw.get("wizard") if isinstance(raw.get("wizard"), dict) else {}
@@ -818,6 +819,7 @@ def generate_llm_hints(cfg: "Config", *, model: str | None = None) -> dict[str, 
         existing_tts=existing_tts,
         existing_wizard=existing_wizard,
         model=model or DEFAULT_LLM_MODEL,
+        cfg=cfg,
     )
 
 

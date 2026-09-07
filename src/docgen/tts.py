@@ -1,4 +1,4 @@
-"""TTS narration generator using OpenAI gpt-4o-mini-tts."""
+"""TTS narration generator (OpenAI gpt-4o-mini-tts or xAI / Grok ``/v1/tts``)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
-from docgen.openai_retry import call_with_rate_limit_retries
 
 
 def _probe_duration(path: Path) -> float | None:
@@ -83,7 +82,7 @@ class TTSGenerator:
                 print(f"  ... ({len(plain) - 500} more chars)")
             return
 
-        import openai
+        from docgen.ai_client import synthesize_speech
 
         audio_dir.mkdir(parents=True, exist_ok=True)
 
@@ -94,18 +93,14 @@ class TTSGenerator:
 
         print(f"[tts] Generating audio for {seg_id} ({len(plain)} chars) -> {out_path}")
 
-        client = openai.OpenAI()
-
-        def _call() -> None:
-            response = client.audio.speech.create(
-                model=self.config.tts_model,
-                voice=self.config.tts_voice,
-                input=plain,
-                instructions=self.config.tts_instructions,
-            )
-            response.stream_to_file(str(out_path))
-
-        call_with_rate_limit_retries(_call)
+        synthesize_speech(
+            text=plain,
+            model=self.config.tts_model,
+            voice=self.config.tts_voice,
+            instructions=self.config.tts_instructions,
+            output_path=out_path,
+            cfg=self.config,
+        )
         print(f"[tts] Wrote {out_path}")
 
         new_duration = _probe_duration(out_path)

@@ -6,8 +6,8 @@ Two engines produce the same Whisper-shaped timing blocks
 * **local** (default) — offline alignment of the known narration text against
   the mp3 using ffmpeg ``silencedetect`` + proportional interpolation
   (:mod:`docgen.align`). No API calls; requires ``narration/<stem>.md``.
-* **whisper** — OpenAI ``whisper-1`` transcription (legacy; requires
-  ``OPENAI_API_KEY`` and network).
+* **whisper** — network transcription (legacy). OpenAI ``whisper-1``, or
+  xAI ``/v1/stt`` when ``ai.provider`` is ``grok``. Requires an API key.
 
 Select via ``timestamps.engine`` in docgen.yaml or ``docgen timestamps --engine``.
 """
@@ -31,29 +31,10 @@ class TimestampExtractor:
     # ── Whisper engine (network) ─────────────────────────────────────
 
     def extract(self, audio_path: str | Path) -> dict[str, Any]:
-        """Transcribe audio via OpenAI whisper-1 and return word-level timestamps."""
-        import openai
+        """Transcribe audio and return word-level timestamps (OpenAI Whisper or xAI STT)."""
+        from docgen.ai_client import transcribe_audio
 
-        client = openai.OpenAI()
-        with open(audio_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                response_format="verbose_json",
-                timestamp_granularities=["word", "segment"],
-            )
-
-        return {
-            "text": result.text,
-            "segments": [
-                {"start": s.start, "end": s.end, "text": s.text}
-                for s in (result.segments or [])
-            ],
-            "words": [
-                {"start": w.start, "end": w.end, "word": w.word}
-                for w in (result.words or [])
-            ],
-        }
+        return transcribe_audio(audio_path, cfg=self.config)
 
     # ── Local engine (offline alignment) ─────────────────────────────
 

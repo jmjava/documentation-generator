@@ -41,6 +41,19 @@ def test_load_env_warns_when_openai_in_shell_and_env_file(tmp_path, monkeypatch,
     assert os.environ["OPENAI_API_KEY"] == "sk-from-shell"
 
 
+def test_load_env_warns_when_xai_in_shell_and_env_file(tmp_path, monkeypatch, capsys) -> None:
+    (tmp_path / ".env").write_text("XAI_API_KEY=xai-from-file\n", encoding="utf-8")
+    cfg = _minimal_cfg(tmp_path, env_file=".env")
+    monkeypatch.setenv("XAI_API_KEY", "xai-from-shell")
+    monkeypatch.delenv("DOCGEN_ENV_OVERRIDES", raising=False)
+
+    cli._load_env(cfg)
+
+    err = capsys.readouterr().err
+    assert "XAI_API_KEY already set" in err
+    assert os.environ["XAI_API_KEY"] == "xai-from-shell"
+
+
 def test_load_env_docgen_env_overrides_all(tmp_path, monkeypatch) -> None:
     (tmp_path / ".env").write_text("OPENAI_API_KEY=sk-from-file\nOTHER=x\n", encoding="utf-8")
     cfg = _minimal_cfg(tmp_path, env_file=".env")

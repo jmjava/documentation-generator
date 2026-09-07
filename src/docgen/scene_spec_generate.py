@@ -181,7 +181,12 @@ def strip_yaml_fences(text: str) -> str:
 
 
 def _invoke_llm(
-    *, system_prompt: str, user_message: str, model: str, temperature: float
+    *,
+    system_prompt: str,
+    user_message: str,
+    model: str,
+    temperature: float,
+    cfg: "Config | None" = None,
 ) -> str:
     from docgen.manim_scene_support import call_llm
 
@@ -191,6 +196,7 @@ def _invoke_llm(
             user_message=user_message,
             model=model,
             temperature=temperature,
+            cfg=cfg,
         )
     )
 
@@ -563,7 +569,7 @@ def generate_scene_spec(
         if temperature_override is not None
         else float(settings.temperature or DEFAULT_SCENE_SPEC_TEMPERATURE)
     )
-    invoke = llm or _invoke_llm
+    invoke = llm or (lambda **kw: _invoke_llm(cfg=cfg, **kw))
     n_beats = len(cluster_subject_beats(narration_sentences(narration_text)))
     # Near-miss: allow a couple uncovered beats after retry, not a blind label quota.
     near_miss_slack = max(1, n_beats // 8) if n_beats else 0
@@ -588,10 +594,13 @@ def generate_scene_spec(
                 temperature=min(0.9, temperature + 0.15 * attempt),
             )
         except RuntimeError as exc:
+            from docgen.ai_client import resolve_ai_settings
+
+            settings = resolve_ai_settings(cfg)
             raise SceneGenerationError(
-                f"OpenAI/chat call failed ({exc}). "
-                "Check OPENAI_API_KEY, set DOCGEN_ENV_OVERRIDES=1 to load the bundle env_file, "
-                "or use --dry-run to inspect the prompt only."
+                f"Chat call failed ({exc}). "
+                f"{settings.auth_help()} Set DOCGEN_ENV_OVERRIDES=1 to load the bundle "
+                "env_file, or use --dry-run to inspect the prompt only."
             ) from exc
         try:
             merged_spec = _parse_and_harden_llm_spec(

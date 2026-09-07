@@ -115,6 +115,16 @@ def test_effective_max_freeze_ratio_uses_global(tmp_path):
     assert c.effective_max_freeze_ratio(None) == 0.4
 
 
+def test_ai_config_defaults_and_override(tmp_path):
+    p = tmp_path / "docgen.yaml"
+    p.write_text("{}", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.ai_config["provider"] == "openai"
+    p.write_text("ai: {provider: grok}\n", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.ai_config["provider"] == "grok"
+
+
 def test_minimal_config(tmp_path):
     c = Config.minimal(tmp_path)
     assert c.base_dir == tmp_path.resolve()
