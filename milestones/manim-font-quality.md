@@ -1,7 +1,7 @@
 # Milestone: manim.font / quality / manim_path must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#106](https://github.com/jmjava/documentation-generator/pull/106)  
 **Depends on:** `milestones/ai-timestamp-strings.md` (PR #105)
 
 ## Problem
