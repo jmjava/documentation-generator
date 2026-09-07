@@ -164,3 +164,17 @@ def test_index_html_extra_links_rejects_non_mapping_items(tmp_path: Path) -> Non
     )
     with pytest.raises(RuntimeError, match="extra_links items must be mappings"):
         PagesGenerator(cfg).generate_index_html(force=True)
+
+
+def test_index_html_rejects_non_mapping_pages_segments(tmp_path: Path) -> None:
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {
+            "title": "Demos",
+            "demos_subdir": "demos",
+            "segments": {"01": "Overview"},
+        },
+        segments_all=["01"],
+    )
+    with pytest.raises(RuntimeError, match="pages.segments.01 must be a YAML mapping"):
+        PagesGenerator(cfg).generate_index_html(force=True)

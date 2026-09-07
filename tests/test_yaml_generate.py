@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from docgen.config import Config
@@ -276,6 +277,22 @@ def test_discover_visual_map_preserves_still_and_fills_manim_slots(tmp_path: Pat
     assert raw["visual_map"]["01"]["caption"] == "keep-me"
     assert raw["visual_map"]["02"]["scene"] == "FirstScene"
     assert raw["visual_map"]["03"]["scene"] == "SecondScene"
+
+
+def test_discover_visual_map_rejects_non_mapping_row(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class FirstScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {"01": "FirstScene"},
+    }
+    (tmp_path / "docgen.yaml").write_text("segments:\n  all: [\"01\"]\n", encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    with pytest.raises(ValueError, match="visual_map\\['01'\\] must be a YAML mapping"):
+        discover_visual_map(raw, cfg)
 
 
 def test_discover_visual_map_preserves_committed_manim_class(tmp_path: Path) -> None:
