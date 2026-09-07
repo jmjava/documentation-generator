@@ -499,6 +499,11 @@ def compose(
             "[compose] No segments left after --only-visual-type filter "
             f"({', '.join(only_visual_types)})."
         )
+    if not target:
+        raise click.ClickException(
+            "[compose] no segments to compose — set segments.default or "
+            "segments.all, or pass segment ids"
+        )
     click.echo(f"=== Composing {len(target)} segments ===")
     composed = comp.compose_segments(target)
     mapped = [
@@ -541,7 +546,11 @@ def lint(ctx: click.Context, segment: str | None) -> None:
 
     cfg = _require_config(ctx)
     linter = NarrationLinter(cfg)
-    segments = [segment] if segment else cfg.segments_all
+    segments = [segment] if segment else list(cfg.segments_all)
+    if not segments:
+        raise click.ClickException(
+            "segments.all is empty — add segment ids in docgen.yaml before lint"
+        )
     issues_total = 0
 
     missing = 0

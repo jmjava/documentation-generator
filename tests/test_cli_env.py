@@ -206,3 +206,40 @@ def test_cli_list_root_yaml_is_click_error(tmp_path: Path) -> None:
     combined = result.output + result.stderr
     assert "mapping" in combined
     assert "AttributeError" not in combined
+
+
+def test_cli_list_dirs_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text("dirs: [narration]\nsegments:\n  all: [\"01\"]\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(p), "lint"])
+    assert result.exit_code != 0
+    combined = result.output + result.stderr
+    assert "dirs must be a YAML mapping" in combined
+    assert "AttributeError" not in combined
+    assert "Traceback" not in combined
+
+
+def test_cli_lint_empty_segments_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"all": [], "default": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(p), "lint"])
+    assert result.exit_code != 0
+    assert "segments.all is empty" in (result.output + result.stderr)

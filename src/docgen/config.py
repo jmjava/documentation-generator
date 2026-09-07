@@ -38,6 +38,66 @@ def load_yaml_mapping(path: Path) -> dict[str, Any]:
     return raw
 
 
+def mapping_block(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    label: str | None = None,
+    source: str = "docgen.yaml",
+) -> dict[str, Any]:
+    """Return ``raw[key]`` when it is a mapping; ``{}`` when missing or null.
+
+    A non-mapping value (list, scalar) raises :class:`ConfigError`.
+    """
+    name = label or key
+    val = raw.get(key)
+    if val is None:
+        return {}
+    if not isinstance(val, dict):
+        raise ConfigError(
+            f"{source}: {name} must be a YAML mapping, not {type(val).__name__}"
+        )
+    return val
+
+
+def mapping_sub_block(
+    parent: dict[str, Any],
+    key: str,
+    *,
+    label: str,
+    source: str = "docgen.yaml",
+) -> dict[str, Any]:
+    """Return ``parent[key]`` when it is a mapping; ``{}`` when missing or null."""
+    val = parent.get(key)
+    if val is None:
+        return {}
+    if not isinstance(val, dict):
+        raise ConfigError(
+            f"{source}: {label} must be a YAML mapping, not {type(val).__name__}"
+        )
+    return val
+
+
+def string_list_block(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    fallback: list[str] | None = None,
+    label: str | None = None,
+    source: str = "docgen.yaml",
+) -> list[str]:
+    """Return a list of strings from ``raw[key]``, or *fallback* when missing/null."""
+    name = label or key
+    val = raw.get(key)
+    if val is None:
+        return list(fallback or [])
+    if not isinstance(val, list):
+        raise ConfigError(
+            f"{source}: {name} must be a YAML list, not {type(val).__name__}"
+        )
+    return [str(x) for x in val]
+
+
 @dataclass
 class Config:
     """Parsed and validated project configuration."""
@@ -53,27 +113,85 @@ class Config:
     hints_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
-        dirs = self.raw.get("dirs", {})
+        dirs = self._block("dirs")
         self.narration_dir = self.base_dir / dirs.get("narration", "narration")
         self.audio_dir = self.base_dir / dirs.get("audio", "audio")
         self.animations_dir = self.base_dir / dirs.get("animations", "animations")
         self.recordings_dir = self.base_dir / dirs.get("recordings", "recordings")
         self.hints_dir = self.base_dir / dirs.get("hints", "hints")
+        # Fail closed on nested mapping keys so later properties do not traceback.
+        for key in (
+            "dirs",
+            "segments",
+            "visual_map",
+            "segment_names",
+            "tts",
+            "manim",
+            "validation",
+            "wizard",
+            "pages",
+            "concat",
+            "compose",
+            "timestamps",
+            "image_generation",
+            "ai",
+            "narration_from_source",
+            "discovery",
+        ):
+            self._block(key)
+        validation = self._block("validation")
+        for nested in (
+            "ocr",
+            "layout",
+            "av_sync",
+            "timing_sync",
+            "scene_assets",
+            "story_end",
+            "narration_lint",
+            "subject_beat_coverage",
+        ):
+            self._sub_block(validation, nested, label=f"validation.{nested}")
+        # List-valued keys: a string must not be iterated as characters.
+        _ = self.segments_all
+        _ = self.manim_scenes
+
+    def _source_label(self) -> str:
+        return self.yaml_path.name if self.yaml_path else "docgen.yaml"
+
+    def _block(self, key: str, *, label: str | None = None) -> dict[str, Any]:
+        return mapping_block(self.raw, key, label=label, source=self._source_label())
+
+    def _sub_block(self, parent: dict[str, Any], key: str, *, label: str) -> dict[str, Any]:
+        return mapping_sub_block(parent, key, label=label, source=self._source_label())
 
     # -- Segment helpers -------------------------------------------------------
 
     @property
     def segments_default(self) -> list[str]:
-        return self.raw.get("segments", {}).get("default", [])
+        return string_list_block(
+            self._block("segments"),
+            "default",
+            label="segments.default",
+            source=self._source_label(),
+        )
 
     @property
     def segments_all(self) -> list[str]:
-        return self.raw.get("segments", {}).get("all", self.segments_default)
+        seg = self._block("segments")
+        if "all" not in seg or seg.get("all") is None:
+            return list(self.segments_default)
+        return string_list_block(
+            seg,
+            "all",
+            fallback=self.segments_default,
+            label="segments.all",
+            source=self._source_label(),
+        )
 
     @property
     def segment_names(self) -> dict[str, str]:
         """Map segment ID → full name stem, e.g. {"01": "01-architecture"}."""
-        return self.raw.get("segment_names", {})
+        return {str(k): str(v) for k, v in self._block("segment_names").items()}
 
     def resolve_segment_name(self, seg_id: str) -> str:
         """Return the full name for a segment, falling back to the ID itself."""
@@ -134,7 +252,7 @@ class Config:
 
     @property
     def visual_map(self) -> dict[str, Any]:
-        return self.raw.get("visual_map", {})
+        return self._block("visual_map")
 
     def pipeline_manim_scene_names(self) -> list[str]:
         """Scene class names for ``segments.all`` entries whose ``visual_map`` type is ``manim``."""
@@ -154,7 +272,7 @@ class Config:
 
     @property
     def concat_map(self) -> dict[str, list[str]]:
-        return self.raw.get("concat", {})
+        return self._block("concat")
 
     # -- AI provider (OpenAI / Grok) ------------------------------------------
 
@@ -168,8 +286,8 @@ class Config:
         ``ANTHROPIC_API_KEY`` selects Claude. See :mod:`docgen.ai_client`.
         """
         defaults: dict[str, Any] = {"provider": "openai"}
-        block = self.raw.get("ai")
-        if isinstance(block, dict):
+        block = self._block("ai")
+        if block:
             defaults.update(block)
         return defaults
 
@@ -177,15 +295,15 @@ class Config:
 
     @property
     def tts_model(self) -> str:
-        return self.raw.get("tts", {}).get("model", "gpt-4o-mini-tts")
+        return self._block("tts").get("model", "gpt-4o-mini-tts")
 
     @property
     def tts_voice(self) -> str:
-        return self.raw.get("tts", {}).get("voice", "coral")
+        return self._block("tts").get("voice", "coral")
 
     @property
     def tts_instructions(self) -> str:
-        return self.raw.get("tts", {}).get(
+        return self._block("tts").get(
             "instructions",
             "You are narrating a technical demo video. Speak in a calm, professional tone.",
         )
@@ -205,7 +323,7 @@ class Config:
             "silence_noise_db": -35.0,
             "min_silence_sec": 0.3,
         }
-        defaults.update(self.raw.get("timestamps", {}) or {})
+        defaults.update(self._block("timestamps"))
         return defaults
 
     # -- Image generation (scene-spec image elements) ----------------------------
@@ -221,33 +339,38 @@ class Config:
             "model": "gpt-image-1",
             "size": "1536x1024",
         }
-        defaults.update(self.raw.get("image_generation", {}) or {})
+        defaults.update(self._block("image_generation"))
         return defaults
 
     # -- Manim -----------------------------------------------------------------
 
     @property
     def manim_scenes(self) -> list[str]:
-        return self.raw.get("manim", {}).get("scenes", [])
+        return string_list_block(
+            self._block("manim"),
+            "scenes",
+            label="manim.scenes",
+            source=self._source_label(),
+        )
 
     @property
     def manim_quality(self) -> str:
-        return self.raw.get("manim", {}).get("quality", "1080p30")
+        return self._block("manim").get("quality", "1080p30")
 
     @property
     def manim_font(self) -> str:
         """Font family used for all Manim Text() calls (default: Liberation Sans)."""
-        return str(self.raw.get("manim", {}).get("font", "Liberation Sans"))
+        return str(self._block("manim").get("font", "Liberation Sans"))
 
     @property
     def manim_min_font_size(self) -> int:
         """Minimum font size enforced in Manim scene lint (default: 14)."""
-        return int(self.raw.get("manim", {}).get("min_font_size", 14))
+        return int(self._block("manim").get("min_font_size", 14))
 
     @property
     def manim_scene_lint_enabled(self) -> bool:
         """When false, ``docgen validate`` skips Text()/unicode lint on ``animations/scenes.py``."""
-        return bool(self.raw.get("manim", {}).get("scene_lint", True))
+        return bool(self._block("manim").get("scene_lint", True))
 
     @property
     def subject_beat_coverage_enabled(self) -> bool:
@@ -255,15 +378,17 @@ class Config:
 
         Config: ``validation.subject_beat_coverage.enabled`` (bool).
         """
-        block = self.raw.get("validation", {}).get("subject_beat_coverage")
-        if isinstance(block, dict) and "enabled" in block:
+        block = self._sub_block(
+            self._block("validation"), "subject_beat_coverage", label="validation.subject_beat_coverage"
+        )
+        if "enabled" in block:
             return bool(block.get("enabled"))
         return True
 
     @property
     def manim_path(self) -> str | None:
         """Optional absolute/relative path to the Manim executable."""
-        value = self.raw.get("manim", {}).get("manim_path")
+        value = self._block("manim").get("manim_path")
         return str(value) if value else None
 
     @property
@@ -273,7 +398,15 @@ class Config:
                    "\u2260", "\u2264", "\u2265", "\u2014", "\u2013",
                    "\u2018", "\u2019", "\u201c", "\u201d", "\u2022",
                    "\u2026"]
-        return self.raw.get("manim", {}).get("unsafe_unicode", default)
+        val = self._block("manim").get("unsafe_unicode", default)
+        if val is None:
+            return list(default)
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"{self._source_label()}: manim.unsafe_unicode must be a YAML list, "
+                f"not {type(val).__name__}"
+            )
+        return [str(x) for x in val]
 
     # -- Compose ----------------------------------------------------------------
 
@@ -282,7 +415,7 @@ class Config:
         defaults: dict[str, Any] = {
             "ffmpeg_timeout_sec": 300,
         }
-        defaults.update(self.raw.get("compose", {}))
+        defaults.update(self._block("compose"))
         return defaults
 
     @property
@@ -294,12 +427,12 @@ class Config:
 
     @property
     def max_drift_sec(self) -> float:
-        return float(self.raw.get("validation", {}).get("max_drift_sec", 2.75))
+        return float(self._block("validation").get("max_drift_sec", 2.75))
 
     @property
     def max_freeze_ratio(self) -> float:
         """Maximum fraction of a composed video that may be a frozen last frame."""
-        return float(self.raw.get("validation", {}).get("max_freeze_ratio", 0.25))
+        return float(self._block("validation").get("max_freeze_ratio", 0.25))
 
     def effective_max_freeze_ratio(self, visual_type: str | None) -> float:
         """Ceiling for compose-time audio-vs-video freeze guard (trailing pad)."""
@@ -319,7 +452,7 @@ class Config:
             ],
             "min_confidence": 40,
         }
-        defaults.update(self.raw.get("validation", {}).get("ocr", {}))
+        defaults.update(self._sub_block(self._block("validation"), "ocr", label="validation.ocr"))
         return defaults
 
     @property
@@ -329,7 +462,9 @@ class Config:
             "edge_margin_px": 15,
             "check_overlap": True,
         }
-        defaults.update(self.raw.get("validation", {}).get("layout", {}))
+        defaults.update(
+            self._sub_block(self._block("validation"), "layout", label="validation.layout")
+        )
         return defaults
 
     @property
@@ -344,7 +479,9 @@ class Config:
             # Only OCR-anchor these visual types (on-screen text expected).
             "visual_types": ["manim"],
         }
-        defaults.update(self.raw.get("validation", {}).get("av_sync", {}))
+        defaults.update(
+            self._sub_block(self._block("validation"), "av_sync", label="validation.av_sync")
+        )
         return defaults
 
     @property
@@ -361,7 +498,11 @@ class Config:
             "max_tail_gap_sec": 3.0,
             "max_end_overrun_sec": 1.0,
         }
-        defaults.update(self.raw.get("validation", {}).get("timing_sync", {}))
+        defaults.update(
+            self._sub_block(
+                self._block("validation"), "timing_sync", label="validation.timing_sync"
+            )
+        )
         return defaults
 
     @property
@@ -372,7 +513,11 @@ class Config:
         ``generate-all`` gate before Manim so a stale spec cannot burn a render.
         """
         defaults: dict[str, Any] = {"enabled": True}
-        defaults.update(self.raw.get("validation", {}).get("scene_assets", {}))
+        defaults.update(
+            self._sub_block(
+                self._block("validation"), "scene_assets", label="validation.scene_assets"
+            )
+        )
         return defaults
 
     @property
@@ -389,7 +534,9 @@ class Config:
             "max_early_sec": 40.0,
             "max_early_ratio": 0.45,
         }
-        defaults.update(self.raw.get("validation", {}).get("story_end", {}))
+        defaults.update(
+            self._sub_block(self._block("validation"), "story_end", label="validation.story_end")
+        )
         return defaults
 
     @property
@@ -411,14 +558,18 @@ class Config:
             "block_tts_on_pre_lint": True,
             "whisper_check": True,
         }
-        defaults.update(self.raw.get("validation", {}).get("narration_lint", {}))
+        defaults.update(
+            self._sub_block(
+                self._block("validation"), "narration_lint", label="validation.narration_lint"
+            )
+        )
         return defaults
 
     # -- Pages -----------------------------------------------------------------
 
     @property
     def pages_config(self) -> dict[str, Any]:
-        return self.raw.get("pages", {})
+        return self._block("pages")
 
     # -- Wizard ----------------------------------------------------------------
 
@@ -458,7 +609,7 @@ class Config:
                 ".java",
             ],
         }
-        defaults.update(self.raw.get("wizard", {}))
+        defaults.update(self._block("wizard"))
         return defaults
 
     # -- Env file --------------------------------------------------------------

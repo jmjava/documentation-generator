@@ -198,3 +198,39 @@ def test_from_yaml_empty_document_is_empty_mapping(tmp_path: Path) -> None:
     p.write_text("", encoding="utf-8")
     c = Config.from_yaml(p)
     assert c.raw == {}
+
+
+def test_from_yaml_null_dirs_uses_defaults(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("dirs: null\nsegments:\n  all: [\"01\"]\n", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.narration_dir == tmp_path / "narration"
+    assert c.segments_all == ["01"]
+
+
+def test_from_yaml_list_dirs_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("dirs: [narration]\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="dirs must be a YAML mapping"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_segments_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segments: [\"01\"]\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="segments must be a YAML mapping"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_segments_all_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segments:\n  all: \"01\"\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="segments.all must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_validation_ocr_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  ocr: []\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="validation.ocr must be a YAML mapping"):
+        Config.from_yaml(p)
