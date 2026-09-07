@@ -251,6 +251,39 @@ def test_settings_root_and_segment_overrides_merge(tmp_path: Path) -> None:
     assert s.class_name == "ExtrasScene"
 
 
+def test_settings_zero_temperature_is_not_replaced_by_default(tmp_path: Path) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {"manim_scene_generation": {"temperature": 0}},
+    )
+    s = merged_scene_generation_settings(cfg, "08")
+    assert s.temperature == 0.0
+
+
+def test_build_timing_enrichment_zero_max_chars_does_not_truncate(tmp_path: Path) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {
+            "manim_scene_generation": {
+                "max_whisper_segment_text_chars": 0,
+                "segments": {"08": {"class_name": "ExtrasScene"}},
+            },
+        },
+    )
+    long = "alpha" * 80
+    segs = [{"start": 0.0, "end": 1.0, "text": long}]
+    out = build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+    assert long in out
+
+
+def test_build_timing_enrichment_bool_max_chars_raises(tmp_path: Path) -> None:
+    cfg = Config.minimal(tmp_path)
+    cfg.raw["manim_scene_generation"] = {"max_whisper_segment_text_chars": True}
+    segs = [{"start": 0.0, "end": 1.0, "text": "alpha"}]
+    with pytest.raises(SceneGenerationError, match="max_whisper_segment_text_chars"):
+        build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+
+
 # ── Class-name derivation ──────────────────────────────────────────────────
 
 

@@ -119,6 +119,27 @@ def test_generate_scene_spec_normalizes_ids_and_compiles(tmp_path: Path) -> None
     assert "timing_key" not in result.spec
 
 
+def test_generate_scene_spec_honors_zero_temperature(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    cfg.raw["manim_scene_generation"]["temperature"] = 0.0
+    seen: list[float] = []
+
+    def fake_llm(*, temperature: float, **_kwargs: object) -> str:
+        seen.append(temperature)
+        return MOCK_LLM_YAML
+
+    generate_scene_spec(
+        cfg,
+        "08",
+        extra_paths=[],
+        extra_hints=[],
+        dry_run=False,
+        llm=fake_llm,
+    )
+    assert seen
+    assert seen[0] == 0.0
+
+
 def test_generate_scene_spec_dry_run_no_llm(tmp_path: Path) -> None:
     cfg = _bundle(tmp_path)
     result = generate_scene_spec(

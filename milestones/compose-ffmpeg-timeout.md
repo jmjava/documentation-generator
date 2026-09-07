@@ -1,6 +1,6 @@
 # Milestone: compose must not accept a timed-out ffmpeg mux
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#121](https://github.com/jmjava/documentation-generator/pull/121)  
 **Depends on:** `milestones/pipeline-fail-closed.md`,
 `milestones/visual-beats-numeric.md` (PR #120)
