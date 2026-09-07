@@ -368,3 +368,54 @@ def test_user_message_includes_computed_layout_stack_budgets() -> None:
     assert f"{budget_default:.2f}" in msg
     assert f"{budget_compact:.2f}" in msg
     assert "13.22" in msg  # horizontal safe width (FRAME_WIDTH - 1.0)
+
+
+def test_scene_spec_generate_all_uses_default_when_all_missing(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration", "animations": "animations"},
+                "segments": {"default": ["01"]},
+                "segment_names": {"01": "01-demo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--config", str(p), "scene-spec-generate", "--all", "--dry-run"],
+    )
+    combined = result.output + result.stderr
+    assert "segments.all is empty" not in combined
+    assert "=== scene-spec-generate --segment 01 ===" in combined
+
+
+def test_scene_spec_generate_all_empty_all_raises_even_with_default(
+    tmp_path: Path,
+) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump(
+            {
+                "segments": {"default": ["01"], "all": []},
+                "segment_names": {"01": "01-demo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--config", str(p), "scene-spec-generate", "--all"]
+    )
+    assert result.exit_code != 0
+    assert "segments.all is empty" in (result.output + result.stderr)
