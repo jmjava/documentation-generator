@@ -5,6 +5,9 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
+**Active:** **[multi-host-ai-hardening.md](multi-host-ai-hardening.md)** — Cursor
+Cloud / local Cursor / Claude Code keys, `--repo` clone cache, fail-closed chat.
+
 **Archived roadmaps:** [archive/](archive/) — older write-ups kept for history;
 not the day-to-day execution list.
 
