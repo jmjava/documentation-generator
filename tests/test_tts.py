@@ -131,6 +131,30 @@ def test_tts_empty_segments_all_raises(tmp_path: Path) -> None:
         TTSGenerator(cfg).generate(dry_run=True)
 
 
+def test_tts_empty_provider_output_raises(tmp_path: Path) -> None:
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "validation": {"narration_lint": {"block_tts_on_pre_lint": False}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    (narr / "01-intro.md").write_text("Spoken line.\n", encoding="utf-8")
+    cfg = Config.from_yaml(p)
+
+    def _write_empty(*, output_path: Path, **_kwargs: object) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"")
+
+    with patch("docgen.ai_client.synthesize_speech", side_effect=_write_empty):
+        with pytest.raises(TTSError, match="wrote no audio"):
+            TTSGenerator(cfg).generate(segment="01")
+    assert not (tmp_path / "audio" / "01-intro.mp3").exists()
+
+
 def test_probe_duration_returns_none_for_missing_file(tmp_path):
     result = _probe_duration(tmp_path / "nonexistent.mp3")
     assert result is None

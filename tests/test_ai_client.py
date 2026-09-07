@@ -190,6 +190,29 @@ def test_grok_tts_posts_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert out.read_bytes() == b"ID3fake"
 
 
+def test_grok_tts_empty_body_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    out = tmp_path / "n.mp3"
+
+    def _http(url: str, *, data: bytes, headers: dict, **_kwargs) -> bytes:
+        assert url.endswith("/tts")
+        return b""
+
+    with patch("docgen.ai_client._http_with_retries", side_effect=_http):
+        with pytest.raises(AIError, match="empty audio"):
+            synthesize_speech(
+                text="Hello",
+                model="gpt-4o-mini-tts",
+                voice="coral",
+                instructions="unused on grok",
+                output_path=out,
+                cfg=cfg,
+            )
+    assert not out.exists()
+
+
 def test_grok_stt_maps_words(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
     monkeypatch.setenv("XAI_API_KEY", "xai-test")

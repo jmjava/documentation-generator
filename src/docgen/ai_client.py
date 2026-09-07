@@ -626,6 +626,8 @@ def _grok_tts(
         accept="audio/mpeg",
         error_label="xAI",
     )
+    if not body:
+        raise AIError("xAI TTS returned empty audio")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(body)
 

@@ -264,6 +264,17 @@ class Config:
                 label="wizard.scan_extensions",
                 source=src,
             )
+        tts = self._block("tts")
+        if tts.get("model") is not None:
+            require_yaml_string(tts["model"], label="tts.model", source=src)
+        if tts.get("voice") is not None:
+            require_yaml_string(tts["voice"], label="tts.voice", source=src)
+        inst = tts.get("instructions")
+        if inst is not None and not isinstance(inst, str):
+            raise ConfigError(
+                f"{src}: tts.instructions must be a YAML string, "
+                f"not {type(inst).__name__}"
+            )
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(

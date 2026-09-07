@@ -131,6 +131,13 @@ class TTSGenerator:
             output_path=out_path,
             cfg=self.config,
         )
+        if not out_path.is_file() or out_path.stat().st_size == 0:
+            if out_path.is_file():
+                out_path.unlink()
+            raise TTSError(
+                f"TTS wrote no audio for {seg_id} ({out_path.name}) — "
+                "the provider returned an empty file"
+            )
         print(f"[tts] Wrote {out_path}")
 
         new_duration = _probe_duration(out_path)
