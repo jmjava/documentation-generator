@@ -1,7 +1,7 @@
 # Milestone: validation enable flags must be YAML booleans
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#119](https://github.com/jmjava/documentation-generator/pull/119)  
 **Depends on:** `milestones/validation-numeric-tunables.md` (PR #118),
 `milestones/discovery-bool-flags.md` (PR #114)
 
@@ -37,8 +37,8 @@ must be YAML booleans. Missing keys keep defaults.
 - [x] Present enable flags must be YAML booleans.
 - [x] Tests for quoted ``"false"``, integer ``0``, and real YAML bools.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (686 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
