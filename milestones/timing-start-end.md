@@ -1,6 +1,6 @@
 # Milestone: timing.json word/segment start and end must be numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#134](https://github.com/jmjava/documentation-generator/pull/134)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127),
 `milestones/bootstrap-timing-helpers.md` (PR #130),

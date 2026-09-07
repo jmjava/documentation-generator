@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[timing-start-end.md](timing-start-end.md)** —
-`timing.json` word/segment `start` / `end` must be JSON numbers.
+**Active:** **[ffprobe-returncode.md](ffprobe-returncode.md)** —
+ffprobe duration probes must honor exit status; image compose needs `-t`.
 
 **Shipped:**
+- **[timing-start-end.md](timing-start-end.md)** —
+  `timing.json` word/segment `start` / `end` must be JSON numbers
+  (#134).
 - **[wizard-path-ref.md](wizard-path-ref.md)** —
   wizard `open-bundle` `path` and `tool/update` `ref` must be JSON strings
   (#133).

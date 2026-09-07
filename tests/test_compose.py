@@ -311,3 +311,48 @@ def test_run_ffmpeg_timeout_without_output_raises(tmp_path: Path, monkeypatch) -
     with pytest.raises(ComposeError, match="ffmpeg timed out after 2s"):
         composer._run_ffmpeg(["ffmpeg", "-y", str(missing)])
     assert not missing.exists()
+
+
+def test_compose_image_raises_when_audio_duration_unknown(tmp_path: Path, monkeypatch) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "image", "source": "images/slide.png"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    (tmp_path / "audio").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "images").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "audio" / "01-demo.mp3").write_bytes(b"fake-mp3")
+    (tmp_path / "images" / "slide.png").write_bytes(b"fake-png")
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+
+    composer = Composer(c)
+    monkeypatch.setattr(composer, "_probe_duration", lambda _p: None)
+    ran = {"n": 0}
+
+    def boom(_cmd):
+        ran["n"] += 1
+
+    monkeypatch.setattr(composer, "_run_ffmpeg", boom)
+    with pytest.raises(ComposeError, match="cannot probe audio duration"):
+        composer._compose_image("01", "images/slide.png")
+    assert ran["n"] == 0
+
+
+def test_probe_duration_ignores_stdout_when_ffprobe_fails(tmp_path: Path, monkeypatch) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    composer = Composer(c)
+
+    class _Proc:
+        returncode = 1
+        stdout = "12.345\n"
+        stderr = "error"
+
+    monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: _Proc())
+    assert composer._probe_duration(tmp_path / "missing.mp3") is None

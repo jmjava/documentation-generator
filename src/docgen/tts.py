@@ -23,8 +23,13 @@ def _probe_duration(path: Path) -> float | None:
              "-of", "csv=p=0", str(path)],
             capture_output=True, text=True, timeout=30,
         )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    if out.returncode != 0:
+        return None
+    try:
         return float(out.stdout.strip())
-    except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+    except ValueError:
         return None
 
 
