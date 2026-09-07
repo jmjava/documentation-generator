@@ -6,9 +6,10 @@ import os
 import time
 from pathlib import Path
 
+import pytest
 import yaml
 
-from docgen.compose import Composer, filter_segments_by_visual_types
+from docgen.compose import ComposeError, Composer, filter_segments_by_visual_types
 from docgen.config import Config
 
 
@@ -67,6 +68,39 @@ def test_compose_skips_unmapped_segment(tmp_path: Path, capsys) -> None:
     out = capsys.readouterr().out
     assert "unmapped" in out
     assert "SKIP: no visual_map" in out
+
+
+def test_compose_unknown_visual_type_raises(tmp_path: Path) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "vhs", "source": "clip.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    composer = Composer(c)
+    with pytest.raises(ComposeError, match="unknown visual_map type 'vhs'"):
+        composer.compose_segments(["01"])
+
+
+def test_cli_compose_unknown_visual_type_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "vhs", "source": "clip.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
+    assert result.exit_code != 0
+    combined = (result.output + result.stderr).lower()
+    assert "unknown visual_map type" in combined
+    assert "traceback" not in combined
 
 
 def test_stale_visual_warning_when_video_older_than_audio(tmp_path: Path, capsys, monkeypatch) -> None:

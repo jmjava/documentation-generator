@@ -194,6 +194,12 @@ class PagesGenerator:
         """
         explicit = self.pages_cfg.get("segments")
         if isinstance(explicit, dict) and explicit:
+            for sid, meta in explicit.items():
+                if not isinstance(meta, dict):
+                    raise RuntimeError(
+                        f"pages.segments.{sid} must be a YAML mapping with title/description, "
+                        f"not {type(meta).__name__}"
+                    )
             return explicit
         discovered: dict[str, dict] = {}
         for seg_id in self.config.segments_all:

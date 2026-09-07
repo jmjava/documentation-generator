@@ -677,6 +677,14 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     if not isinstance(existing, dict):
         existing = {}
 
+    for key, spec in existing.items():
+        if spec is None:
+            continue
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"visual_map[{key!r}] must be a YAML mapping, not {type(spec).__name__}"
+            )
+
     new_vm: dict[str, Any] = {}
     leftover_non_manim: dict[str, Any] = {}
     for key, spec in existing.items():

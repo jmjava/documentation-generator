@@ -488,7 +488,7 @@ def compose(
 
     Pass segment IDs to compose specific ones, or omit for the default set.
     """
-    from docgen.compose import Composer, filter_segments_by_visual_types
+    from docgen.compose import ComposeError, Composer, filter_segments_by_visual_types
 
     cfg = _require_config(ctx)
     comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
@@ -505,7 +505,10 @@ def compose(
             "segments.all, or pass segment ids"
         )
     click.echo(f"=== Composing {len(target)} segments ===")
-    composed = comp.compose_segments(target)
+    try:
+        composed = comp.compose_segments(target)
+    except ComposeError as exc:
+        raise click.ClickException(str(exc)) from exc
     mapped = [
         sid
         for sid in target
@@ -1210,7 +1213,10 @@ def yaml_generate_cmd(
 
     changes: list[str] = []
     if merge_defaults:
-        changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
+        try:
+            changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
     if llm:
         _echo_ai_status(cfg)
         try:

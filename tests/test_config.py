@@ -234,3 +234,10 @@ def test_from_yaml_list_validation_ocr_raises(tmp_path: Path) -> None:
     p.write_text("validation:\n  ocr: []\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="validation.ocr must be a YAML mapping"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_visual_map_row_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("visual_map:\n  01: FirstScene\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="visual_map.01 must be a YAML mapping"):
+        Config.from_yaml(p)

@@ -163,6 +163,15 @@ class Config:
                     f"{self._source_label()}: concat.{name} must be a YAML list, "
                     f"not {type(segs).__name__}"
                 )
+        vm = self._block("visual_map")
+        for sid, spec in vm.items():
+            if spec is None:
+                continue
+            if not isinstance(spec, dict):
+                raise ConfigError(
+                    f"{self._source_label()}: visual_map.{sid} must be a YAML mapping, "
+                    f"not {type(spec).__name__}"
+                )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"

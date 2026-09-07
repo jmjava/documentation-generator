@@ -80,7 +80,10 @@ class Composer:
             elif vtype == "image":
                 ok = self._compose_image(seg_id, vmap.get("source", ""))
             else:
-                print(f"    unknown type '{vtype}'")
+                raise ComposeError(
+                    f"    unknown visual_map type {vtype!r} for {seg_id} "
+                    "(use manim, still, image, or mixed)"
+                )
 
             if ok:
                 composed += 1
