@@ -1,7 +1,7 @@
 # Milestone: concat must not leave a truncated ffmpeg output
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#123](https://github.com/jmjava/documentation-generator/pull/123)  
 **Depends on:** `milestones/compose-ffmpeg-timeout.md` (PR #121),
 `milestones/generation-zero-values.md` (PR #122)
 
@@ -21,12 +21,12 @@ unlink the incomplete output (same contract as compose). Keep raising
 
 ## Done when
 
-- [ ] Timeout / failed concat removes the incomplete target mp4.
-- [ ] Tests cover timeout and CalledProcessError with a pre-existing
+- [x] Timeout / failed concat removes the incomplete target mp4.
+- [x] Tests cover timeout and CalledProcessError with a pre-existing
       partial file.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (709 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
