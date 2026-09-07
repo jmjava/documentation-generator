@@ -5,10 +5,12 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[manim-unsafe-unicode.md](manim-unsafe-unicode.md)** —
-`manim.unsafe_unicode` must be a YAML list at config load, not a scalar.
+**Active:** **[layout-check-errors.md](layout-check-errors.md)** —
+Manim layout check crashes must fail, not skip as success.
 
 **Shipped:**
+- **[manim-unsafe-unicode.md](manim-unsafe-unicode.md)** —
+  `manim.unsafe_unicode` must be a YAML list at config load (#96).
 - **[validation-list-keys.md](validation-list-keys.md)** —
   `validation.ocr.error_patterns`, `av_sync.visual_types`, and narration-lint
   deny pattern lists must be YAML lists (#95).
