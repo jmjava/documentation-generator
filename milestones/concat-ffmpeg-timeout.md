@@ -1,6 +1,6 @@
 # Milestone: concat must not leave a truncated ffmpeg output
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#123](https://github.com/jmjava/documentation-generator/pull/123)  
 **Depends on:** `milestones/compose-ffmpeg-timeout.md` (PR #121),
 `milestones/generation-zero-values.md` (PR #122)

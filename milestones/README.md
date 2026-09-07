@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[concat-ffmpeg-timeout.md](concat-ffmpeg-timeout.md)** —
-concat must not leave a truncated full-demo mp4 after ffmpeg
-timeout or failure.
+**Active:** **[empty-segments-all.md](empty-segments-all.md)** —
+explicit empty `segments.all: []` must not fall through to
+`segments.default` in yaml-generate.
 
 **Shipped:**
+- **[concat-ffmpeg-timeout.md](concat-ffmpeg-timeout.md)** —
+  concat must not leave a truncated full-demo mp4 after ffmpeg
+  timeout or failure (#123).
 - **[generation-zero-values.md](generation-zero-values.md)** —
   `temperature: 0` / `max_whisper_segment_text_chars: 0` must not be
   replaced by ``or`` defaults (#122).
