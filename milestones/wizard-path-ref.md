@@ -1,7 +1,7 @@
 # Milestone: wizard open-bundle path and tool/update ref must be strings
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#133](https://github.com/jmjava/documentation-generator/pull/133)  
 **Depends on:** `milestones/wizard-json-parse.md` (PR #132)
 
 ## Problem
@@ -22,12 +22,12 @@ defaults to ``main``. Empty ``ref`` still defaults to ``main``.
 
 ## Done when
 
-- [ ] List / bool / number ``path`` returns 400
-- [ ] Bool / number / list ``ref`` returns 400 (does not pip-install)
-- [ ] Missing ``ref`` still defaults to ``main``
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] List / bool / number ``path`` returns 400
+- [x] Bool / number / list ``ref`` returns 400 (does not pip-install)
+- [x] Missing ``ref`` still defaults to ``main``
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (760 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
