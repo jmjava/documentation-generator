@@ -1,6 +1,6 @@
 # Milestone: LLM generation numeric tunables must be YAML numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#117](https://github.com/jmjava/documentation-generator/pull/117)  
 **Depends on:** `milestones/hint-segment-create-bool.md` (PR #116),
 `milestones/numeric-config-tunables.md` (PR #115),
