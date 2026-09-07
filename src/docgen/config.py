@@ -86,6 +86,21 @@ def require_optional_yaml_string(value: Any, *, label: str, source: str) -> None
         )
 
 
+def require_yaml_bool(value: Any, *, label: str, source: str) -> bool:
+    """Require a YAML boolean so ``0`` / ``\"false\"`` are not misread as off/on.
+
+    Identity checks like ``value is False`` are false for integer ``0`` and
+    the string ``\"false\"``, which used to leave ``discovery.auto_visual_map``
+    enabled and rewrite ``visual_map``.
+    """
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(
+        f"{source}: {label} must be a YAML boolean, not {type(value).__name__} "
+        f"({value!r})"
+    )
+
+
 def require_yaml_string(value: Any, *, label: str, source: str) -> str:
     """Require a YAML string so unquoted ``01`` is not silently coerced to ``\"1\"``."""
     if isinstance(value, str):
@@ -439,6 +454,12 @@ class Config:
             require_yaml_string(self.raw["env_file"], label="env_file", source=src)
         if self.raw.get("repo_root") is not None:
             require_yaml_string(self.raw["repo_root"], label="repo_root", source=src)
+        disc = self._block("discovery")
+        for dkey in ("auto_visual_map", "merge_hint_segments"):
+            if disc.get(dkey) is not None:
+                require_yaml_bool(
+                    disc[dkey], label=f"discovery.{dkey}", source=src
+                )
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(

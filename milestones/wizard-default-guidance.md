@@ -1,6 +1,6 @@
 # Milestone: wizard.default_guidance must be a string
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#113](https://github.com/jmjava/documentation-generator/pull/113)  
 **Depends on:** `milestones/wizard-prompt-strings.md` (PR #100),
 `milestones/visual-map-sources.md` (PR #112)

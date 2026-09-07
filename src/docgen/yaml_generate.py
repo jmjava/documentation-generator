@@ -62,6 +62,24 @@ def _require_yaml_mapping(value: Any, *, label: str) -> dict[str, Any]:
     return value
 
 
+def _discovery_flag_off(raw: dict[str, Any], key: str) -> bool:
+    """True when ``discovery.<key>`` is YAML ``false``.
+
+    Missing or null keeps the feature on. A present non-bool (``0``,
+    ``\"false\"``) used to fail open: ``is False`` is false for those
+    values, so ``auto_visual_map`` still rewrote ``visual_map``.
+    """
+    from docgen.config import require_yaml_bool
+
+    disc = raw.get("discovery")
+    if not isinstance(disc, dict):
+        return False
+    val = disc.get(key)
+    if val is None:
+        return False
+    return require_yaml_bool(val, label=f"discovery.{key}", source="docgen.yaml") is False
+
+
 def narration_segment_pairs(narration_dir: Path) -> list[tuple[str, str]]:
     """Return sorted (seg_id, stem) from ``narration/<NN-name>.md`` (skip README)."""
     if not narration_dir.is_dir():
@@ -305,8 +323,7 @@ def collect_hint_project_blocks(hints_dir: Path) -> dict[str, Any]:
 
 def merge_hint_project(raw: dict[str, Any], cfg: "Config") -> list[str]:
     """Apply ``docgen.project`` from hints (env_file, narration_from_source, concat, discovery)."""
-    disc = raw.get("discovery")
-    if isinstance(disc, dict) and disc.get("merge_hint_segments") is False:
+    if _discovery_flag_off(raw, "merge_hint_segments"):
         return []
     project = collect_hint_project_blocks(cfg.hints_dir)
     if not project:
@@ -365,8 +382,7 @@ def _segment_lists_to_update(raw: dict[str, Any]) -> list[list[str]]:
 
 def merge_hint_declared_segments(raw: dict[str, Any], cfg: "Config") -> list[str]:
     """Insert ids into ``segments`` lists and ``segment_names`` from ``hints/*.md`` front matter."""
-    disc = raw.get("discovery")
-    if isinstance(disc, dict) and disc.get("merge_hint_segments") is False:
+    if _discovery_flag_off(raw, "merge_hint_segments"):
         return []
     declared = collect_hint_segment_declarations(cfg.hints_dir)
     if not declared:
@@ -599,8 +615,7 @@ def ensure_segment_hint_with_focus(
 
 def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
     """Apply ``visual`` overrides from hints, re-sync Manim lists, then merge narration / manim_scene blocks."""
-    disc = raw.get("discovery")
-    hint_merge_off = isinstance(disc, dict) and disc.get("merge_hint_segments") is False
+    hint_merge_off = _discovery_flag_off(raw, "merge_hint_segments")
     wirings = {} if hint_merge_off else collect_hint_wirings_by_segment(cfg.hints_dir)
     changes: list[str] = []
 
@@ -718,8 +733,7 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
 
     Set ``discovery: { auto_visual_map: false }`` to skip and keep existing ``visual_map``.
     """
-    disc = raw.get("discovery")
-    if isinstance(disc, dict) and disc.get("auto_visual_map") is False:
+    if _discovery_flag_off(raw, "auto_visual_map"):
         return []
 
     seg_block = raw.get("segments")
