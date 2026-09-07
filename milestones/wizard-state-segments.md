@@ -1,7 +1,7 @@
 # Milestone: wizard state segments must be objects
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#128](https://github.com/jmjava/documentation-generator/pull/128)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127)
 
 ## Problem
@@ -23,14 +23,14 @@ the parse error (not ``AttributeError``).
 
 ## Done when
 
-- [ ] ``load_state`` raises ``WizardError`` on list / scalar ``segments``
-- [ ] per-id non-object rows raise
-- [ ] missing / null ``segments`` still means ``{}``
-- [ ] corrupt JSON still resets to empty (existing contract)
-- [ ] ``POST /api/state`` rejects a list body and list ``segments``
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] ``load_state`` raises ``WizardError`` on list / scalar ``segments``
+- [x] per-id non-object rows raise
+- [x] missing / null ``segments`` still means ``{}``
+- [x] corrupt JSON still resets to empty (existing contract)
+- [x] ``POST /api/state`` rejects a list body and list ``segments``
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (741 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
