@@ -278,7 +278,17 @@ def align_narration_to_audio(
 ) -> dict[str, Any]:
     """End-to-end local alignment: probe duration, detect speech, build timing block."""
     duration = probe_duration(audio_path)
+    if duration <= 0:
+        raise AlignmentError(
+            f"audio duration is {duration}s for {audio_path} — cannot align"
+        )
     intervals = detect_speech_intervals(
         audio_path, duration, noise_db=noise_db, min_silence_sec=min_silence_sec
     )
-    return build_local_timing(text, duration, intervals)
+    block = build_local_timing(text, duration, intervals)
+    words = block.get("words") if isinstance(block, dict) else None
+    if not isinstance(words, list) or not words:
+        raise AlignmentError(
+            f"no word timings for {audio_path} (empty narration sentences or zero duration)"
+        )
+    return block

@@ -38,7 +38,10 @@ class TimestampExtractor:
         """Transcribe audio and return word-level timestamps (OpenAI Whisper or xAI STT)."""
         from docgen.ai_client import transcribe_audio
 
-        return transcribe_audio(audio_path, cfg=self.config)
+        stem = Path(audio_path).stem
+        block = transcribe_audio(audio_path, cfg=self.config)
+        self._require_word_timings(stem, block)
+        return block
 
     # ── Local engine (offline alignment) ─────────────────────────────
 
@@ -60,13 +63,20 @@ class TimestampExtractor:
                 "`docgen timestamps --engine whisper`."
             )
         text = markdown_to_tts_plain(narration.read_text(encoding="utf-8"))
+        if not text.strip():
+            raise TimestampError(
+                f"[timestamps] narration/{stem}.md has no spoken text after markdown "
+                "stripping — add prose before timestamps (same contract as TTS)"
+            )
         ts_cfg = self.config.timestamps_config
-        return align_narration_to_audio(
+        block = align_narration_to_audio(
             text,
             Path(audio_path),
             noise_db=float(ts_cfg.get("silence_noise_db", -35.0)),
             min_silence_sec=float(ts_cfg.get("min_silence_sec", 0.3)),
         )
+        self._require_word_timings(stem, block)
+        return block
 
     # ── Orchestration ────────────────────────────────────────────────
 
@@ -79,6 +89,15 @@ class TimestampExtractor:
                 f"[timestamps] unknown engine {chosen!r}; use one of {', '.join(ENGINES)}"
             )
         return chosen
+
+    @staticmethod
+    def _require_word_timings(stem: str, block: dict[str, Any]) -> None:
+        words = block.get("words") if isinstance(block, dict) else None
+        if not isinstance(words, list) or not words:
+            raise TimestampError(
+                f"[timestamps] {stem}: no word-level timings — "
+                "alignment produced an empty `words` list"
+            )
 
     def extract_all(self, engine: str | None = None) -> None:
         """Extract timestamps for ``segments.all`` and write timing.json.

@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[concat-segment-lists.md](concat-segment-lists.md)** — concat
-targets must be lists of segment ids; pages extra_links items must be mappings.
+**Active:** **[timestamps-empty-words.md](timestamps-empty-words.md)** —
+timestamps must not write empty `words` for heading-only narration or
+zero-duration audio.
 
 **Shipped:**
+- **[concat-segment-lists.md](concat-segment-lists.md)** — concat targets
+  must be lists of segment ids; pages extra_links items must be mappings
+  (#84).
 - **[config-mapping-keys.md](config-mapping-keys.md)** — nested `docgen.yaml`
   mapping/list keys must not traceback; lint/compose empty-all must not
   succeed (#83).

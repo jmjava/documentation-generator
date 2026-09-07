@@ -118,6 +118,24 @@ class TestExtractLocal:
         TimestampExtractor(cfg).extract_all()
         assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}
 
+    def test_heading_only_narration_fails_loud(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("# Title only\n---\n*(pause)*\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="no spoken text"):
+            TimestampExtractor(cfg).extract_all()
+
+    def test_zero_duration_audio_fails_loud(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch, duration=0.0)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        from docgen.align import AlignmentError
+
+        with pytest.raises(AlignmentError, match="duration"):
+            TimestampExtractor(cfg).extract_all()
+
     def test_orphan_short_id_mp3_is_not_used(self, cfg, monkeypatch) -> None:
         _fake_audio_env(monkeypatch)
         (cfg.narration_dir / "01-x.md").write_text("Alpha begins. Beta ends.\n", encoding="utf-8")
