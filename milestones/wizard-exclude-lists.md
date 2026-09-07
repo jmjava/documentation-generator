@@ -1,7 +1,7 @@
 # Milestone: wizard exclude/scan lists must not be scalars
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #94  
 **Depends on:** `milestones/yaml-generate-mappings.md` (PR #91),
 `milestones/config-mapping-keys.md` (PR #83)
 
