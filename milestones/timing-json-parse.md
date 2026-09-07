@@ -1,7 +1,7 @@
 # Milestone: corrupt `timing.json` must not look like empty words
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #89  
 **Depends on:** `milestones/wizard-narration-paths.md` (PR #81)
 
 ## Problem
@@ -22,9 +22,9 @@ One loader: missing file → `{}`; garbage JSON or a non-object root → error.
 - [x] validate `timing_sync` / `story_end` / `av_sync` fail with the parse error
 - [x] `scene_asset_validate` and wizard timestamps reuse the loader
 - [x] Tests: corrupt JSON and list-root, including `pace: none`
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 

@@ -276,3 +276,46 @@ def test_from_yaml_unquoted_pages_segments_key_raises(tmp_path: Path) -> None:
     p.write_text("pages:\n  segments:\n    01:\n      title: Overview\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="pages.segments key must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_pages_segments_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('pages:\n  segments: ["01"]\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="pages.segments must be a YAML mapping"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_context_paths_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "narration_from_source:\n  context:\n    paths: README.md\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="narration_from_source.context.paths must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_nfs_segments_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("narration_from_source:\n  segments: []\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="narration_from_source.segments must be a YAML mapping"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_nfs_segment_row_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'narration_from_source:\n  segments:\n    "01": intro\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="narration_from_source.segments.01 must be a YAML mapping"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_scene_generation_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim_scene_generation: []\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="manim_scene_generation must be a YAML mapping"):
+        Config.from_yaml(p)
