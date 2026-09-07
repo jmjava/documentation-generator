@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[context-path-lists.md](context-path-lists.md)** —
-`pages.segments` and narration/manim context path lists must be typed.
+**Active:** **[yaml-generate-mappings.md](yaml-generate-mappings.md)** —
+`yaml-generate` merge/discover must not replace a list/scalar `visual_map` or
+narration/manim block with `{}`.
 
 **Shipped:**
+- **[context-path-lists.md](context-path-lists.md)** — `pages.segments` and
+  narration/manim context path lists must be typed (#90).
 - **[timing-json-parse.md](timing-json-parse.md)** — corrupt `timing.json`
   must not be treated as empty words at compile/validate (#89).
 - **[lint-empty-narration.md](lint-empty-narration.md)** — lint / validate fail

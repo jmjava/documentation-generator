@@ -1,7 +1,7 @@
 # Milestone: context path lists and `pages.segments` mapping
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #90  
 **Depends on:** `milestones/config-mapping-keys.md` (PR #83),
 `milestones/segment-id-strings.md` (PR #87)
 
@@ -29,9 +29,9 @@ Fail closed at `Config.from_yaml` for those nested types.
 - [x] Tests for list `pages.segments`, string `context.paths`, list
       `narration_from_source.segments`, string per-segment row, list
       `manim_scene_generation`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 

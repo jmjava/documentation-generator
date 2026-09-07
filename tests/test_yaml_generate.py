@@ -662,3 +662,212 @@ def test_merge_defaults_syncs_manim_scenes_from_visual_map_class_key(tmp_path: P
     assert raw["manim"]["scenes"] == ["OnlyClassScene", "ExplicitScene"]
     assert raw["manim_scene_generation"]["segments"]["01"]["class_name"] == "OnlyClassScene"
     assert raw["manim_scene_generation"]["segments"]["02"]["class_name"] == "ExplicitScene"
+
+
+def _cfg_with_hints_dir(tmp_path: Path) -> Config:
+    return _cfg(
+        tmp_path,
+        {
+            "repo_root": ".",
+            "dirs": {
+                "narration": "narration",
+                "audio": "audio",
+                "animations": "animations",
+                "recordings": "recordings",
+                "hints": "hints",
+            },
+            "segments": {"all": ["01"], "default": ["01"]},
+            "segment_names": {"01": "01-wired"},
+            "visual_map": {"01": {"type": "still", "source": "a.png"}},
+            "discovery": {"auto_visual_map": False},
+        },
+    )
+
+
+def _write_narration_wiring_hint(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir(exist_ok=True)
+    (hints / "topic.md").write_text(
+        "---\n"
+        "docgen:\n"
+        "  segment:\n"
+        "    create: true\n"
+        "    id: \"01\"\n"
+        "    stem: 01-wired\n"
+        "  wiring:\n"
+        "    narration:\n"
+        "      hints: [explain wiring]\n"
+        "---\n",
+        encoding="utf-8",
+    )
+
+
+def test_discover_visual_map_rejects_non_mapping_visual_map(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": ["oops"],
+    }
+    with pytest.raises(ValueError, match="visual_map must be a YAML mapping"):
+        discover_visual_map(raw, cfg)
+
+
+def test_merge_defaults_rejects_list_visual_map(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": ["oops"],
+        "discovery": {"auto_visual_map": False},
+    }
+    with pytest.raises(ValueError, match="visual_map must be a YAML mapping"):
+        merge_defaults(raw, cfg)
+
+
+def test_merge_defaults_rejects_list_narration_from_source(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {"01": {"type": "still", "source": "a.png"}},
+        "narration_from_source": ["bad"],
+        "discovery": {"auto_visual_map": False},
+    }
+    with pytest.raises(ValueError, match="narration_from_source must be a YAML mapping"):
+        merge_defaults(raw, cfg)
+
+
+def test_merge_defaults_rejects_list_manim_scene_generation(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {"01": {"type": "still", "source": "a.png"}},
+        "manim_scene_generation": "nope",
+        "discovery": {"auto_visual_map": False},
+    }
+    with pytest.raises(ValueError, match="manim_scene_generation must be a YAML mapping"):
+        merge_defaults(raw, cfg)
+
+
+def test_merge_defaults_rejects_list_wizard(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {"wizard": ["exclude me"], "discovery": {"auto_visual_map": False}}
+    with pytest.raises(ValueError, match="wizard must be a YAML mapping"):
+        merge_defaults(raw, cfg)
+
+
+def test_merge_hint_wiring_rejects_non_mapping_manim(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "visual_map": {"01": {"type": "manim", "scene": "AScene"}},
+        "segments": {"all": ["01"]},
+        "manim": ["AScene"],
+    }
+    with pytest.raises(ValueError, match="manim must be a YAML mapping"):
+        merge_hint_wiring(raw, cfg)
+
+
+def test_merge_hint_wiring_rejects_non_mapping_mg_segments(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "visual_map": {"01": {"type": "manim", "scene": "AScene"}},
+        "manim_scene_generation": {"segments": ["01"]},
+    }
+    with pytest.raises(ValueError, match="manim_scene_generation.segments must be a YAML mapping"):
+        merge_hint_wiring(raw, cfg)
+
+
+def test_merge_hint_wiring_rejects_non_mapping_narration_from_source(tmp_path: Path) -> None:
+    _write_narration_wiring_hint(tmp_path)
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {
+        "visual_map": {"01": {"type": "still", "source": "a.png"}},
+        "narration_from_source": ["bad"],
+    }
+    with pytest.raises(ValueError, match="narration_from_source must be a YAML mapping"):
+        merge_hint_wiring(raw, cfg)
+
+
+def test_merge_hint_wiring_rejects_non_mapping_nfs_segments(tmp_path: Path) -> None:
+    _write_narration_wiring_hint(tmp_path)
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {
+        "visual_map": {"01": {"type": "still", "source": "a.png"}},
+        "narration_from_source": {"segments": ["01"]},
+    }
+    with pytest.raises(ValueError, match="narration_from_source.segments must be a YAML mapping"):
+        merge_hint_wiring(raw, cfg)
+
+
+def test_merge_hint_wiring_rejects_non_mapping_nfs_segment_row(tmp_path: Path) -> None:
+    _write_narration_wiring_hint(tmp_path)
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {
+        "visual_map": {"01": {"type": "still", "source": "a.png"}},
+        "narration_from_source": {"segments": {"01": "not-a-row"}},
+    }
+    with pytest.raises(
+        ValueError, match=r"narration_from_source.segments\['01'\] must be a YAML mapping"
+    ):
+        merge_hint_wiring(raw, cfg)
+
+
+def test_merge_hint_project_rejects_non_mapping_existing_block(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "project-context.md").write_text(
+        "---\n"
+        "docgen:\n"
+        "  project:\n"
+        "    narration_from_source:\n"
+        "      hints:\n"
+        "        - Prefer milestone docs.\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+            "hints": "hints",
+        },
+        "segments": {"all": ["01"], "default": ["01"]},
+        "discovery": {"auto_visual_map": False},
+        "narration_from_source": {"hints": []},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    dirty = dict(cfg.raw)
+    dirty["narration_from_source"] = ["bad"]
+    with pytest.raises(ValueError, match="narration_from_source must be a YAML mapping"):
+        merge_hint_project(dirty, cfg)
+
+
+def test_merge_hint_declared_segments_rejects_non_mapping_segments(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"02\"\n    stem: 02-x\n---\n",
+        encoding="utf-8",
+    )
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {"segments": ["01"]}
+    with pytest.raises(ValueError, match="segments must be a YAML mapping"):
+        merge_hint_declared_segments(raw, cfg)
+
+
+def test_merge_hint_declared_segments_rejects_non_mapping_segment_names(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"02\"\n    stem: 02-x\n---\n",
+        encoding="utf-8",
+    )
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": ["01-wired"],
+    }
+    with pytest.raises(ValueError, match="segment_names must be a YAML mapping"):
+        merge_hint_declared_segments(raw, cfg)

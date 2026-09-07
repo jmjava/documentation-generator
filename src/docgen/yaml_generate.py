@@ -53,6 +53,15 @@ Return **only** a single JSON object, no markdown fences, no explanation. Keys:
 Both strings must be plain UTF-8 text suitable for YAML folded scalars (no raw newlines that break JSON — use \\n only inside JSON string values)."""
 
 
+def _require_yaml_mapping(value: Any, *, label: str) -> dict[str, Any]:
+    """Raise ``ValueError`` unless ``value`` is a mapping (empty dict is allowed)."""
+    if not isinstance(value, dict):
+        raise ValueError(
+            f"{label} must be a YAML mapping, not {type(value).__name__}"
+        )
+    return value
+
+
 def narration_segment_pairs(narration_dir: Path) -> list[tuple[str, str]]:
     """Return sorted (seg_id, stem) from ``narration/<NN-name>.md`` (skip README)."""
     if not narration_dir.is_dir():
@@ -94,10 +103,12 @@ def merge_defaults(
     """Mutate ``raw`` with idempotent defaults. Returns human-readable changelog lines."""
     changes: list[str] = []
     rr = cfg.repo_root.resolve()
-    wiz = raw.setdefault("wizard", {})
-    if not isinstance(wiz, dict):
+    wiz = raw.get("wizard")
+    if wiz is None:
         wiz = {}
         raw["wizard"] = wiz
+    else:
+        wiz = _require_yaml_mapping(wiz, label="wizard")
     ex = wiz.setdefault("exclude_patterns", [])
     if not isinstance(ex, list):
         ex = []
@@ -144,15 +155,17 @@ def merge_defaults(
             "context": {"paths": ctx_paths, "globs": []},
         }
         changes.append("narration_from_source: added skeleton (context.paths from README/AGENTS when present)")
-    elif isinstance(nf_existing, dict) and not nf_existing.get("context"):
-        ctx_paths = []
-        for name in ("README.md", "AGENTS.md"):
-            p = rr / name
-            if p.is_file():
-                ctx_paths.append(name)
-        if ctx_paths:
-            nf_existing["context"] = {"paths": ctx_paths, "globs": []}
-            changes.append("narration_from_source.context: seeded from repo root files")
+    else:
+        nf_existing = _require_yaml_mapping(nf_existing, label="narration_from_source")
+        if not nf_existing.get("context"):
+            ctx_paths = []
+            for name in ("README.md", "AGENTS.md"):
+                p = rr / name
+                if p.is_file():
+                    ctx_paths.append(name)
+            if ctx_paths:
+                nf_existing["context"] = {"paths": ctx_paths, "globs": []}
+                changes.append("narration_from_source.context: seeded from repo root files")
 
     mg = raw.get("manim_scene_generation")
     if mg is None:
@@ -166,6 +179,8 @@ def merge_defaults(
             "context": {"paths": [], "globs": []},
         }
         changes.append("manim_scene_generation: added minimal skeleton")
+    else:
+        _require_yaml_mapping(mg, label="manim_scene_generation")
 
     if merge_hint_segments:
         changes.extend(merge_hint_project(raw, cfg))
@@ -295,10 +310,11 @@ def merge_hint_project(raw: dict[str, Any], cfg: "Config") -> list[str]:
         if not isinstance(block, dict) or not block:
             continue
         cur = raw.get(key)
-        if not isinstance(cur, dict):
+        if cur is None:
             raw[key] = dict(block)
             changes.append(f"{key}: merged from hints/*.md (docgen.project)")
             continue
+        cur = _require_yaml_mapping(cur, label=key)
         before = yaml.safe_dump(cur, sort_keys=True)
         _deep_merge_yaml_mapping(cur, dict(block))
         after = yaml.safe_dump(cur, sort_keys=True)
@@ -337,10 +353,12 @@ def merge_hint_declared_segments(raw: dict[str, Any], cfg: "Config") -> list[str
 
     lists = _segment_lists_to_update(raw)
     if not lists:
-        seg_block = raw.setdefault("segments", {})
-        if not isinstance(seg_block, dict):
+        seg_block = raw.get("segments")
+        if seg_block is None:
             seg_block = {}
             raw["segments"] = seg_block
+        else:
+            seg_block = _require_yaml_mapping(seg_block, label="segments")
         shared: list[str] = []
         seg_block["default"] = shared
         seg_block["all"] = shared
@@ -356,10 +374,12 @@ def merge_hint_declared_segments(raw: dict[str, Any], cfg: "Config") -> list[str
         if lst != before:
             changes.append("segments: merged ids from hints/*.md (docgen.segment.create)")
 
-    names = raw.setdefault("segment_names", {})
-    if not isinstance(names, dict):
+    names = raw.get("segment_names")
+    if names is None:
         names = {}
         raw["segment_names"] = names
+    else:
+        names = _require_yaml_mapping(names, label="segment_names")
     for sid, stem in sorted(declared.items(), key=lambda x: _segment_id_sort_key(x[0])):
         if names.get(sid) != stem:
             names[sid] = stem
@@ -564,10 +584,12 @@ def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
     changes: list[str] = []
 
     if not hint_merge_off:
-        vm = raw.setdefault("visual_map", {})
-        if not isinstance(vm, dict):
+        vm = raw.get("visual_map")
+        if vm is None:
             vm = {}
             raw["visual_map"] = vm
+        else:
+            vm = _require_yaml_mapping(vm, label="visual_map")
         for sid, w in sorted(wirings.items(), key=lambda x: _segment_id_sort_key(x[0])):
             vis = w.get("visual")
             if isinstance(vis, dict) and vis:
@@ -580,40 +602,54 @@ def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
     if hint_merge_off or not wirings:
         return sorted(set(changes))
 
-    nfs = raw.setdefault("narration_from_source", {})
-    if not isinstance(nfs, dict):
+    nfs = raw.get("narration_from_source")
+    if nfs is None:
         nfs = {}
         raw["narration_from_source"] = nfs
-    nf_segs = nfs.setdefault("segments", {})
-    if not isinstance(nf_segs, dict):
+    else:
+        nfs = _require_yaml_mapping(nfs, label="narration_from_source")
+    nf_segs = nfs.get("segments")
+    if nf_segs is None:
         nf_segs = {}
-        raw["narration_from_source"]["segments"] = nf_segs
+        nfs["segments"] = nf_segs
+    else:
+        nf_segs = _require_yaml_mapping(nf_segs, label="narration_from_source.segments")
 
-    mg = raw.setdefault("manim_scene_generation", {})
-    if not isinstance(mg, dict):
+    mg = raw.get("manim_scene_generation")
+    if mg is None:
         mg = {}
         raw["manim_scene_generation"] = mg
-    mg_segs = mg.setdefault("segments", {})
-    if not isinstance(mg_segs, dict):
+    else:
+        mg = _require_yaml_mapping(mg, label="manim_scene_generation")
+    mg_segs = mg.get("segments")
+    if mg_segs is None:
         mg_segs = {}
-        raw["manim_scene_generation"]["segments"] = mg_segs
+        mg["segments"] = mg_segs
+    else:
+        mg_segs = _require_yaml_mapping(mg_segs, label="manim_scene_generation.segments")
 
     for sid, w in sorted(wirings.items(), key=lambda x: _segment_id_sort_key(x[0])):
         nar = w.get("narration")
         if isinstance(nar, dict) and nar:
             cur = nf_segs.get(str(sid))
-            if isinstance(cur, dict):
-                _deep_merge_yaml_mapping(cur, dict(nar))
-            else:
+            if cur is None:
                 nf_segs[str(sid)] = dict(nar)
+            else:
+                cur = _require_yaml_mapping(
+                    cur, label=f"narration_from_source.segments[{sid!r}]"
+                )
+                _deep_merge_yaml_mapping(cur, dict(nar))
             changes.append(f"narration_from_source.segments[{sid!r}]: merged from hints")
         ms = w.get("manim_scene")
         if isinstance(ms, dict) and ms:
             cur = mg_segs.get(str(sid))
-            if isinstance(cur, dict):
-                _deep_merge_yaml_mapping(cur, dict(ms))
-            else:
+            if cur is None:
                 mg_segs[str(sid)] = dict(ms)
+            else:
+                cur = _require_yaml_mapping(
+                    cur, label=f"manim_scene_generation.segments[{sid!r}]"
+                )
+                _deep_merge_yaml_mapping(cur, dict(ms))
             changes.append(f"manim_scene_generation.segments[{sid!r}]: merged from hints")
 
     return sorted(set(changes))
@@ -665,7 +701,10 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     if isinstance(disc, dict) and disc.get("auto_visual_map") is False:
         return []
 
-    seg_block = raw.get("segments") or {}
+    seg_block = raw.get("segments")
+    if seg_block is None:
+        return []
+    seg_block = _require_yaml_mapping(seg_block, label="segments")
     all_ids = seg_block.get("all") or seg_block.get("default") or []
     if not isinstance(all_ids, list) or not all_ids:
         return []
@@ -674,8 +713,10 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     manim_classes = manim_scene_class_names_in_order(scenes_py)
 
     existing = raw.get("visual_map")
-    if not isinstance(existing, dict):
+    if existing is None:
         existing = {}
+    else:
+        existing = _require_yaml_mapping(existing, label="visual_map")
 
     for key, spec in existing.items():
         if spec is None:
@@ -735,9 +776,11 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
         new_vm.setdefault(key, spec)
 
     vm = raw.get("visual_map")
-    if not isinstance(vm, dict):
+    if vm is None:
         vm = {}
         raw["visual_map"] = vm
+    else:
+        vm = _require_yaml_mapping(vm, label="visual_map")
     if vm != new_vm:
         vm.clear()
         vm.update(new_vm)
@@ -747,13 +790,19 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
 
 def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
     """Set ``manim.scenes`` to Manim scene names in ``segments.all`` order (deduped)."""
-    vm = raw.get("visual_map") or {}
-    if not isinstance(vm, dict):
-        return []
-    seg_block = raw.get("segments") or {}
-    all_ids = seg_block.get("all") or seg_block.get("default") or []
-    if not isinstance(all_ids, list):
-        all_ids = []
+    vm = raw.get("visual_map")
+    if vm is None:
+        vm = {}
+    else:
+        vm = _require_yaml_mapping(vm, label="visual_map")
+    seg_block = raw.get("segments")
+    if seg_block is None:
+        all_ids: list[Any] = []
+    else:
+        seg_block = _require_yaml_mapping(seg_block, label="segments")
+        all_ids = seg_block.get("all") or seg_block.get("default") or []
+        if not isinstance(all_ids, list):
+            all_ids = []
     scenes: list[str] = []
     seen: set[str] = set()
     for sid in all_ids:
@@ -767,10 +816,12 @@ def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
         if s not in seen:
             seen.add(s)
             scenes.append(s)
-    manim = raw.setdefault("manim", {})
-    if not isinstance(manim, dict):
+    manim = raw.get("manim")
+    if manim is None:
         manim = {}
         raw["manim"] = manim
+    else:
+        manim = _require_yaml_mapping(manim, label="manim")
     old = manim.get("scenes")
     manim["scenes"] = scenes
     if old != scenes:
@@ -786,15 +837,19 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
     (same as consumers editing ``docgen.yaml`` and re-running the tool).
     """
     vm = raw.get("visual_map")
-    if not isinstance(vm, dict):
+    if vm is None:
         return []
+    vm = _require_yaml_mapping(vm, label="visual_map")
     mg = raw.get("manim_scene_generation")
-    if not isinstance(mg, dict):
+    if mg is None:
         return []
+    mg = _require_yaml_mapping(mg, label="manim_scene_generation")
 
     old = mg.get("segments")
-    if not isinstance(old, dict):
+    if old is None:
         old = {}
+    else:
+        old = _require_yaml_mapping(old, label="manim_scene_generation.segments")
 
     synced: dict[str, dict[str, Any]] = {}
     for seg_id, spec in sorted(vm.items(), key=lambda x: str(x[0])):
@@ -921,15 +976,19 @@ def generate_llm_hints(cfg: "Config", *, model: str | None = None) -> dict[str, 
 
 def apply_llm_hints(raw: dict[str, Any], hints: dict[str, str]) -> None:
     """Merge LLM strings into ``tts`` and ``wizard`` blocks."""
-    tts = raw.setdefault("tts", {})
-    if not isinstance(tts, dict):
+    tts = raw.get("tts")
+    if tts is None:
         tts = {}
         raw["tts"] = tts
+    else:
+        tts = _require_yaml_mapping(tts, label="tts")
     tts["instructions"] = hints["tts_instructions"]
-    wiz = raw.setdefault("wizard", {})
-    if not isinstance(wiz, dict):
+    wiz = raw.get("wizard")
+    if wiz is None:
         wiz = {}
         raw["wizard"] = wiz
+    else:
+        wiz = _require_yaml_mapping(wiz, label="wizard")
     wiz["system_prompt"] = hints["wizard_system_prompt"]
 
 
