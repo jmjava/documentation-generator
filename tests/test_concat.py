@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from docgen.concat import ConcatBuilder, ConcatError
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 
 
 def _cfg(tmp_path: Path, concat: dict) -> Config:
@@ -40,3 +40,21 @@ def test_concat_missing_recording_raises_before_ffmpeg(tmp_path: Path) -> None:
 def test_concat_empty_map_is_noop(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, {})
     ConcatBuilder(cfg).build()
+
+
+def test_concat_string_segment_list_raises(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="concat.full must be a YAML list"):
+        _cfg(tmp_path, {"full": "01"})
+
+
+def test_concat_builder_rejects_non_list_target() -> None:
+    from pathlib import Path as P
+    from types import SimpleNamespace
+
+    cfg = SimpleNamespace(
+        concat_map={"full": "01"},
+        recordings_dir=P("/tmp"),
+        find_segment_asset=lambda *a, **k: None,
+    )
+    with pytest.raises(ConcatError, match="must be a YAML list"):
+        ConcatBuilder(cfg).build()  # type: ignore[arg-type]

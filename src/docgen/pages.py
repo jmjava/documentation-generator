@@ -38,7 +38,11 @@ class PagesGenerator:
         subtitle = self.pages_cfg.get("subtitle", "")
         repo_url = self.pages_cfg.get("repo_url", "")
         demos_sub = self.pages_cfg.get("demos_subdir", "demos")
-        extra_links = self.pages_cfg.get("extra_links", [])
+        extra_links = self.pages_cfg.get("extra_links", []) or []
+        if not isinstance(extra_links, list):
+            raise RuntimeError(
+                f"pages.extra_links must be a YAML list, not {type(extra_links).__name__}"
+            )
         segments_cfg = self._resolve_segments_cfg()
         concat_map = self.config.concat_map
 
@@ -75,7 +79,14 @@ class PagesGenerator:
 
         footer_links = ""
         for lnk in extra_links:
-            footer_links += f' | <a href="{lnk["href"]}">{_esc(lnk["label"])}</a>'
+            if not isinstance(lnk, dict):
+                raise RuntimeError(
+                    "pages.extra_links items must be mappings with href and label, "
+                    f"not {type(lnk).__name__}"
+                )
+            href = lnk.get("href", "")
+            label = lnk.get("label", "")
+            footer_links += f' | <a href="{href}">{_esc(str(label))}</a>'
 
         html = _INDEX_TEMPLATE.format(
             title=_esc(title),

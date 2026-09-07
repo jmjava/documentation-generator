@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from docgen.config import Config
@@ -150,3 +151,16 @@ def test_index_html_segment_titles_escape_user_strings(tmp_path: Path) -> None:
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "<script>alert(1)" not in html
     assert "A &amp; B" in html
+
+
+def test_index_html_extra_links_rejects_non_mapping_items(tmp_path: Path) -> None:
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {
+            "title": "Demos",
+            "demos_subdir": "demos",
+            "extra_links": ["https://example.com"],
+        },
+    )
+    with pytest.raises(RuntimeError, match="extra_links items must be mappings"):
+        PagesGenerator(cfg).generate_index_html(force=True)
