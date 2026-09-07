@@ -1,7 +1,7 @@
 # Milestone: honor explicit generation zeros (temperature / max_chars)
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#122](https://github.com/jmjava/documentation-generator/pull/122)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/compose-ffmpeg-timeout.md` (PR #121)
 
@@ -29,12 +29,12 @@ from merged scene-generation settings; max_chars 200). Present invalid
 
 ## Done when
 
-- [ ] ``temperature: 0`` is sent to the LLM as ``0.0``.
-- [ ] ``max_whisper_segment_text_chars: 0`` does not truncate prompt text.
-- [ ] Tests cover both zeros and a bool max_chars raise.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] ``temperature: 0`` is sent to the LLM as ``0.0``.
+- [x] ``max_whisper_segment_text_chars: 0`` does not truncate prompt text.
+- [x] Tests cover both zeros and a bool max_chars raise.
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (707 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
