@@ -185,6 +185,7 @@ def test_session_and_open_bundle(tmp_path: Path) -> None:
     assert data["frozen"] is False
     assert data["pipeline_available"] is True
     assert data["has_bundle"] is False
+    assert "ai_provider" in data
     (tmp_path / "docgen.yaml").write_text("segments:\n  default: ['01']\n", encoding="utf-8")
     opened = client.post("/api/open-bundle", json={"path": str(tmp_path)})
     assert opened.status_code == 200, opened.get_json()

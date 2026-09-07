@@ -820,7 +820,7 @@ def scene_spec_generate_cmd(
     do_compile: bool,
     model: str | None,
 ) -> None:
-    """Generate a declarative ``*.scene.yaml`` via OpenAI, then optionally compile.
+    """Generate a declarative ``*.scene.yaml`` via chat completions, then optionally compile.
 
     The model outputs YAML only (see :mod:`docgen.scene_spec`); layout is
     deterministic in :func:`docgen.scene_spec.compile_scene_class`.
@@ -1173,7 +1173,7 @@ def yaml_generate_cmd(
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
         yg.apply_llm_hints(raw, hints)
-        changes.append("tts.instructions + wizard.system_prompt: refreshed via OpenAI")
+        changes.append("tts.instructions + wizard.system_prompt: refreshed via chat")
 
     if not changes and not dry_run:
         click.echo("[yaml-generate] nothing to do (already up to date)")
@@ -1339,7 +1339,7 @@ def generate_all(
 @click.option(
     "--regen-scene-specs",
     is_flag=True,
-    help="Also regenerate scene specs via OpenAI before retime-compile.",
+    help="Also regenerate scene specs via chat completions before retime-compile.",
 )
 @click.pass_context
 def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:

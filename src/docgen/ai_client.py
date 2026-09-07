@@ -119,6 +119,10 @@ class AISettings:
     def supports_images(self) -> bool:
         return self.provider in {"openai", "grok"}
 
+    @property
+    def supports_stt(self) -> bool:
+        return self.provider in {"openai", "grok"}
+
     def auth_help(self) -> str:
         return (
             "docgen is not tied to one IDE. Set a key for your host: "
@@ -434,14 +438,29 @@ def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> 
     if settings.is_grok:
         return _grok_stt(Path(audio_path), settings)
 
+    import openai
+
+    from docgen.openai_retry import call_with_rate_limit_retries
+
     client = openai_client(cfg)
-    with open(audio_path, "rb") as f:
-        result = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"],
-        )
+
+    def _call() -> Any:
+        with open(audio_path, "rb") as f:
+            return client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"],
+            )
+
+    try:
+        result = call_with_rate_limit_retries(_call)
+    except openai.RateLimitError as exc:
+        raise AIError(f"{_vendor(settings)} rate-limited whisper STT: {exc}.") from exc
+    except openai.APIConnectionError as exc:
+        raise AIError(
+            f"{_vendor(settings)} connection error: {exc} — re-run when connectivity is restored."
+        ) from exc
     return {
         "text": result.text,
         "segments": [
@@ -457,9 +476,34 @@ def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> 
 
 def fetch_url_bytes(url: str, *, timeout: int = 120) -> bytes:
     """GET ``url`` and return the response body (image CDN / signed URLs)."""
-    req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    last_exc: BaseException | None = None
+    for attempt in range(_MAX_HTTP_ATTEMPTS):
+        req = urllib.request.Request(url, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            if exc.code in _RETRYABLE_HTTP_CODES and attempt < _MAX_HTTP_ATTEMPTS - 1:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                try:
+                    if exc.fp is not None:
+                        exc.fp.close()
+                except OSError:
+                    pass
+                time.sleep(_retry_delay_sec(retry_after, attempt))
+                continue
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            raise AIError(
+                f"GET HTTP {exc.code} for {url}: {detail or exc.reason}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            last_exc = exc
+            if attempt < _MAX_HTTP_ATTEMPTS - 1:
+                time.sleep(_retry_delay_sec(None, attempt))
+                continue
+            raise AIError(f"GET connection error for {url}: {exc}") from exc
+    raise AIError(f"GET request failed after retries: {last_exc}")
 
 
 def _vendor(settings: AISettings) -> str:

@@ -52,14 +52,37 @@ def looks_like_git_url(spec: str) -> bool:
 
 
 def normalize_git_url(spec: str) -> str:
-    """Turn ``org/repo`` / ``github.com/org/repo`` into an https clone URL."""
-    s = spec.strip()
+    """Turn ``org/repo`` / GitHub web URLs into an https clone URL.
+
+    Strips ``/tree/…``, ``/blob/…``, query strings, and fragments so a pasted
+    GitHub page URL still clones the repository.
+    """
+    s = spec.strip().split("#", 1)[0].split("?", 1)[0].rstrip("/")
+    if s.startswith("www.github.com/"):
+        s = "https://" + s
     if s.startswith("github.com/"):
         s = "https://" + s
     elif _GITHUB_SHORTHAND.fullmatch(s) and not _GIT_URL_PREFIX.match(s):
         s = f"https://github.com/{s}"
+    if s.startswith("git@github.com:"):
+        rest = s[len("git@github.com:") :]
+        if rest.endswith(".git"):
+            rest = rest[: -len(".git")]
+        parts = [p for p in rest.split("/") if p]
+        if len(parts) >= 2:
+            return f"https://github.com/{parts[0]}/{parts[1]}.git"
+        return s
+    marker = "github.com/"
+    idx = s.lower().find(marker)
+    if idx >= 0 and s.lower().startswith(("http://", "https://")):
+        rest = s[idx + len(marker) :]
+        if rest.endswith(".git"):
+            rest = rest[: -len(".git")]
+        parts = [p for p in rest.split("/") if p]
+        if len(parts) >= 2:
+            return f"https://github.com/{parts[0]}/{parts[1]}.git"
     if s.startswith("https://github.com/") and not s.endswith(".git"):
-        s = s.rstrip("/") + ".git"
+        s = s + ".git"
     return s
 
 

@@ -275,6 +275,7 @@ def test_anthropic_only_key_selects_claude_chat(
     assert st.api_key == "sk-ant-test"
     assert st.supports_tts is False
     assert st.supports_images is False
+    assert st.supports_stt is False
     from docgen.ai_client import DEFAULT_ANTHROPIC_CHAT_MODEL
 
     assert resolve_chat_model("gpt-4o-mini", st) == DEFAULT_ANTHROPIC_CHAT_MODEL
@@ -450,6 +451,42 @@ def test_http_retries_urlerror() -> None:
                 "https://example.test/x", data=b"{}", headers={}, error_label="API"
             )
     assert body == b"ok"
+    assert calls["n"] == 2
+
+
+def test_fetch_url_bytes_retries_503() -> None:
+    import urllib.error
+
+    from docgen.ai_client import fetch_url_bytes
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b"png"
+
+    def _urlopen(req: object, timeout: int = 120) -> _Resp:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise urllib.error.HTTPError(
+                "https://example.test/img",
+                503,
+                "unavailable",
+                hdrs=None,  # type: ignore[arg-type]
+                fp=None,
+            )
+        return _Resp()
+
+    with patch("docgen.ai_client.urllib.request.urlopen", side_effect=_urlopen):
+        with patch("docgen.ai_client.time.sleep"):
+            body = fetch_url_bytes("https://example.test/img")
+    assert body == b"png"
     assert calls["n"] == 2
 
 

@@ -37,6 +37,18 @@ def test_normalize_git_url() -> None:
         normalize_git_url("https://github.com/acme/app")
         == "https://github.com/acme/app.git"
     )
+    assert (
+        normalize_git_url("https://github.com/acme/app/tree/main")
+        == "https://github.com/acme/app.git"
+    )
+    assert (
+        normalize_git_url("https://github.com/acme/app/blob/main/README.md")
+        == "https://github.com/acme/app.git"
+    )
+    assert (
+        normalize_git_url("git@github.com:acme/app.git")
+        == "https://github.com/acme/app.git"
+    )
 
 
 def test_repo_cache_name() -> None:

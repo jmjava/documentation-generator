@@ -4,7 +4,7 @@
 
 **Branch / PR:** `cursor/senior-python-ai-review-2ccd` (follow-up to #75).
 
-## Shipped (prior commits on this line)
+## Shipped
 
 - [x] Host-agnostic keys: `CURSOR_API_KEY` then `OPENAI_API_KEY`; skip Cloud `crsr_` proxies
 - [x] Anthropic chat when that is the only usable key; TTS/images still need OpenAI or Grok
@@ -14,16 +14,19 @@
 - [x] Cache dirs are `owner-repo`; reject a cache whose `origin` does not match
 - [x] `--repo docs/demos` is a missing local path when `docs/` exists, not GitHub shorthand
 - [x] Empty OpenAI/Grok chat raises (same as Anthropic); close HTTP bodies before 429/5xx retry
+- [x] Cached clone fetches **`origin HEAD`** then `reset --hard FETCH_HEAD`
+- [x] `timestamps extract_all` does not write `timing.json` as `{}` when there are no `*.mp3`
+- [x] urllib **connection** errors (`URLError`) retry with the same backoff as 5xx
+- [x] OpenAI/Grok **chat** uses `call_with_rate_limit_retries`
+- [x] Pasted GitHub **page** URLs (`/tree/…`, `/blob/…`) normalize to `owner/repo.git`
+- [x] Image CDN `fetch_url_bytes` retries 5xx / connection errors
+- [x] Whisper STT rate-limit retries; whisper engine fail-fast when the provider has no STT
+- [x] Wizard `/api/session` exposes provider + key present (not the secret); status bar shows it
+- [x] CLI copy says “chat”, not “OpenAI”, for yaml-generate / scene-spec / rebuild
 
-## Open (this round)
-
-- [x] Cached clone `git fetch` must update **remote HEAD**, then `reset --hard FETCH_HEAD`. Bare `git fetch origin` leaves `FETCH_HEAD` on an arbitrary last ref, so the working tree can jump to the wrong branch.
-- [x] `timestamps extract_all` must not write `timing.json` as `{}` when `audio/` exists but has no `*.mp3` (`generate-all --skip-tts` / first-run wipe).
-- [x] urllib **connection** errors (`URLError`) retry with the same backoff as 5xx.
-- [x] OpenAI/Grok **chat** uses `call_with_rate_limit_retries` (TTS and images already do).
-
-## Out of scope
+## Deferred (not this library’s job)
 
 - Anthropic TTS/images (no API)
-- Switching urllib to httpx
-- Pushing consumer bundles (`slm-setup`) from this library repo
+- urllib → httpx
+- Pushing consumer bundles (`slm-setup`) from this repo
+- Archived roadmaps (slides, i18n, Playwright, Embabel) — see `archive/`

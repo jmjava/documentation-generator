@@ -28,12 +28,20 @@ def session_payload(config: Any | None) -> dict[str, Any]:
                 has_bundle = True
                 yaml_path = str(path)
                 bundle_dir = str(config.base_dir)
+    from docgen.ai_client import resolve_ai_settings
+
+    st = resolve_ai_settings(config)
     return {
         "frozen": frozen,
         "pipeline_available": not frozen,
         "has_bundle": has_bundle,
         "bundle_dir": bundle_dir,
         "config_path": yaml_path,
+        "ai_provider": st.provider,
+        "ai_key_env": st.api_key_env,
+        "ai_key_present": bool(st.api_key),
+        "ai_tts": st.supports_tts,
+        "ai_images": st.supports_images,
     }
 
 

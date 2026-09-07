@@ -84,6 +84,7 @@ docgen --repo /path/to/course-builder generate-all
 # GitHub URL or org/repo shorthand (shallow clone into DOCGEN_REPO_CACHE)
 docgen --repo github.com/acme/course-builder generate-all
 # equivalent: DOCGEN_REPO=acme/course-builder docgen generate-all
+# pasted GitHub page URLs work: https://github.com/acme/app/tree/main
 ```
 
 `--repo` looks for `docs/demos/docgen.yaml` (then any other `docgen.yaml` under
