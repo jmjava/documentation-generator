@@ -31,6 +31,7 @@ from docgen.manim_scene_support import (
     refresh_bootstrap_helpers,
     resolve_pace_segment_indices,
     sync_audio_tail_waits_in_scenes,
+    _bootstrap_helper_source,
 )
 
 
@@ -763,6 +764,72 @@ def test_refresh_bootstrap_helpers_noop_when_current(tmp_path: Path) -> None:
     before = p.read_text(encoding="utf-8")
     assert refresh_bootstrap_helpers(p) == []
     assert p.read_text(encoding="utf-8") == before
+
+
+def _exec_timing_loaders(tmp_path: Path, payload: object) -> dict:
+    (tmp_path / "timing.json").write_text(json.dumps(payload), encoding="utf-8")
+    src = (
+        _bootstrap_helper_source("_load_timing")
+        + "\n"
+        + _bootstrap_helper_source("_load_timing_words")
+    )
+    ns: dict = {"Path": Path, "json": json, "__file__": str(tmp_path / "scenes.py")}
+    exec(compile(src, str(tmp_path / "scenes.py"), "exec"), ns)
+    return ns
+
+
+def test_load_timing_helpers_reject_list_stem(tmp_path: Path) -> None:
+    ns = _exec_timing_loaders(tmp_path, {"01-x": [{"start": 0.0}]})
+    with pytest.raises(TypeError, match=r"timing.json\['01-x'\] must be a JSON object"):
+        ns["_load_timing"]("01-x")
+    with pytest.raises(TypeError, match=r"timing.json\['01-x'\] must be a JSON object"):
+        ns["_load_timing_words"]("01-x")
+
+
+def test_load_timing_helpers_reject_non_array_inner_fields(tmp_path: Path) -> None:
+    ns = _exec_timing_loaders(tmp_path, {"01-x": {"words": "x", "segments": {}}})
+    with pytest.raises(TypeError, match=r"\.words must be a JSON array"):
+        ns["_load_timing_words"]("01-x")
+    with pytest.raises(TypeError, match=r"\.segments must be a JSON array"):
+        ns["_load_timing"]("01-x")
+
+
+def test_load_timing_helpers_accept_object_rows(tmp_path: Path) -> None:
+    ns = _exec_timing_loaders(
+        tmp_path,
+        {
+            "01-x": {
+                "words": [{"word": "hi", "start": 0.0, "end": 0.1}],
+                "segments": [{"text": "hi", "start": 0.0, "end": 0.1}],
+            }
+        },
+    )
+    assert ns["_load_timing_words"]("01-x")[0]["word"] == "hi"
+    assert ns["_load_timing"]("01-x")[0]["text"] == "hi"
+    assert ns["_load_timing"]("missing") == []
+    assert ns["_load_timing_words"]("missing") == []
+
+
+def test_refresh_bootstrap_helpers_upgrades_stale_timing_loaders(tmp_path: Path) -> None:
+    p = tmp_path / "scenes.py"
+    p.write_text(
+        "from manim import *\n"
+        "def _load_timing(segment_key):\n"
+        "    data = json.loads(Path('timing.json').read_text())\n"
+        "    return data.get(segment_key, {}).get('segments', [])\n"
+        "def _load_timing_words(segment_key):\n"
+        "    data = json.loads(Path('timing.json').read_text())\n"
+        "    block = data.get(segment_key) or {}\n"
+        "    words = block.get('words')\n"
+        "    return list(words) if isinstance(words, list) else []\n",
+        encoding="utf-8",
+    )
+    changed = refresh_bootstrap_helpers(p)
+    assert set(changed) == {"_load_timing", "_load_timing_words"}
+    text = p.read_text(encoding="utf-8")
+    assert "must be a JSON object" in text
+    assert "data.get(segment_key, {}).get('segments'" not in text
+
 
 
 def test_ensure_bootstrap_refreshes_stale_helpers(tmp_path: Path) -> None:

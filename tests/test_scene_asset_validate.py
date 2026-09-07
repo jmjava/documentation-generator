@@ -213,6 +213,20 @@ class _TimedScene:
     assert any("stale" in i for i in issues)
 
 
+def test_helper_api_flags_stale_timing_loaders() -> None:
+    stale = '''
+MANIM_FONT = "Liberation Sans"
+def _load_timing(segment_key):
+    return data.get(segment_key, {}).get("segments", [])
+def _load_timing_words(segment_key):
+    block = data.get(segment_key) or {}
+    return block.get("words")
+'''
+    issues = helper_api_violations(stale)
+    assert any("_load_timing is stale" in i for i in issues)
+    assert any("_load_timing_words is stale" in i for i in issues)
+
+
 def test_helper_api_clean_for_current_bootstrap() -> None:
     assert helper_api_violations(BOOTSTRAP_HEADER) == []
 

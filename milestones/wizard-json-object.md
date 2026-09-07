@@ -1,6 +1,6 @@
 # Milestone: wizard POST bodies must be JSON objects
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#129](https://github.com/jmjava/documentation-generator/pull/129)  
 **Depends on:** `milestones/wizard-state-segments.md` (PR #128)
 
