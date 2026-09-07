@@ -271,3 +271,65 @@ class TestExtractLocal:
         out.write_text(json.dumps(payload), encoding="utf-8")
         assert load_bundle_timing(cfg) == payload
 
+    def test_load_bundle_timing_accepts_missing_or_null_inner_lists(self, cfg) -> None:
+        from docgen.timestamps import load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"01-x": {"text": "ok", "words": None}, "legacy": {"text": "keep"}}
+        out.write_text(json.dumps(payload), encoding="utf-8")
+        assert load_bundle_timing(cfg) == payload
+
+    def test_load_bundle_timing_rejects_non_array_inner_lists(self, cfg) -> None:
+        from docgen.timestamps import TimestampError, load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cases = (
+            ({"01-x": {"words": "not-a-list"}}, r"timing.json\['01-x'\].words must be a JSON array, not str"),
+            ({"01-x": {"words": {}}}, r"timing.json\['01-x'\].words must be a JSON array, not dict"),
+            ({"01-x": {"segments": 3}}, r"timing.json\['01-x'\].segments must be a JSON array, not int"),
+        )
+        for payload, match in cases:
+            out.write_text(json.dumps(payload), encoding="utf-8")
+            with pytest.raises(TimestampError, match=match):
+                load_bundle_timing(cfg)
+
+    def test_load_bundle_timing_rejects_non_object_inner_items(self, cfg) -> None:
+        from docgen.timestamps import TimestampError, load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cases = (
+            (
+                {"01-x": {"words": ["hello"]}},
+                r"timing.json\['01-x'\].words\[0\] must be a JSON object, not str",
+            ),
+            (
+                {"01-x": {"segments": [1]}},
+                r"timing.json\['01-x'\].segments\[0\] must be a JSON object, not int",
+            ),
+            (
+                {"01-x": {"words": [None]}},
+                r"timing.json\['01-x'\].words\[0\] must be a JSON object, not null",
+            ),
+        )
+        for payload, match in cases:
+            out.write_text(json.dumps(payload), encoding="utf-8")
+            with pytest.raises(TimestampError, match=match):
+                load_bundle_timing(cfg)
+
+    def test_extract_all_rejects_non_array_words_without_rewrite(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({"legacy-stem": {"words": "corrupt"}}) + "\n"
+        out.write_text(payload, encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match=r"timing.json\['legacy-stem'\].words must be a JSON array"):
+            TimestampExtractor(cfg).extract_all()
+        assert out.read_text(encoding="utf-8") == payload
+

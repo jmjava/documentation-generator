@@ -163,6 +163,21 @@ def test_segment_statuses_non_object_timing_stem_raises(tmp_path: Path) -> None:
         segment_step_statuses(cfg, "01")
 
 
+def test_segment_statuses_non_array_timing_words_raises(tmp_path: Path) -> None:
+    from docgen.timestamps import TimestampError
+
+    cfg = _bundle(tmp_path)
+    (cfg.animations_dir / "timing.json").write_text(
+        json.dumps({"01-demo": {"words": ["hello"]}}), encoding="utf-8"
+    )
+    with pytest.raises(
+        TimestampError,
+        match=r"timing.json\['01-demo'\].words\[0\] must be a JSON object",
+    ):
+        segment_step_statuses(cfg, "01")
+
+
+
 
 def test_api_segments_rejects_corrupt_timing_json(tmp_path: Path) -> None:
     cfg = _bundle(tmp_path)

@@ -28,11 +28,37 @@ class TimestampError(RuntimeError):
     """Raised when timestamps cannot be extracted for required segments."""
 
 
+def _json_kind(value: Any) -> str:
+    return "null" if value is None else type(value).__name__
+
+
+def _require_timing_object_list(
+    path_name: str, stem: str, payload: dict[str, Any], key: str
+) -> None:
+    """Require ``words`` / ``segments`` (when present and not null) to be object arrays."""
+    if key not in payload:
+        return
+    value = payload[key]
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise TimestampError(
+            f"{path_name}[{stem!r}].{key} must be a JSON array, not {_json_kind(value)}"
+        )
+    for i, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise TimestampError(
+                f"{path_name}[{stem!r}].{key}[{i}] must be a JSON object, "
+                f"not {_json_kind(item)}"
+            )
+
+
 def load_bundle_timing(config: "Config") -> dict[str, Any]:
     """Load ``animations/timing.json``.
 
-    A missing file is ``{}``. Corrupt JSON, a non-object root, or a non-object
-    per-stem value raises :class:`TimestampError` so compile/validate cannot
+    A missing file is ``{}``. Corrupt JSON, a non-object root, a non-object
+    per-stem value, or a present ``words`` / ``segments`` field that is not an
+    array of objects raises :class:`TimestampError` so compile/validate cannot
     treat garbage as empty ``words``.
     """
     path = config.animations_dir / "timing.json"
@@ -49,14 +75,15 @@ def load_bundle_timing(config: "Config") -> dict[str, Any]:
         raise TimestampError(f"could not read {path}: {exc}") from exc
     if not isinstance(data, dict):
         raise TimestampError(
-            f"{path.name} root must be a JSON object, not {type(data).__name__}"
+            f"{path.name} root must be a JSON object, not {_json_kind(data)}"
         )
     for stem, payload in data.items():
         if not isinstance(payload, dict):
-            kind = "null" if payload is None else type(payload).__name__
             raise TimestampError(
-                f"{path.name}[{stem!r}] must be a JSON object, not {kind}"
+                f"{path.name}[{stem!r}] must be a JSON object, not {_json_kind(payload)}"
             )
+        _require_timing_object_list(path.name, str(stem), payload, "words")
+        _require_timing_object_list(path.name, str(stem), payload, "segments")
     return data
 
 
@@ -140,7 +167,8 @@ class TimestampExtractor:
 
         Successful runs **merge** stems into the existing file (same as the
         wizard per-segment timestamps step) so extra keys not in
-        ``segments.all`` are not wiped. Corrupt JSON / a non-object root raises
+        ``segments.all`` are not wiped. Corrupt JSON, a non-object root, a
+        non-object stem, or a non-array ``words`` / ``segments`` field raises
         :class:`TimestampError` and the file is not rewritten.
         """
         chosen = self.resolve_engine(engine)
