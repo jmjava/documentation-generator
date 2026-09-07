@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[bootstrap-timing-helpers.md](bootstrap-timing-helpers.md)** —
-Manim `_load_timing` helpers must fail closed on corrupt `timing.json`.
+**Active:** **[wizard-source-paths.md](wizard-source-paths.md)** —
+wizard `source_paths` must be a string array; prose fields must be strings.
 
 **Shipped:**
+- **[bootstrap-timing-helpers.md](bootstrap-timing-helpers.md)** —
+  Manim `_load_timing` helpers must fail closed on corrupt `timing.json`
+  (#130).
 - **[wizard-json-object.md](wizard-json-object.md)** —
   wizard POST/PUT bodies must be JSON objects; bool fields must be booleans
   (#129).

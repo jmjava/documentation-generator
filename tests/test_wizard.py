@@ -198,6 +198,51 @@ def test_api_put_focus_rejects_string_yaml_generate(tmp_path):
     assert "yaml_generate must be a JSON boolean" in res.get_json()["error"]
 
 
+def test_generate_narration_rejects_string_source_paths(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post(
+        "/api/generate-narration",
+        json={"source_paths": "README.md", "guidance": "x"},
+    )
+    assert res.status_code == 400
+    assert "source_paths must be a JSON array" in res.get_json()["error"]
+
+
+def test_generate_narration_rejects_non_string_source_path_items(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post(
+        "/api/generate-narration",
+        json={"source_paths": [1], "guidance": "x"},
+    )
+    assert res.status_code == 400
+    assert "source_paths[0] must be a JSON string" in res.get_json()["error"]
+
+
+def test_generate_narration_rejects_list_guidance(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post(
+        "/api/generate-narration",
+        json={"source_paths": [], "guidance": ["do", "this"]},
+    )
+    assert res.status_code == 400
+    assert "guidance must be a JSON string" in res.get_json()["error"]
+
+
+def test_put_narration_rejects_list_text(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.put("/api/narration/01", json={"text": ["line"]})
+    assert res.status_code == 400
+    assert "text must be a JSON string" in res.get_json()["error"]
+
+
+def test_put_focus_rejects_non_string_path_items(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.put("/api/segments/01/focus", json={"paths": [1]})
+    assert res.status_code == 400
+    assert "paths[0] must be a JSON string" in res.get_json()["error"]
+
+
+
 
 def test_api_file_rejects_prefix_escape(tmp_path):
     from docgen.config import Config
