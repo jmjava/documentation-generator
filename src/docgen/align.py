@@ -94,10 +94,19 @@ def probe_duration(audio_path: Path) -> float:
              "-of", "csv=p=0", str(audio_path)],
             capture_output=True, text=True, timeout=30,
         )
-        return float(out.stdout.strip())
     except FileNotFoundError as exc:
         raise AlignmentError("ffprobe not found in PATH (required for local timing)") from exc
-    except (ValueError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
+    if out.returncode != 0:
+        detail = (out.stderr or out.stdout or "").strip()[:200]
+        extra = f": {detail}" if detail else ""
+        raise AlignmentError(
+            f"ffprobe failed on {audio_path} (exit {out.returncode}){extra}"
+        )
+    try:
+        return float(out.stdout.strip())
+    except ValueError as exc:
         raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
 
 

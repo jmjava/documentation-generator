@@ -259,6 +259,11 @@ class Composer:
         out.parent.mkdir(parents=True, exist_ok=True)
 
         audio_dur = self._probe_duration(audio)
+        if audio_dur is None or audio_dur <= 0:
+            raise ComposeError(
+                f"cannot probe audio duration for {audio.name} — "
+                "looping image mux needs a finite -t (check ffprobe / the mp3)"
+            )
         cmd = [
             "ffmpeg", "-y",
             "-loop", "1", "-framerate", "30", "-i", str(img),
@@ -267,13 +272,12 @@ class Composer:
                    "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
-            "-t", f"{audio_dur:.3f}" if audio_dur else "",
+            "-t", f"{audio_dur:.3f}",
             "-movflags", "+faststart",
             str(out),
         ]
-        cmd = [c for c in cmd if c]
         self._run_ffmpeg(cmd)
-        print(f"    ok image {img.name} + audio={audio_dur:.1f}s" if audio_dur else "    ok image")
+        print(f"    ok image {img.name} + audio={audio_dur:.1f}s")
         return True
 
     def _find_audio(self, seg_id: str) -> Path | None:
@@ -317,8 +321,13 @@ class Composer:
                  "-of", "csv=p=0", str(path)],
                 capture_output=True, text=True, timeout=30,
             )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if out.returncode != 0:
+            return None
+        try:
             return float(out.stdout.strip())
-        except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+        except ValueError:
             return None
 
     def _run_ffmpeg(self, cmd: list[str]) -> None:

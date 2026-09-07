@@ -162,6 +162,13 @@ def test_probe_duration_returns_none_for_missing_file(tmp_path):
 
 @patch("docgen.tts.subprocess.run")
 def test_probe_duration_returns_float(mock_run):
-    mock_run.return_value = type("R", (), {"stdout": "12.345\n"})()
+    mock_run.return_value = type("R", (), {"stdout": "12.345\n", "returncode": 0})()
     result = _probe_duration(__import__("pathlib").Path("/tmp/test.mp3"))
     assert result == 12.345
+
+
+@patch("docgen.tts.subprocess.run")
+def test_probe_duration_returns_none_when_ffprobe_fails(mock_run):
+    mock_run.return_value = type("R", (), {"stdout": "12.345\n", "returncode": 1})()
+    result = _probe_duration(__import__("pathlib").Path("/tmp/test.mp3"))
+    assert result is None

@@ -130,3 +130,18 @@ class TestBuildLocalTiming:
         assert timing["segments"][0]["start"] == pytest.approx(0.0)
         assert timing["segments"][0]["end"] == pytest.approx(3.5)
         assert timing["segments"][1]["start"] == pytest.approx(4.0)
+
+
+def test_probe_duration_rejects_nonzero_ffprobe_exit(monkeypatch) -> None:
+    from pathlib import Path
+
+    from docgen.align import AlignmentError, probe_duration
+
+    class _Proc:
+        returncode = 1
+        stdout = "9.0\n"
+        stderr = "ffprobe: Invalid data"
+
+    monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
+    with pytest.raises(AlignmentError, match="ffprobe failed"):
+        probe_duration(Path("/tmp/x.mp3"))
