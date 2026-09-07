@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[generation-segment-strings.md](generation-segment-strings.md)** —
-per-segment narration / scene-generation prompts must be YAML strings
-at config load.
+**Active:** **[pages-config-strings.md](pages-config-strings.md)** —
+`pages.docs_dir` / title / extra_links must be typed at config load.
 
 **Shipped:**
+- **[generation-segment-strings.md](generation-segment-strings.md)** —
+  per-segment narration / scene-generation prompts must be YAML strings
+  (#110).
 - **[path-config-strings.md](path-config-strings.md)** —
   `env_file` / `repo_root` / `dirs.*` must be YAML strings (#109).
 - **[visual-map-field-strings.md](visual-map-field-strings.md)** —

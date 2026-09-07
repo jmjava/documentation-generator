@@ -717,3 +717,27 @@ def test_from_yaml_empty_nfs_segment_system_prompt_allowed(tmp_path: Path) -> No
     )
     c = Config.from_yaml(p)
     assert c.raw["narration_from_source"]["segments"]["01"]["system_prompt"] == ""
+
+
+def test_from_yaml_list_pages_docs_dir_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("pages:\n  docs_dir:\n    - docs\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="pages.docs_dir must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_pages_title_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("pages:\n  title:\n    - Demo Videos\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="pages.title must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_pages_segment_title_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'pages:\n  segments:\n    "01":\n      title:\n        - Overview\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="pages.segments.01.title must be a YAML string"):
+        Config.from_yaml(p)

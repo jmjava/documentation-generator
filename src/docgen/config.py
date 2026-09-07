@@ -255,14 +255,62 @@ class Config:
         for key, val in self._block("segment_names").items():
             sid = require_yaml_string(key, label="segment_names key", source=src)
             require_yaml_string(val, label=f"segment_names.{sid}", source=src)
-        pages_segs = self._block("pages").get("segments")
+        pages = self._block("pages")
+        if pages.get("docs_dir") is not None:
+            require_yaml_string(pages["docs_dir"], label="pages.docs_dir", source=src)
+        if pages.get("demos_subdir") is not None:
+            require_yaml_string(pages["demos_subdir"], label="pages.demos_subdir", source=src)
+        require_optional_yaml_string(pages.get("title"), label="pages.title", source=src)
+        require_optional_yaml_string(pages.get("subtitle"), label="pages.subtitle", source=src)
+        require_optional_yaml_string(pages.get("repo_url"), label="pages.repo_url", source=src)
+        extra_links = pages.get("extra_links")
+        if extra_links is not None:
+            if not isinstance(extra_links, list):
+                raise ConfigError(
+                    f"{src}: pages.extra_links must be a YAML list, "
+                    f"not {type(extra_links).__name__}"
+                )
+            for i, item in enumerate(extra_links):
+                if not isinstance(item, dict):
+                    raise ConfigError(
+                        f"{src}: pages.extra_links[{i}] must be a YAML mapping, "
+                        f"not {type(item).__name__}"
+                    )
+                require_yaml_string(
+                    item.get("href"),
+                    label=f"pages.extra_links[{i}].href",
+                    source=src,
+                )
+                require_optional_yaml_string(
+                    item.get("label"),
+                    label=f"pages.extra_links[{i}].label",
+                    source=src,
+                )
+        pages_segs = pages.get("segments")
         if pages_segs is not None and not isinstance(pages_segs, dict):
             raise ConfigError(
                 f"{src}: pages.segments must be a YAML mapping, not {type(pages_segs).__name__}"
             )
         if isinstance(pages_segs, dict):
-            for key in pages_segs:
-                require_yaml_string(key, label="pages.segments key", source=src)
+            for key, spec in pages_segs.items():
+                sid = require_yaml_string(key, label="pages.segments key", source=src)
+                if spec is None:
+                    continue
+                if not isinstance(spec, dict):
+                    raise ConfigError(
+                        f"{src}: pages.segments.{sid} must be a YAML mapping, "
+                        f"not {type(spec).__name__}"
+                    )
+                require_optional_yaml_string(
+                    spec.get("title"),
+                    label=f"pages.segments.{sid}.title",
+                    source=src,
+                )
+                require_optional_yaml_string(
+                    spec.get("description"),
+                    label=f"pages.segments.{sid}.description",
+                    source=src,
+                )
         require_hint_and_context_lists(
             self._block("narration_from_source"),
             prefix="narration_from_source",
