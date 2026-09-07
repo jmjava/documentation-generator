@@ -741,3 +741,25 @@ def test_from_yaml_list_pages_segment_title_raises(tmp_path: Path) -> None:
     )
     with pytest.raises(ConfigError, match="pages.segments.01.title must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_visual_map_sources_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'visual_map:\n  "01":\n    type: mixed\n    sources: clip.mp4\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="visual_map.01.sources must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_visual_map_sources_item_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'visual_map:\n  "01":\n    type: mixed\n    sources:\n      - - clip.mp4\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match=r"visual_map.01.sources\[0\] must be a YAML string"
+    ):
+        Config.from_yaml(p)
