@@ -198,6 +198,34 @@ def test_api_run_from_cascades_mocked(tmp_path: Path, monkeypatch: pytest.Monkey
     assert called == ["timestamps", "scene-retime", "manim", "compose", "validate"]
 
 
+def test_api_timestamps_rejects_corrupt_timing_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _bundle(tmp_path)
+    (cfg.audio_dir / "01-demo.mp3").write_bytes(b"x")
+    (cfg.animations_dir / "timing.json").write_text("{not-json", encoding="utf-8")
+    app = create_app(cfg)
+    client = app.test_client()
+
+    from docgen import timestamps
+
+    monkeypatch.setattr(
+        timestamps.TimestampExtractor,
+        "resolve_engine",
+        lambda self, e: "local",
+    )
+    monkeypatch.setattr(
+        timestamps.TimestampExtractor,
+        "extract_local",
+        lambda self, mp3: {"words": [{"word": "hi", "start": 0, "end": 0.1}]},
+    )
+    res = client.post("/api/run/timestamps/01")
+    assert res.status_code == 500
+    err = res.get_json()["error"]
+    assert "not valid JSON" in err
+    assert (cfg.animations_dir / "timing.json").read_text(encoding="utf-8") == "{not-json"
+
+
 def test_revise_mode_includes_current_narration(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 

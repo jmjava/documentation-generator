@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[validate-fail-closed.md](validate-fail-closed.md)** — validate
-and remaining CLI skips must not pass listed segments with no narration,
-untimed paced specs, or dropped context files.
+**Active:** **[wizard-narration-paths.md](wizard-narration-paths.md)** — wizard
+generate-narration must not drop missing sources; timestamps must not wipe
+corrupt `timing.json`.
 
 **Shipped:**
+- **[validate-fail-closed.md](validate-fail-closed.md)** — validate
+  narration/timing skips, empty Manim lists, missing context paths.
 - **[scene-compile-pace.md](scene-compile-pace.md)** — paced `scene-compile`
   requires timing words; `yaml-generate` keeps committed Manim rows.
 - **[timestamps-fail-closed.md](timestamps-fail-closed.md)** — timestamps,
