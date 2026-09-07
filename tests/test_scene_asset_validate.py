@@ -353,3 +353,19 @@ def test_list_root_timing_json_is_reported(tmp_path: Path) -> None:
     (cfg.animations_dir / "timing.json").write_text("[]\n", encoding="utf-8")
     issues = scene_asset_violations_for_segment(cfg, "01")
     assert any("JSON object" in i for i in issues)
+
+
+def test_non_object_timing_stem_is_reported(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    specs = cfg.animations_dir / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
+    (specs / "01-x.scene.yaml").write_text(
+        yaml.dump(_spec([_box("Alpha")])),
+        encoding="utf-8",
+    )
+    (cfg.animations_dir / "timing.json").write_text(
+        json.dumps({"01-x": None}) + "\n", encoding="utf-8"
+    )
+    issues = scene_asset_violations_for_segment(cfg, "01")
+    assert any("timing.json['01-x'] must be a JSON object, not null" in i for i in issues)
+

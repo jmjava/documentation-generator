@@ -31,9 +31,9 @@ class TimestampError(RuntimeError):
 def load_bundle_timing(config: "Config") -> dict[str, Any]:
     """Load ``animations/timing.json``.
 
-    A missing file is ``{}``. Corrupt JSON or a non-object root raises
-    :class:`TimestampError` so compile/validate cannot treat garbage as empty
-    ``words``.
+    A missing file is ``{}``. Corrupt JSON, a non-object root, or a non-object
+    per-stem value raises :class:`TimestampError` so compile/validate cannot
+    treat garbage as empty ``words``.
     """
     path = config.animations_dir / "timing.json"
     if not path.is_file():
@@ -51,6 +51,12 @@ def load_bundle_timing(config: "Config") -> dict[str, Any]:
         raise TimestampError(
             f"{path.name} root must be a JSON object, not {type(data).__name__}"
         )
+    for stem, payload in data.items():
+        if not isinstance(payload, dict):
+            kind = "null" if payload is None else type(payload).__name__
+            raise TimestampError(
+                f"{path.name}[{stem!r}] must be a JSON object, not {kind}"
+            )
     return data
 
 

@@ -1186,7 +1186,8 @@ def sync_audio_tail_waits_in_scenes(cfg: "Config") -> list[str]:
         if not isinstance(vm, dict) or str(vm.get("type", "")).lower() != "manim":
             continue
         stem = cfg.resolve_segment_name(sid)
-        if not timing.get(stem, {}).get("segments"):
+        block = timing.get(stem)
+        if not isinstance(block, dict) or not block.get("segments"):
             continue
 
         block_re = re.compile(

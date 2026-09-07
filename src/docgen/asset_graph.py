@@ -121,9 +121,10 @@ def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path |
 def _timing_entry_exists(cfg: "Config", seg_name: str, audio: Path | None) -> bool:
     """True when ``timing.json`` has a stem for this segment.
 
-    A missing file is ``False`` (timestamps not run yet). Corrupt JSON or a
-    non-object root raises :class:`~docgen.timestamps.TimestampError` so the
-    wizard cannot treat garbage as “no entry”.
+    A missing file is ``False`` (timestamps not run yet). Corrupt JSON, a
+    non-object root, or a non-object per-stem value raises
+    :class:`~docgen.timestamps.TimestampError` so the wizard cannot treat
+    garbage as “no entry”.
     """
     from docgen.timestamps import load_bundle_timing
 

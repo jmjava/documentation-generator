@@ -385,6 +385,40 @@ class OverviewScene(_TimedScene):
     assert sync_audio_tail_waits_in_scenes(cfg) == []
 
 
+def test_sync_audio_tail_waits_rejects_list_stem(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir(parents=True)
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "# ── BEGIN GENERATED SCENE: 01 (OverviewScene) ──\n"
+        "class OverviewScene(_TimedScene):\n"
+        "    def construct(self):\n"
+        "        self.timed_play(Write(Text('x', font_size=24)), run_time=1.0)\n"
+        "# ── END GENERATED SCENE: 01 ──\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "animations" / "timing.json").write_text(
+        json.dumps({"01-test": [{"start": 0.0, "end": 1.0}]}) + "\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "dirs": {
+            "narration": "n",
+            "audio": "a",
+            "animations": "animations",
+            "recordings": "r",
+        },
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-test"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "OverviewScene", "source": "OverviewScene.mp4"}
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    with pytest.raises(SceneGenerationError, match=r"timing.json\['01-test'\] must be a JSON object"):
+        sync_audio_tail_waits_in_scenes(cfg)
+
+
+
 _GOOD_CLASS = (
     "class DemoFunctionScene(_TimedScene):\n"
     "    def construct(self):\n"

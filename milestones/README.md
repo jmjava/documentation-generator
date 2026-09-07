@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[cli-segments-all.md](cli-segments-all.md)** —
-`narration-generate --all` / `scene-spec-generate --all` must use
-`Config.segments_all` (missing `all` falls back to `default`).
+**Active:** **[timing-stem-objects.md](timing-stem-objects.md)** —
+`timing.json` per-stem values must be JSON objects (not lists/scalars).
 
 **Shipped:**
+- **[cli-segments-all.md](cli-segments-all.md)** —
+  `narration-generate --all` / `scene-spec-generate --all` must use
+  `Config.segments_all` (missing `all` falls back to `default`) (#125).
 - **[empty-segments-all.md](empty-segments-all.md)** —
   explicit empty `segments.all: []` must not fall through to
   `segments.default` in yaml-generate (#124).

@@ -230,3 +230,44 @@ class TestExtractLocal:
         with pytest.raises(TimestampError, match="JSON object"):
             TimestampExtractor(cfg).extract_all()
         assert out.read_text(encoding="utf-8") == "[1, 2]\n"
+
+
+    def test_extract_all_rejects_non_object_timing_stem(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({"legacy-stem": ["not", "an", "object"]}) + "\n"
+        out.write_text(payload, encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match=r"timing.json\['legacy-stem'\] must be a JSON object"):
+            TimestampExtractor(cfg).extract_all()
+        assert out.read_text(encoding="utf-8") == payload
+
+
+    def test_load_bundle_timing_rejects_scalar_stems(self, cfg) -> None:
+        from docgen.timestamps import TimestampError, load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cases = (
+            ({"01-x": "whisper-dump"}, "str"),
+            ({"01-x": 3}, "int"),
+            ({"01-x": None}, "null"),
+        )
+        for payload, kind in cases:
+            out.write_text(json.dumps(payload), encoding="utf-8")
+            with pytest.raises(TimestampError, match=rf"timing.json\['01-x'\] must be a JSON object, not {kind}"):
+                load_bundle_timing(cfg)
+
+    def test_load_bundle_timing_accepts_object_stems(self, cfg) -> None:
+        from docgen.timestamps import load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"01-x": {"text": "ok", "words": [], "segments": []}}
+        out.write_text(json.dumps(payload), encoding="utf-8")
+        assert load_bundle_timing(cfg) == payload
+

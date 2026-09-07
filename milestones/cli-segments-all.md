@@ -1,6 +1,6 @@
 # Milestone: CLI --all must use Config.segments_all
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#125](https://github.com/jmjava/documentation-generator/pull/125)  
 **Depends on:** `milestones/empty-segments-all.md` (PR #124)
 
