@@ -319,6 +319,11 @@ def generate_narration_via_llm(
             "that satisfy the revision notes over a full rewrite."
         )
     else:
+        if not source_texts:
+            raise ValueError(
+                "generate mode requires source documentation — pick files in the wizard "
+                "or set narration_from_source.context.paths"
+            )
         user_parts = [
             f"Write a narration script focused on: {focus}.",
             "Do not mention segment numbers, file stems, ordinals, or any 'segment NN' phrasing.",
@@ -558,6 +563,12 @@ def create_app(config: Any | None = None) -> Flask:
             except Exception:
                 topic_label = None
 
+        effective_mode = str(mode or "generate").strip().lower()
+        if effective_mode not in ("generate", "revise"):
+            effective_mode = "generate"
+        if effective_mode == "generate" and current_narration.strip() and revision_notes.strip():
+            effective_mode = "revise"
+
         root = cfg.repo_root if cfg else Path.cwd()
         wiz = cfg.wizard_config if cfg else {}
 
@@ -587,10 +598,19 @@ def create_app(config: Any | None = None) -> Flask:
             fpath = (root / rel_s).resolve()
             if not _is_under_root(fpath, root):
                 return jsonify({"error": f"path escapes repo_root: {rel_s}"}), 400
-            if fpath.exists() and fpath.is_file():
-                source_texts.append(
-                    f"## File: {rel_s}\n{fpath.read_text(encoding='utf-8', errors='replace')}"
+            if not fpath.is_file():
+                return jsonify({"error": f"file not found: {rel_s}"}), 400
+            source_texts.append(
+                f"## File: {rel_s}\n{fpath.read_text(encoding='utf-8', errors='replace')}"
+            )
+
+        if effective_mode != "revise" and not source_texts:
+            return jsonify({
+                "error": (
+                    "generate mode requires source files — pick files in the wizard "
+                    "or set narration_from_source.context.paths / hint wiring"
                 )
+            }), 400
 
         try:
             narration = generate_narration_via_llm(
@@ -602,7 +622,7 @@ def create_app(config: Any | None = None) -> Flask:
                 revision_notes=revision_notes,
                 topic_label=topic_label,
                 current_narration=current_narration,
-                mode=mode,
+                mode=effective_mode,
                 cfg=cfg,
             )
         except ValueError as exc:
@@ -614,12 +634,6 @@ def create_app(config: Any | None = None) -> Flask:
         narration_dir.mkdir(parents=True, exist_ok=True)
         out = narration_dir / f"{segment_name}.md"
         out.write_text(narration + "\n", encoding="utf-8")
-
-        effective_mode = str(mode or "generate").strip().lower()
-        if effective_mode not in ("generate", "revise"):
-            effective_mode = "generate"
-        if effective_mode == "generate" and current_narration.strip() and revision_notes.strip():
-            effective_mode = "revise"
 
         return jsonify({
             "narration": narration,
@@ -856,10 +870,14 @@ def create_app(config: Any | None = None) -> Flask:
             if out.is_file():
                 try:
                     timing = _json.loads(out.read_text(encoding="utf-8"))
-                except _json.JSONDecodeError:
-                    timing = {}
+                except _json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        f"{out.name} is not valid JSON; fix or delete it before timestamps"
+                    ) from exc
             if not isinstance(timing, dict):
-                timing = {}
+                raise RuntimeError(
+                    f"{out.name} root must be a JSON object, not {type(timing).__name__}"
+                )
             timing[mp3.stem] = block
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(

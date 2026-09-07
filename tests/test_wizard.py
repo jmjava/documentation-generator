@@ -1,5 +1,6 @@
 """Tests for docgen.wizard file scanning and tree building."""
 
+import pytest
 
 from docgen.wizard import scan_md_files, build_file_tree
 
@@ -114,3 +115,77 @@ def test_generate_narration_rejects_escaped_source_path(tmp_path):
     )
     assert resp.status_code == 400
     assert "invalid path" in resp.get_json()["error"]
+
+
+def test_generate_narration_rejects_missing_source_path(tmp_path):
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    repo = tmp_path / "proj"
+    repo.mkdir()
+    yaml_path = repo / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    client = create_app(cfg).test_client()
+    resp = client.post(
+        "/api/generate-narration",
+        json={
+            "segment_id": "01",
+            "segment_name": "01-intro",
+            "source_paths": ["missing.md"],
+            "guidance": "x",
+        },
+    )
+    assert resp.status_code == 400
+    assert "file not found" in resp.get_json()["error"]
+
+
+def test_generate_narration_requires_sources_in_generate_mode(tmp_path, monkeypatch):
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    repo = tmp_path / "proj"
+    repo.mkdir()
+    yaml_path = repo / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    called = {"n": 0}
+
+    def boom(**_kwargs):
+        called["n"] += 1
+        return "should not run"
+
+    monkeypatch.setattr("docgen.wizard.generate_narration_via_llm", boom)
+    client = create_app(cfg).test_client()
+    resp = client.post(
+        "/api/generate-narration",
+        json={
+            "segment_id": "01",
+            "segment_name": "01-intro",
+            "mode": "generate",
+            "source_paths": [],
+        },
+    )
+    assert resp.status_code == 400
+    assert "source" in resp.get_json()["error"]
+    assert called["n"] == 0
+
+
+def test_generate_narration_via_llm_generate_requires_sources() -> None:
+    from docgen.wizard import generate_narration_via_llm
+
+    with pytest.raises(ValueError, match="source documentation"):
+        generate_narration_via_llm(
+            source_texts=[],
+            guidance="",
+            system_prompt="x",
+            model="gpt-4o",
+            segment_name="01",
+            mode="generate",
+        )
