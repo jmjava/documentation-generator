@@ -1,7 +1,7 @@
 # Milestone: nested validation numerics must be YAML numbers
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#118](https://github.com/jmjava/documentation-generator/pull/118)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/numeric-config-tunables.md` (PR #115)
 
@@ -40,8 +40,8 @@ defaults.
       ``min_confidence``, quoted ``max_tail_gap_sec``, and valid
       numbers.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (682 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
