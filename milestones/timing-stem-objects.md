@@ -1,7 +1,7 @@
 # Milestone: timing.json per-stem values must be objects
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#126](https://github.com/jmjava/documentation-generator/pull/126)  
 **Depends on:** `milestones/timing-json-parse.md` (PR #89),
 `milestones/cli-segments-all.md` (PR #125)
 
@@ -24,14 +24,14 @@ is still ``{}``. A present non-object stem raises ``TimestampError``.
 
 ## Done when
 
-- [ ] ``load_bundle_timing`` rejects list / string / number / null stems
-- [ ] paced and ``pace: none`` compile fail with the parse error
-- [ ] validate ``timing_sync`` and scene-asset checks surface the error
-- [ ] ``extract_all`` / wizard statuses do not merge or treat list stems
+- [x] ``load_bundle_timing`` rejects list / string / number / null stems
+- [x] paced and ``pace: none`` compile fail with the parse error
+- [x] validate ``timing_sync`` and scene-asset checks surface the error
+- [x] ``extract_all`` / wizard statuses do not merge or treat list stems
       as valid
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (725 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
