@@ -441,7 +441,10 @@ def manim(ctx: click.Context, scene: str | None) -> None:
 
     cfg = _require_config(ctx)
     runner = ManimRunner(cfg)
-    runner.render(scene=scene)
+    try:
+        runner.render(scene=scene)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
@@ -485,7 +488,19 @@ def compose(
             f"({', '.join(only_visual_types)})."
         )
     click.echo(f"=== Composing {len(target)} segments ===")
-    comp.compose_segments(target)
+    composed = comp.compose_segments(target)
+    mapped = [
+        sid
+        for sid in target
+        if isinstance(cfg.visual_map.get(sid), dict)
+        and str(cfg.visual_map[sid].get("type", "")).strip()
+    ]
+    expected = len(mapped) if mapped else len(target)
+    if expected and composed < expected:
+        raise click.ClickException(
+            f"[compose] produced {composed}/{expected} segment videos "
+            "(missing audio or visuals)."
+        )
 
 
 @main.command()
@@ -1254,11 +1269,13 @@ def clean_bundle(
 @click.pass_context
 def concat(ctx: click.Context, concat_name: str | None) -> None:
     """Concatenate full demo files from composed segments."""
-    from docgen.concat import ConcatBuilder
+    from docgen.concat import ConcatBuilder, ConcatError
 
     cfg = _require_config(ctx)
-    builder = ConcatBuilder(cfg)
-    builder.build(name=concat_name)
+    try:
+        ConcatBuilder(cfg).build(name=concat_name)
+    except ConcatError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()

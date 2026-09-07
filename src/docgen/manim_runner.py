@@ -46,15 +46,17 @@ class ManimRunner:
 
         scenes_file = self.config.animations_dir / "scenes.py"
         if not scenes_file.exists():
-            print(f"[manim] scenes.py not found at {scenes_file}")
-            return
+            raise RuntimeError(f"[manim] scenes.py not found at {scenes_file}")
 
         self._check_font()
 
         quality_args, quality_label = self._quality_args()
         manim_bin = self._resolve_manim_binary()
         if not manim_bin:
-            return
+            raise RuntimeError(
+                "[manim] manim executable not found. "
+                "Install with `pip install manim` or set `manim.manim_path` in docgen.yaml."
+            )
 
         font = self.config.manim_font
         print(f"[manim] Rendering at {quality_label}, font={font}")

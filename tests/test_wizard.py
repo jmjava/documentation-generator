@@ -87,3 +87,30 @@ def test_api_file_rejects_prefix_escape(tmp_path):
     assert ok.get_json()["content"] == "safe"
     escaped = client.get("/api/file", query_string={"path": "../proj-evil/secret.md"})
     assert escaped.status_code == 404
+
+
+def test_generate_narration_rejects_escaped_source_path(tmp_path):
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    repo = tmp_path / "proj"
+    evil = tmp_path / "secret.md"
+    repo.mkdir()
+    evil.write_text("leak", encoding="utf-8")
+    yaml_path = repo / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    client = create_app(cfg).test_client()
+    resp = client.post(
+        "/api/generate-narration",
+        json={
+            "segment_name": "01-intro",
+            "source_paths": ["../secret.md"],
+            "guidance": "x",
+        },
+    )
+    assert resp.status_code == 400
+    assert "invalid path" in resp.get_json()["error"]

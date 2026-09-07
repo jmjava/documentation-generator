@@ -24,6 +24,10 @@ if TYPE_CHECKING:
 ENGINES = ("local", "whisper")
 
 
+class TimestampError(RuntimeError):
+    """Raised when timestamps cannot be extracted for required segments."""
+
+
 class TimestampExtractor:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -77,12 +81,12 @@ class TimestampExtractor:
         return chosen
 
     def extract_all(self, engine: str | None = None) -> None:
-        """Extract timestamps for all segments and write timing.json."""
-        audio_dir = self.config.audio_dir
-        if not audio_dir.exists():
-            print("[timestamps] No audio directory found")
-            return
+        """Extract timestamps for ``segments.all`` and write timing.json.
 
+        Walks configured segment ids via :meth:`Config.find_segment_asset` (no
+        ``*.mp3`` glob). Missing audio for a listed segment is an error. With
+        no ``segments.all`` entries, existing ``timing.json`` is left unchanged.
+        """
         chosen = self.resolve_engine(engine)
         print(f"[timestamps] engine: {chosen}")
         if chosen == "whisper":
@@ -96,19 +100,35 @@ class TimestampExtractor:
                     f"(offline) or OpenAI/Grok. {st.auth_help()}"
                 )
 
-        mp3s = sorted(audio_dir.glob("*.mp3"))
-        if not mp3s:
-            print("[timestamps] No audio/*.mp3 files found; leaving timing.json unchanged")
+        seg_ids = [str(s) for s in self.config.segments_all]
+        if not seg_ids:
+            print("[timestamps] segments.all is empty; leaving timing.json unchanged")
             return
 
-        timing: dict[str, Any] = {}
-        for mp3 in mp3s:
-            seg_id = mp3.stem
-            print(f"[timestamps] Extracting timestamps for {seg_id}")
-            if chosen == "whisper":
-                timing[seg_id] = self.extract(mp3)
+        missing: list[str] = []
+        jobs: list[tuple[str, Path]] = []
+        for sid in seg_ids:
+            mp3 = self.config.find_segment_asset(self.config.audio_dir, sid, ".mp3")
+            if mp3 is None:
+                stem = self.config.resolve_segment_name(sid)
+                missing.append(f"{sid} ({stem}.mp3)")
             else:
-                timing[seg_id] = self.extract_local(mp3)
+                jobs.append((sid, mp3))
+        if missing:
+            raise TimestampError(
+                "[timestamps] missing audio for segment(s): "
+                + ", ".join(missing)
+                + ". Run `docgen tts` first."
+            )
+
+        timing: dict[str, Any] = {}
+        for sid, mp3 in jobs:
+            key = mp3.stem
+            print(f"[timestamps] Extracting timestamps for {sid} ({key})")
+            if chosen == "whisper":
+                timing[key] = self.extract(mp3)
+            else:
+                timing[key] = self.extract_local(mp3)
 
         out = self.config.animations_dir / "timing.json"
         out.parent.mkdir(parents=True, exist_ok=True)

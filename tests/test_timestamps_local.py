@@ -97,12 +97,58 @@ class TestExtractLocal:
         assert "**Bold**" not in words
 
 
-    def test_no_mp3s_leaves_existing_timing_json(self, cfg) -> None:
+    def test_no_mp3s_fails_when_segments_listed(self, cfg) -> None:
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text('{"keep": true}\n', encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="missing audio"):
+            TimestampExtractor(cfg).extract_all()
+        assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}
+
+    def test_empty_segments_all_leaves_existing_timing_json(self, tmp_path) -> None:
+        (tmp_path / "docgen.yaml").write_text(
+            yaml.dump({"segments": {"all": []}}), encoding="utf-8"
+        )
+        cfg = Config.from_yaml(tmp_path / "docgen.yaml")
         out = cfg.animations_dir / "timing.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text('{"keep": true}\n', encoding="utf-8")
         TimestampExtractor(cfg).extract_all()
         assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}
+
+    def test_orphan_short_id_mp3_is_not_used(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins. Beta ends.\n", encoding="utf-8")
+        (cfg.audio_dir / "01.mp3").write_bytes(b"orphan")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="01-x.mp3"):
+            TimestampExtractor(cfg).extract_all()
+
+    def test_does_not_wipe_timing_when_a_listed_segment_is_missing(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        _fake_audio_env(monkeypatch)
+        raw = {
+            "segments": {"all": ["01", "02"]},
+            "segment_names": {"01": "01-a", "02": "02-b"},
+        }
+        (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+        (tmp_path / "audio").mkdir()
+        (tmp_path / "narration").mkdir()
+        cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+        (cfg.narration_dir / "01-a.md").write_text("Hello world.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-a.mp3").write_bytes(b"fake")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text('{"02-b": {"text": "keep"}}\n', encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="02"):
+            TimestampExtractor(cfg).extract_all()
+        assert json.loads(out.read_text(encoding="utf-8")) == {"02-b": {"text": "keep"}}
 
     def test_whisper_engine_fails_fast_without_stt(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch

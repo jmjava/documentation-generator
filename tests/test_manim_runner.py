@@ -130,3 +130,10 @@ def test_render_raises_when_retry_also_fails(tmp_path: Path) -> None:
         pytest.raises(RuntimeError, match="Manim failed for scene"),
     ):
         runner.render(scene="Scene01")
+
+
+def test_render_raises_when_scenes_py_missing(tmp_path: Path) -> None:
+    cfg = _config_with_quality(tmp_path, "720p30")
+    runner = ManimRunner(cfg)
+    with pytest.raises(RuntimeError, match="scenes.py not found"):
+        runner.render(scene="Scene01")

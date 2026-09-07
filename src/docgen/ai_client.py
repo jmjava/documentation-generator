@@ -548,6 +548,16 @@ def echo_ai_status(cfg: "Config | None" = None) -> None:
     click.echo(format_ai_status_line(cfg=cfg), err=True)
 
 
+def _anthropic_messages_url(settings: AISettings) -> str:
+    """Chat completions URL for Anthropic or a compatible proxy."""
+    base = (settings.base_url or "https://api.anthropic.com").rstrip("/")
+    if base == "https://api.anthropic.com":
+        return ANTHROPIC_MESSAGES_URL
+    if base.endswith("/v1"):
+        return f"{base}/messages"
+    return f"{base}/v1/messages"
+
+
 def _anthropic_chat(
     *,
     system_prompt: str,
@@ -566,7 +576,7 @@ def _anthropic_chat(
         "messages": [{"role": "user", "content": user_message}],
     }
     raw = _http_json(
-        ANTHROPIC_MESSAGES_URL,
+        _anthropic_messages_url(settings),
         payload,
         settings=settings,
         accept="application/json",

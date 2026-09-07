@@ -323,6 +323,31 @@ def test_anthropic_chat_posts_messages(
     assert captured["payload"]["model"] == DEFAULT_ANTHROPIC_CHAT_MODEL
 
 
+def test_anthropic_chat_honors_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("DOCGEN_AI_BASE_URL", "https://proxy.example/anthropic")
+    cfg = _cfg(tmp_path, {"ai": {"provider": "anthropic"}})
+    captured: dict = {}
+
+    def _http(url: str, *, data: bytes, headers: dict, **_kwargs) -> bytes:
+        captured["url"] = url
+        return json.dumps(
+            {"content": [{"type": "text", "text": "ok"}]}
+        ).encode()
+
+    with patch("docgen.ai_client._http_with_retries", side_effect=_http):
+        chat_completion(
+            system_prompt="s",
+            user_message="u",
+            model="claude-sonnet-4-5",
+            temperature=0.1,
+            cfg=cfg,
+        )
+    assert captured["url"] == "https://proxy.example/anthropic/v1/messages"
+
+
 def test_anthropic_tts_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     with pytest.raises(AIError, match="no TTS"):
