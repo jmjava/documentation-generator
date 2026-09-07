@@ -230,6 +230,26 @@ def test_cli_lint_exits_nonzero_when_narration_missing(tmp_path: Path) -> None:
     assert "no narration file" in result.output
 
 
+def test_cli_lint_exits_nonzero_when_narration_empty(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"narration": "narration"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    narr = tmp_path / "narration"
+    narr.mkdir(parents=True, exist_ok=True)
+    (narr / "01-demo.md").write_text("\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "lint"])
+    assert result.exit_code == 1
+    assert "empty after markdown stripping" in result.output
+
+
 def test_cli_compose_empty_segments_is_click_error(tmp_path: Path) -> None:
     from click.testing import CliRunner
 

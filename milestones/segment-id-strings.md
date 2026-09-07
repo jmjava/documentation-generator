@@ -1,7 +1,7 @@
 # Milestone: quoted string segment ids
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #87  
 **Depends on:** `milestones/visual-map-row-types.md` (PR #86)
 
 ## Problem
@@ -24,9 +24,9 @@ Fail closed: those ids must be YAML strings. Tell the author to write `"01"`.
 - [x] `visual_map`, `segment_names`, and `pages.segments` keys must be strings.
 - [x] `concat.<name>` list items must be strings (`ConfigError` + `ConcatError`).
 - [x] Tests for unquoted `01` in each of those places.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 

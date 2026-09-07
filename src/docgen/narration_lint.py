@@ -38,6 +38,15 @@ def lint_pre_tts(text: str, deny_patterns: list[str] | None = None) -> LintResul
     ]
 
     issues: list[str] = []
+    from docgen.tts import markdown_to_tts_plain
+
+    if not markdown_to_tts_plain(text).strip():
+        issues.append(
+            "narration is empty after markdown stripping — add spoken prose "
+            "before lint/TTS (same contract as `docgen tts`)"
+        )
+        return LintResult(stage="pre-tts", passed=False, issues=issues)
+
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped:
