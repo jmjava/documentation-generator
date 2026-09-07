@@ -1,7 +1,7 @@
 # Milestone: wizard.default_guidance must be a string
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#113](https://github.com/jmjava/documentation-generator/pull/113)  
 **Depends on:** `milestones/wizard-prompt-strings.md` (PR #100),
 `milestones/visual-map-sources.md` (PR #112)
 
@@ -21,9 +21,9 @@ Fail closed at `Config.from_yaml`. Missing key still uses `""`.
 - [x] Present `wizard.default_guidance` must be a YAML string (empty
       allowed).
 - [x] Tests for a list value and an empty string.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
