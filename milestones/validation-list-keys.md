@@ -28,9 +28,9 @@ present. Missing keys still use the property defaults.
 - [x] Present `error_patterns`, `visual_types`, `pre_tts_deny_patterns`, and
       `post_tts_deny_patterns` must be YAML lists of strings.
 - [x] Tests for string values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
