@@ -103,6 +103,23 @@ def test_bundle_scan_generates_only_missing(cfg: Config) -> None:
     assert existing.read_bytes() == b"committed"
 
 
+def test_empty_provider_bytes_fails_without_writing(cfg: Config) -> None:
+    spec = _write_spec(cfg.animations_dir / "specs" / "01-x.scene.yaml")
+    with pytest.raises(ImageGenerationError, match="empty bytes"):
+        generate_images_for_spec(cfg, spec, image_fn=lambda p: b"")
+    assert not (cfg.base_dir / "images" / "arch.png").exists()
+
+
+def test_empty_provider_bytes_does_not_clobber_existing(cfg: Config) -> None:
+    spec = _write_spec(cfg.animations_dir / "specs" / "01-x.scene.yaml")
+    out = cfg.base_dir / "images" / "arch.png"
+    out.parent.mkdir(parents=True)
+    out.write_bytes(b"committed")
+    with pytest.raises(ImageGenerationError, match="empty bytes"):
+        generate_images_for_spec(cfg, spec, force=True, image_fn=lambda p: b"")
+    assert out.read_bytes() == b"committed"
+
+
 def test_no_specs_dir_is_noop(cfg: Config) -> None:
     assert spec_files_for_bundle(cfg) == []
     assert generate_missing_images_for_bundle(cfg, image_fn=lambda p: _PNG_BYTES) == []

@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[hint-front-matter-yaml.md](hint-front-matter-yaml.md)** —
-Invalid `hints/*.md` YAML front matter must fail `yaml-generate`, not skip
-hint `visual_map` wiring.
+**Active:** **[image-empty-bytes.md](image-empty-bytes.md)** —
+`image-generate` must not write empty PNG bytes as success.
 
 **Shipped:**
+- **[hint-front-matter-yaml.md](hint-front-matter-yaml.md)** —
+  Invalid `hints/*.md` YAML front matter must fail `yaml-generate`, not skip
+  hint `visual_map` wiring (#102).
 - **[av-sync-anchor-keywords.md](av-sync-anchor-keywords.md)** —
   `validation.av_sync.anchor_keywords` must be a mapping of keyword rows
   (#101).

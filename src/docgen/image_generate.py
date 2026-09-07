@@ -103,15 +103,25 @@ def generate_image_bytes(
     data = response.data[0] if response.data else None
     b64 = getattr(data, "b64_json", None) if data is not None else None
     if b64:
-        return base64.b64decode(b64)
+        raw = base64.b64decode(b64)
+        if not raw:
+            raise ImageGenerationError(
+                f"Image model {resolved!r} returned empty b64_json bytes"
+            )
+        return raw
     url = getattr(data, "url", None) if data is not None else None
     if url:
         try:
-            return fetch_url_bytes(str(url))
+            raw = fetch_url_bytes(str(url))
         except Exception as exc:
             raise ImageGenerationError(
                 f"Image model {resolved!r} returned a URL but download failed: {exc}."
             ) from exc
+        if not raw:
+            raise ImageGenerationError(
+                f"Image model {resolved!r} URL download was empty"
+            )
+        return raw
     raise ImageGenerationError(
         f"Image response for model {resolved!r} had neither b64_json nor url; "
         "cannot write the asset."
@@ -178,6 +188,10 @@ def generate_images_for_spec(
             )
         )
         data = fn(prompt)
+        if not data:
+            raise ImageGenerationError(
+                f"{spec_path}: image element {rel!r} — provider returned empty bytes"
+            )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(data)
         results.append(ImageAssetResult(rel, out, "generated", prompt))

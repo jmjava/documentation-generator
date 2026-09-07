@@ -1,7 +1,7 @@
 # Milestone: invalid hint front matter must not skip wiring
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #102  
 **Depends on:** `milestones/av-sync-anchor-keywords.md` (PR #101),
 `milestones/yaml-generate-mappings.md` (PR #91)
 
