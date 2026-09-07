@@ -25,8 +25,11 @@ _SKIP_DIR_NAMES = frozenset(
         "archive",
         ".tox",
         ".mypy_cache",
+        ".ruff_cache",
         "dist",
         "build",
+        "recordings",
+        "media",
     }
 )
 
@@ -49,14 +52,37 @@ def looks_like_git_url(spec: str) -> bool:
 
 
 def normalize_git_url(spec: str) -> str:
-    """Turn ``org/repo`` / ``github.com/org/repo`` into an https clone URL."""
-    s = spec.strip()
+    """Turn ``org/repo`` / GitHub web URLs into an https clone URL.
+
+    Strips ``/tree/…``, ``/blob/…``, query strings, and fragments so a pasted
+    GitHub page URL still clones the repository.
+    """
+    s = spec.strip().split("#", 1)[0].split("?", 1)[0].rstrip("/")
+    if s.startswith("www.github.com/"):
+        s = "https://" + s
     if s.startswith("github.com/"):
         s = "https://" + s
     elif _GITHUB_SHORTHAND.fullmatch(s) and not _GIT_URL_PREFIX.match(s):
         s = f"https://github.com/{s}"
+    if s.startswith("git@github.com:"):
+        rest = s[len("git@github.com:") :]
+        if rest.endswith(".git"):
+            rest = rest[: -len(".git")]
+        parts = [p for p in rest.split("/") if p]
+        if len(parts) >= 2:
+            return f"https://github.com/{parts[0]}/{parts[1]}.git"
+        return s
+    marker = "github.com/"
+    idx = s.lower().find(marker)
+    if idx >= 0 and s.lower().startswith(("http://", "https://")):
+        rest = s[idx + len(marker) :]
+        if rest.endswith(".git"):
+            rest = rest[: -len(".git")]
+        parts = [p for p in rest.split("/") if p]
+        if len(parts) >= 2:
+            return f"https://github.com/{parts[0]}/{parts[1]}.git"
     if s.startswith("https://github.com/") and not s.endswith(".git"):
-        s = s.rstrip("/") + ".git"
+        s = s + ".git"
     return s
 
 
@@ -71,10 +97,22 @@ def default_cache_dir() -> Path:
 
 
 def repo_cache_name(url: str) -> str:
-    name = url.rstrip("/").split("/")[-1]
-    if name.endswith(".git"):
-        name = name[: -len(".git")]
-    return name or "repo"
+    """Directory name for a cached clone.
+
+    Uses ``owner-repo`` so ``acme/app`` and ``other/app`` do not share a folder.
+    """
+    raw = url.rstrip("/")
+    if raw.endswith(".git"):
+        raw = raw[: -len(".git")]
+    if "://" in raw:
+        raw = raw.split("://", 1)[1]
+        raw = raw.split("/", 1)[-1] if "/" in raw else raw
+    elif ":" in raw:
+        raw = raw.split(":", 1)[-1]
+    bits = [p for p in raw.replace("\\", "/").split("/") if p]
+    if len(bits) >= 2:
+        return f"{bits[-2]}-{bits[-1]}"
+    return bits[-1] if bits else "repo"
 
 
 def find_bundle_yaml(repo_root: Path) -> Path | None:
@@ -86,22 +124,19 @@ def find_bundle_yaml(repo_root: Path) -> Path | None:
     root = repo_root.resolve()
     preferred = (
         root / "docs" / "demos" / "docgen.yaml",
+        root / "demos" / "docgen.yaml",
         root / "docgen.yaml",
     )
     for path in preferred:
         if path.is_file():
             return path
-    found: list[Path] = []
     if not root.is_dir():
         return None
-    for path in root.rglob("docgen.yaml"):
-        try:
-            rel_parts = path.relative_to(root).parts
-        except ValueError:
-            continue
-        if any(part in _SKIP_DIR_NAMES for part in rel_parts[:-1]):
-            continue
-        found.append(path)
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
+        if "docgen.yaml" in filenames:
+            found.append(Path(dirpath) / "docgen.yaml")
     if not found:
         return None
     found.sort(
@@ -127,7 +162,7 @@ def resolve_repo(
     local = Path(raw).expanduser()
     if local.exists():
         return local.resolve()
-    if not looks_like_git_url(raw):
+    if _looks_like_missing_local_path(raw, local) or not looks_like_git_url(raw):
         raise TargetRepoError(
             f"repo path does not exist: {local}. Pass a local checkout or a "
             "git URL / GitHub org/repo."
@@ -137,6 +172,12 @@ def resolve_repo(
     url = normalize_git_url(raw)
     dest = (cache_dir or default_cache_dir()) / repo_cache_name(url)
     if (dest / ".git").exists():
+        origin = _git_origin_url(dest)
+        if origin and _remote_urls_differ(origin, url):
+            raise TargetRepoError(
+                f"clone cache {dest} is origin {origin!r}, not {url!r}; "
+                "set DOCGEN_REPO_CACHE or remove the directory."
+            )
         _try_update_cached_clone(dest, url)
         return dest.resolve()
     if dest.exists() and any(dest.iterdir()):
@@ -148,27 +189,91 @@ def resolve_repo(
     return dest.resolve()
 
 
+def _looks_like_missing_local_path(raw: str, local: Path) -> bool:
+    """True when ``raw`` is a filesystem path, not GitHub ``org/repo`` shorthand.
+
+    ``docs/demos`` matches the shorthand regex, but if ``docs/`` exists it is a
+    typo'd local path — do not clone ``github.com/docs/demos``.
+    """
+    s = raw.strip()
+    if s.startswith(("./", "../", ".\\", "~")) or local.is_absolute():
+        return True
+    parent = local.parent
+    return parent != Path(".") and parent.exists()
+
+
+def _git_origin_url(dest: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(dest), "remote", "get-url", "origin"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    url = (result.stdout or "").strip()
+    return url or None
+
+
+def _remote_urls_differ(left: str, right: str) -> bool:
+    def _canon(url: str) -> str:
+        return normalize_git_url(url).rstrip("/").lower().removesuffix(".git")
+
+    return _canon(left) != _canon(right)
+
+
 def _git_auth_env(url: str) -> dict[str, str]:
-    """Put a GitHub token in the child env, not on the argv that ``ps`` shows."""
+    """Put a GitHub token in the child env, not on the argv that ``ps`` shows.
+
+    Appends a ``GIT_CONFIG_KEY_*`` slot instead of overwriting a count the
+    parent process already set (CI images often inject ``user.name`` this way).
+    """
     env = os.environ.copy()
     token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
-    if token and "github.com" in url and url.startswith("https://"):
-        env["GIT_CONFIG_COUNT"] = "1"
-        env["GIT_CONFIG_KEY_0"] = f"url.https://x-access-token:{token}@github.com/.insteadOf"
-        env["GIT_CONFIG_VALUE_0"] = "https://github.com/"
+    if not (token and "github.com" in url and url.startswith("https://")):
+        return env
+    try:
+        count = max(0, int(env.get("GIT_CONFIG_COUNT") or "0"))
+    except ValueError:
+        count = 0
+    env["GIT_CONFIG_COUNT"] = str(count + 1)
+    env[f"GIT_CONFIG_KEY_{count}"] = (
+        f"url.https://x-access-token:{token}@github.com/.insteadOf"
+    )
+    env[f"GIT_CONFIG_VALUE_{count}"] = "https://github.com/"
     return env
 
 
 def _try_update_cached_clone(dest: Path, url: str) -> None:
-    """Best-effort ``git fetch`` so a reused ``DOCGEN_REPO_CACHE`` is not forever stale."""
+    """Best-effort fetch of remote HEAD + hard reset so a reused cache tracks default branch.
+
+    ``git fetch origin`` (no ref) can leave ``FETCH_HEAD`` on an arbitrary last
+    ref. Always fetch ``origin HEAD`` so the working tree matches the remote
+    default branch.
+    """
+    env = _git_auth_env(url)
     try:
-        subprocess.run(
-            ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin"],
+        fetched = subprocess.run(
+            ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin", "HEAD"],
             check=False,
             capture_output=True,
             text=True,
             timeout=120,
-            env=_git_auth_env(url),
+            env=env,
+        )
+        if fetched.returncode != 0:
+            return
+        subprocess.run(
+            ["git", "-C", str(dest), "reset", "--hard", "--quiet", "FETCH_HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return

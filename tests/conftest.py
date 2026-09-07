@@ -16,11 +16,28 @@ _CLEAR_ENV = (
     "DOCGEN_REPO_CACHE",
 )
 
+_AI_KEY_ENVS = (
+    "CURSOR_API_KEY",
+    "OPENAI_API_KEY",
+    "XAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "DOCGEN_AI_PROVIDER",
+    "DOCGEN_AI_BASE_URL",
+    "DOCGEN_AI_API_KEY_ENV",
+)
+
 
 @pytest.fixture(autouse=True)
 def _clear_docgen_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep provider/repo env from leaking into CLI and AI-client tests."""
     for key in _CLEAR_ENV:
+        monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def clear_ai_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop AI keys so provider resolution tests do not inherit the host env."""
+    for key in _AI_KEY_ENVS:
         monkeypatch.delenv(key, raising=False)
 
 

@@ -37,8 +37,13 @@
     const input = document.getElementById("bundle-path");
     if (input && data.config_path) input.value = data.config_path;
     const status = document.getElementById("bundle-status");
-    if (status) {
-      status.textContent = data.has_bundle ? (data.bundle_dir || "bundle open") : "no bundle";
+    if status) {
+      let text = data.has_bundle ? (data.bundle_dir || "bundle open") : "no bundle";
+      if (data.ai_provider) {
+        const key = data.ai_key_present ? "key" : "no key";
+        text += ` · ${data.ai_provider} ${key}`;
+      }
+      status.textContent = text;
     }
     const disable = !!data.frozen;
     [

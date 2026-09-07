@@ -85,9 +85,24 @@ class TimestampExtractor:
 
         chosen = self.resolve_engine(engine)
         print(f"[timestamps] engine: {chosen}")
+        if chosen == "whisper":
+            from docgen.ai_client import AIError, resolve_ai_settings
+
+            st = resolve_ai_settings(self.config)
+            if not st.supports_stt:
+                raise AIError(
+                    "timestamps --engine whisper needs speech-to-text; "
+                    f"provider {st.provider!r} has none. Use engine local "
+                    f"(offline) or OpenAI/Grok. {st.auth_help()}"
+                )
+
+        mp3s = sorted(audio_dir.glob("*.mp3"))
+        if not mp3s:
+            print("[timestamps] No audio/*.mp3 files found; leaving timing.json unchanged")
+            return
 
         timing: dict[str, Any] = {}
-        for mp3 in sorted(audio_dir.glob("*.mp3")):
+        for mp3 in mp3s:
             seg_id = mp3.stem
             print(f"[timestamps] Extracting timestamps for {seg_id}")
             if chosen == "whisper":

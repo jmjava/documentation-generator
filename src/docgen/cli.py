@@ -40,6 +40,12 @@ def _docgen_env_override_mode() -> str | set[str] | None:
     return keys if keys else None
 
 
+def _echo_ai_status(cfg: Config | None) -> None:
+    from docgen.ai_client import echo_ai_status
+
+    echo_ai_status(cfg)
+
+
 def _load_env(cfg: Config | None) -> None:
     """Load .env file from config if specified, so OPENAI_API_KEY / XAI_API_KEY etc. are available.
 
@@ -381,12 +387,11 @@ def wizard(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
     """Generate TTS audio from narration markdown."""
-    from docgen.ai_client import echo_ai_status
     from docgen.tts import TTSGenerator
 
     cfg = ctx.obj["config"]
     if not dry_run:
-        echo_ai_status(cfg)
+        _echo_ai_status(cfg)
     gen = TTSGenerator(cfg)
     gen.generate(segment=segment, dry_run=dry_run)
 
@@ -603,11 +608,10 @@ def narration_generate(
     if revise and not str(revision_notes or "").strip():
         raise click.ClickException("--revise requires --revision-notes")
 
-    from docgen.ai_client import echo_ai_status
     from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
 
     cfg = ctx.obj["config"]
-    echo_ai_status(cfg)
+    _echo_ai_status(cfg)
     mode = "revise" if revise else "generate"
     # Revising always overwrites the existing script.
     write_force = force or revise
@@ -816,7 +820,7 @@ def scene_spec_generate_cmd(
     do_compile: bool,
     model: str | None,
 ) -> None:
-    """Generate a declarative ``*.scene.yaml`` via OpenAI, then optionally compile.
+    """Generate a declarative ``*.scene.yaml`` via chat completions, then optionally compile.
 
     The model outputs YAML only (see :mod:`docgen.scene_spec`); layout is
     deterministic in :func:`docgen.scene_spec.compile_scene_class`.
@@ -843,9 +847,7 @@ def scene_spec_generate_cmd(
 
     cfg = ctx.obj["config"]
     if not dry_run:
-        from docgen.ai_client import echo_ai_status
-
-        echo_ai_status(cfg)
+        _echo_ai_status(cfg)
 
     def _one_sid(sid: str) -> None:
         try:
@@ -1046,10 +1048,8 @@ def image_generate_cmd(
     from docgen.scene_spec import SceneSpecError
 
     cfg = ctx.obj["config"]
-    from docgen.ai_client import echo_ai_status
-
     if not dry_run:
-        echo_ai_status(cfg)
+        _echo_ai_status(cfg)
 
     if spec_path is not None:
         targets = [spec_path]
@@ -1165,9 +1165,7 @@ def yaml_generate_cmd(
     if merge_defaults:
         changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
     if llm:
-        from docgen.ai_client import echo_ai_status
-
-        echo_ai_status(cfg)
+        _echo_ai_status(cfg)
         try:
             hints = yg.generate_llm_hints(cfg, model=model)
         except ValueError as exc:
@@ -1175,7 +1173,7 @@ def yaml_generate_cmd(
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
         yg.apply_llm_hints(raw, hints)
-        changes.append("tts.instructions + wizard.system_prompt: refreshed via OpenAI")
+        changes.append("tts.instructions + wizard.system_prompt: refreshed via chat")
 
     if not changes and not dry_run:
         click.echo("[yaml-generate] nothing to do (already up to date)")
@@ -1324,10 +1322,9 @@ def generate_all(
     - ``--skip-scene-retime`` skips the whole scene-spec stage (legacy hand scenes).
     """
     from docgen.pipeline import Pipeline
-    from docgen.ai_client import echo_ai_status
 
     cfg = ctx.obj["config"]
-    echo_ai_status(cfg)
+    _echo_ai_status(cfg)
     pipeline = Pipeline(cfg)
     pipeline.run(
         skip_tts=skip_tts,
@@ -1342,7 +1339,7 @@ def generate_all(
 @click.option(
     "--regen-scene-specs",
     is_flag=True,
-    help="Also regenerate scene specs via OpenAI before retime-compile.",
+    help="Also regenerate scene specs via chat completions before retime-compile.",
 )
 @click.pass_context
 def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
