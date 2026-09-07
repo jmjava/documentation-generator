@@ -685,8 +685,12 @@ def create_app(config: Any | None = None) -> Flask:
                     merged_narration_from_source_settings(cfg, seg_id).context_paths
                 )
             from docgen.asset_graph import segment_asset_report
+            from docgen.timestamps import TimestampError
 
-            assets = segment_asset_report(cfg, seg_id)
+            try:
+                assets = segment_asset_report(cfg, seg_id)
+            except TimestampError as exc:
+                return jsonify({"error": str(exc)}), 500
             result.append({
                 "id": seg_id,
                 "name": seg_name,
@@ -711,8 +715,12 @@ def create_app(config: Any | None = None) -> Flask:
         if not cfg:
             return jsonify({"error": "no config"}), 400
         from docgen.asset_graph import segment_asset_report
+        from docgen.timestamps import TimestampError
 
-        return jsonify(segment_asset_report(cfg, segment_id))
+        try:
+            return jsonify(segment_asset_report(cfg, segment_id))
+        except TimestampError as exc:
+            return jsonify({"error": str(exc)}), 500
 
     @app.route("/api/segments/<segment_id>/focus")
     def api_get_focus(segment_id: str):

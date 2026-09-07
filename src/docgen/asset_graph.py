@@ -8,7 +8,6 @@ cascade ``run`` from a chosen step through validate. Aligns with CLI
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -120,15 +119,15 @@ def _find_asset(directory: Path, seg_name: str, seg_id: str, ext: str) -> Path |
 
 
 def _timing_entry_exists(cfg: "Config", seg_name: str, audio: Path | None) -> bool:
-    timing_path = cfg.animations_dir / "timing.json"
-    if not timing_path.is_file():
-        return False
-    try:
-        data = json.loads(timing_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    if not isinstance(data, dict):
-        return False
+    """True when ``timing.json`` has a stem for this segment.
+
+    A missing file is ``False`` (timestamps not run yet). Corrupt JSON or a
+    non-object root raises :class:`~docgen.timestamps.TimestampError` so the
+    wizard cannot treat garbage as “no entry”.
+    """
+    from docgen.timestamps import load_bundle_timing
+
+    data = load_bundle_timing(cfg)
     if seg_name in data:
         return True
     if audio is not None and audio.stem in data:

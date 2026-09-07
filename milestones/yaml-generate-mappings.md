@@ -1,7 +1,7 @@
 # Milestone: yaml-generate must not wipe non-mapping blocks
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #91  
 **Depends on:** `milestones/context-path-lists.md` (PR #90),
 `milestones/config-mapping-keys.md` (PR #83)
 

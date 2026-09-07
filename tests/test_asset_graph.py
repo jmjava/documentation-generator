@@ -133,6 +133,48 @@ def test_api_segments_includes_assets(tmp_path: Path) -> None:
     assert assets.get_json()["segment_id"] == "01"
 
 
+def test_segment_statuses_corrupt_timing_json_raises(tmp_path: Path) -> None:
+    from docgen.timestamps import TimestampError
+
+    cfg = _bundle(tmp_path)
+    (cfg.audio_dir / "01-demo.mp3").write_bytes(b"fake")
+    (cfg.animations_dir / "timing.json").write_text("{not-json", encoding="utf-8")
+    with pytest.raises(TimestampError, match="not valid JSON"):
+        segment_step_statuses(cfg, "01")
+
+
+def test_segment_statuses_non_object_timing_json_raises(tmp_path: Path) -> None:
+    from docgen.timestamps import TimestampError
+
+    cfg = _bundle(tmp_path)
+    (cfg.animations_dir / "timing.json").write_text("[1, 2]", encoding="utf-8")
+    with pytest.raises(TimestampError, match="JSON object"):
+        segment_step_statuses(cfg, "01")
+
+
+def test_api_segments_rejects_corrupt_timing_json(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    (cfg.animations_dir / "timing.json").write_text("{not-json", encoding="utf-8")
+    app = create_app(cfg)
+    client = app.test_client()
+    res = client.get("/api/segments")
+    assert res.status_code == 500
+    err = res.get_json()["error"]
+    assert "not valid JSON" in err
+
+
+def test_api_segment_assets_rejects_corrupt_timing_json(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    (cfg.animations_dir / "timing.json").write_text("{not-json", encoding="utf-8")
+    app = create_app(cfg)
+    client = app.test_client()
+    res = client.get("/api/segments/01/assets")
+    assert res.status_code == 500
+    assert "not valid JSON" in res.get_json()["error"]
+    assert (cfg.animations_dir / "timing.json").read_text(encoding="utf-8") == "{not-json"
+
+
+
 def test_api_run_from_cascades_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = _bundle(tmp_path)
     app = create_app(cfg)
