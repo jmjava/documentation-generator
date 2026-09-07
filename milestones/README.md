@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-prompt-strings.md](wizard-prompt-strings.md)** —
-`wizard.system_prompt` / `llm_model` must be YAML strings at config load.
+**Active:** **[av-sync-anchor-keywords.md](av-sync-anchor-keywords.md)** —
+`validation.av_sync.anchor_keywords` must be a mapping of string lists of
+keyword rows.
 
 **Shipped:**
+- **[wizard-prompt-strings.md](wizard-prompt-strings.md)** —
+  `wizard.system_prompt` / `llm_model` must be YAML strings at config load
+  (#100).
 - **[tts-empty-audio.md](tts-empty-audio.md)** —
   TTS must not succeed with an empty mp3; `tts.model` / `voice` /
   `instructions` must be YAML strings (#99).

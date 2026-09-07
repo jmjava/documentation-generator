@@ -1,7 +1,7 @@
 # Milestone: wizard.system_prompt and llm_model must be strings
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #100  
 **Depends on:** `milestones/tts-empty-audio.md` (PR #99),
 `milestones/wizard-exclude-lists.md` (PR #94)
 

@@ -419,3 +419,49 @@ def test_from_yaml_list_wizard_llm_model_raises(tmp_path: Path) -> None:
     p.write_text("wizard:\n  llm_model:\n    - gpt-4o\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="wizard.llm_model must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_av_sync_anchor_keywords_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  av_sync:\n    anchor_keywords:\n      - Flask\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="validation.av_sync.anchor_keywords must be a YAML mapping"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_av_sync_anchor_keywords_row_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'validation:\n  av_sync:\n    anchor_keywords:\n      "01": Flask\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.av_sync.anchor_keywords.01 must be a YAML list"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_av_sync_anchor_keyword_item_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'validation:\n  av_sync:\n    anchor_keywords:\n      "01":\n        - Flask\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match=r"validation.av_sync.anchor_keywords.01\[0\] must be a YAML mapping",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_mapping_av_sync_anchor_keywords_loads(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'validation:\n  av_sync:\n    anchor_keywords:\n      "01":\n'
+        "        - keyword: Flask\n          expected_at: 5.0\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(p)
+    rows = cfg.av_sync_config["anchor_keywords"]["01"]
+    assert rows[0]["keyword"] == "Flask"
