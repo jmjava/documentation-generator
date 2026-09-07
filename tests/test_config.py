@@ -631,3 +631,24 @@ def test_from_yaml_list_segment_names_value_raises(tmp_path: Path) -> None:
     p.write_text('segment_names:\n  "01":\n    - 01-intro\n', encoding="utf-8")
     with pytest.raises(ConfigError, match="segment_names.01 must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_env_file_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("env_file:\n  - .env\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="env_file must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_repo_root_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("repo_root:\n  - ..\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="repo_root must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_dirs_narration_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("dirs:\n  narration:\n    - narration\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="dirs.narration must be a YAML string"):
+        Config.from_yaml(p)
