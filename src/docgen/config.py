@@ -455,6 +455,10 @@ class Config:
                 label="manim.min_font_size",
                 source=src,
             )
+        if manim.get("scene_lint") is not None:
+            require_yaml_bool(
+                manim["scene_lint"], label="manim.scene_lint", source=src
+            )
         compose = self._block("compose")
         if compose.get("ffmpeg_timeout_sec") is not None:
             require_yaml_number(
@@ -643,6 +647,52 @@ class Config:
                 require_yaml_number(
                     story[nkey], label=f"validation.story_end.{nkey}", source=src
                 )
+        if layout.get("check_overlap") is not None:
+            require_yaml_bool(
+                layout["check_overlap"],
+                label="validation.layout.check_overlap",
+                source=src,
+            )
+        if avs.get("enabled") is not None:
+            require_yaml_bool(
+                avs["enabled"], label="validation.av_sync.enabled", source=src
+            )
+        if avs.get("prefer_scene_spec_labels") is not None:
+            require_yaml_bool(
+                avs["prefer_scene_spec_labels"],
+                label="validation.av_sync.prefer_scene_spec_labels",
+                source=src,
+            )
+        if ts_sync.get("enabled") is not None:
+            require_yaml_bool(
+                ts_sync["enabled"],
+                label="validation.timing_sync.enabled",
+                source=src,
+            )
+        if story.get("enabled") is not None:
+            require_yaml_bool(
+                story["enabled"],
+                label="validation.story_end.enabled",
+                source=src,
+            )
+        sa = self._sub_block(
+            validation, "scene_assets", label="validation.scene_assets"
+        )
+        if sa.get("enabled") is not None:
+            require_yaml_bool(
+                sa["enabled"], label="validation.scene_assets.enabled", source=src
+            )
+        sbc = self._sub_block(
+            validation,
+            "subject_beat_coverage",
+            label="validation.subject_beat_coverage",
+        )
+        if sbc.get("enabled") is not None:
+            require_yaml_bool(
+                sbc["enabled"],
+                label="validation.subject_beat_coverage.enabled",
+                source=src,
+            )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"

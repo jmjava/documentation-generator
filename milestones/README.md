@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[validation-numeric-tunables.md](validation-numeric-tunables.md)** —
-nested validation OCR / layout / av_sync / timing / story_end numerics
-must be YAML numbers (`true` used to become `1`).
+**Active:** **[validation-enable-bools.md](validation-enable-bools.md)** —
+validation / manim enable flags must be YAML booleans (`"false"` used
+to leave checks on).
 
 **Shipped:**
+- **[validation-numeric-tunables.md](validation-numeric-tunables.md)** —
+  nested validation OCR / layout / av_sync / timing / story_end
+  numerics must be YAML numbers (#118).
 - **[generation-numeric-tunables.md](generation-numeric-tunables.md)** —
   narration / scene-generation temperature and context-byte tunables
   must be YAML numbers (#117).

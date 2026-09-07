@@ -1,6 +1,6 @@
 # Milestone: nested validation numerics must be YAML numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#118](https://github.com/jmjava/documentation-generator/pull/118)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/numeric-config-tunables.md` (PR #115)
