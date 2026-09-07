@@ -29,9 +29,9 @@ raises on an empty HTTP body.
 - [x] `TTSGenerator` raises `TTSError` and removes a 0-byte output file.
 - [x] xAI TTS raises `AIError` on an empty body (does not write the file).
 - [x] Tests for list-valued fields, empty provider output, empty Grok body.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
