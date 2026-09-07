@@ -26,9 +26,9 @@ Fail closed at `Config.from_yaml`. Missing keys still use
 - [x] Present `wizard.system_prompt` must be a YAML string (empty allowed).
 - [x] Present `wizard.llm_model` must be a non-empty YAML string.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
