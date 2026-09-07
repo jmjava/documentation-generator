@@ -535,3 +535,58 @@ def test_from_yaml_list_manim_path_raises(tmp_path: Path) -> None:
     p.write_text("manim:\n  manim_path:\n    - /usr/bin/manim\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="manim.manim_path must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_narration_from_source_model_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("narration_from_source:\n  model:\n    - gpt-4o\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="narration_from_source.model must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_narration_from_source_system_prompt_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "narration_from_source:\n  system_prompt:\n    - Write narration\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="narration_from_source.system_prompt must be a YAML string"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_scene_generation_model_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim_scene_generation:\n  model:\n    - gpt-4o\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="manim_scene_generation.model must be a YAML string"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_manim_scene_generation_system_prompt_raises(
+    tmp_path: Path,
+) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  system_prompt:\n    - Draw boxes\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="manim_scene_generation.system_prompt must be a YAML string"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_scene_spec_system_prompt_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  scene_spec_system_prompt:\n    - Cover beats\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.scene_spec_system_prompt must be a YAML string",
+    ):
+        Config.from_yaml(p)

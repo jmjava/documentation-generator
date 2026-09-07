@@ -308,6 +308,37 @@ class Config:
             require_yaml_string(manim["quality"], label="manim.quality", source=src)
         if manim.get("manim_path") is not None:
             require_yaml_string(manim["manim_path"], label="manim.manim_path", source=src)
+        nfs = self._block("narration_from_source")
+        if nfs.get("model") is not None:
+            require_yaml_string(
+                nfs["model"], label="narration_from_source.model", source=src
+            )
+        if nfs.get("system_prompt") is not None and not isinstance(
+            nfs["system_prompt"], str
+        ):
+            raise ConfigError(
+                f"{src}: narration_from_source.system_prompt must be a YAML string, "
+                f"not {type(nfs['system_prompt']).__name__}"
+            )
+        msg = self._block("manim_scene_generation")
+        if msg.get("model") is not None:
+            require_yaml_string(
+                msg["model"], label="manim_scene_generation.model", source=src
+            )
+        if msg.get("system_prompt") is not None and not isinstance(
+            msg["system_prompt"], str
+        ):
+            raise ConfigError(
+                f"{src}: manim_scene_generation.system_prompt must be a YAML string, "
+                f"not {type(msg['system_prompt']).__name__}"
+            )
+        if msg.get("scene_spec_system_prompt") is not None and not isinstance(
+            msg["scene_spec_system_prompt"], str
+        ):
+            raise ConfigError(
+                f"{src}: manim_scene_generation.scene_spec_system_prompt must be a "
+                f"YAML string, not {type(msg['scene_spec_system_prompt']).__name__}"
+            )
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(
