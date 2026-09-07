@@ -250,11 +250,11 @@ class Config:
                     f"{src}: visual_map.{sid_s} must be a YAML mapping, "
                     f"not {type(spec).__name__}"
                 )
-            for field in ("type", "scene", "class", "source"):
-                val = spec.get(field)
+            for fname in ("type", "scene", "class", "source"):
+                val = spec.get(fname)
                 if val is not None and not isinstance(val, str):
                     raise ConfigError(
-                        f"{src}: visual_map.{sid_s}.{field} must be a YAML string, "
+                        f"{src}: visual_map.{sid_s}.{fname} must be a YAML string, "
                         f"not {type(val).__name__}"
                     )
         wiz = self._block("wizard")

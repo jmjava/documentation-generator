@@ -1,7 +1,7 @@
 # Milestone: visual_map type/scene/source and segment_names values must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#108](https://github.com/jmjava/documentation-generator/pull/108)  
 **Depends on:** `milestones/generation-model-strings.md` (PR #107),
 `milestones/visual-map-row-types.md` (PR #86),
 `milestones/segment-id-strings.md` (PR #87)
@@ -31,9 +31,9 @@ Fail closed at `Config.from_yaml`. Missing fields stay optional.
       be YAML strings (empty allowed).
 - [x] Present `segment_names` values must be non-empty YAML strings.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
