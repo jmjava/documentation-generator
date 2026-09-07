@@ -861,20 +861,14 @@ def create_app(config: Any | None = None) -> Flask:
             block = (
                 ts.extract(mp3) if engine == "whisper" else ts.extract_local(mp3)
             )
-            out = cfg.animations_dir / "timing.json"
-            timing: dict = {}
-            if out.is_file():
-                try:
-                    timing = _json.loads(out.read_text(encoding="utf-8"))
-                except _json.JSONDecodeError as exc:
-                    raise RuntimeError(
-                        f"{out.name} is not valid JSON; fix or delete it before timestamps"
-                    ) from exc
-            if not isinstance(timing, dict):
-                raise RuntimeError(
-                    f"{out.name} root must be a JSON object, not {type(timing).__name__}"
-                )
+            from docgen.timestamps import TimestampError, load_bundle_timing
+
+            try:
+                timing = dict(load_bundle_timing(cfg))
+            except TimestampError as exc:
+                raise RuntimeError(str(exc)) from exc
             timing[mp3.stem] = block
+            out = cfg.animations_dir / "timing.json"
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(
                 _json.dumps(timing, indent=2, ensure_ascii=False) + "\n",

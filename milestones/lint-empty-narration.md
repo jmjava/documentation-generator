@@ -1,7 +1,7 @@
 # Milestone: lint empty narration
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #88  
 **Depends on:** `milestones/timestamps-empty-words.md` (PR #85)
 
 ## Problem
@@ -19,9 +19,9 @@ Same contract as TTS: empty spoken text is a lint failure.
 
 - [x] `lint_pre_tts` fails when `markdown_to_tts_plain` is empty.
 - [x] Tests: empty, whitespace-only, heading-only, CLI `docgen lint`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 

@@ -275,22 +275,14 @@ def scene_asset_violations_for_segment(cfg: "Config", seg_id: str) -> list[str]:
         return issues
 
     block: dict[str, Any] = {}
-    timing_path = cfg.animations_dir / "timing.json"
     stem = cfg.resolve_segment_name(seg_id)
-    if timing_path.is_file():
-        import json
+    if cfg.animations_dir.joinpath("timing.json").is_file():
+        from docgen.timestamps import TimestampError, load_bundle_timing
 
         try:
-            data = json.loads(timing_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            issues.append(
-                f"timing.json is not valid JSON ({exc}) — run `docgen timestamps`"
-            )
-            data = None
-        if data is not None and not isinstance(data, dict):
-            issues.append(
-                f"timing.json root must be a JSON object, not {type(data).__name__}"
-            )
+            data = load_bundle_timing(cfg)
+        except TimestampError as exc:
+            issues.append(str(exc))
             data = None
         raw_block = data.get(stem) if isinstance(data, dict) else None
         if isinstance(raw_block, dict):

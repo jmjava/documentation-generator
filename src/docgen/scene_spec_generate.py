@@ -323,16 +323,17 @@ def spec_to_yaml_text(spec: dict[str, Any]) -> str:
 
 
 def _load_timing_words(cfg: Config, timing_key: str) -> list[dict[str, Any]]:
-    """Return the ``words`` list from ``animations/timing.json`` for ``timing_key`` (best effort)."""
-    timing_path = cfg.animations_dir / "timing.json"
-    if not timing_path.exists():
-        return []
+    """Return the ``words`` list from ``animations/timing.json`` for ``timing_key``."""
+    from docgen.timestamps import TimestampError, load_bundle_timing
+
     try:
-        data = json.loads(timing_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = load_bundle_timing(cfg)
+    except TimestampError as exc:
+        raise SceneGenerationError(str(exc)) from exc
+    block = data.get(timing_key)
+    if not isinstance(block, dict):
         return []
-    block = data.get(timing_key) or {}
-    words = block.get("words") if isinstance(block, dict) else None
+    words = block.get("words")
     return list(words) if isinstance(words, list) else []
 
 

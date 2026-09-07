@@ -229,6 +229,60 @@ def test_linted_class_block_allows_pace_none_without_words(tmp_path: Path) -> No
     assert merged["rows"][0]["boxes"][0].get("pace") == "none"
 
 
+def test_linted_class_block_fails_on_corrupt_timing_json(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    (tmp_path / "animations" / "timing.json").write_text("{not json", encoding="utf-8")
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                        "pace": "none",
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match="not valid JSON"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
+def test_linted_class_block_fails_on_list_root_timing_json(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    (tmp_path / "animations" / "timing.json").write_text("[]\n", encoding="utf-8")
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                        "pace": "none",
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match="JSON object"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
 def test_retime_compile_spec_rewrites_scenes_py(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     path = _write_spec(tmp_path, label="Hello")

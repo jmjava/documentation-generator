@@ -28,6 +28,32 @@ class TimestampError(RuntimeError):
     """Raised when timestamps cannot be extracted for required segments."""
 
 
+def load_bundle_timing(config: "Config") -> dict[str, Any]:
+    """Load ``animations/timing.json``.
+
+    A missing file is ``{}``. Corrupt JSON or a non-object root raises
+    :class:`TimestampError` so compile/validate cannot treat garbage as empty
+    ``words``.
+    """
+    path = config.animations_dir / "timing.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise TimestampError(
+            f"{path.name} is not valid JSON ({exc}) — fix or delete it before "
+            "timestamps/compile"
+        ) from exc
+    except OSError as exc:
+        raise TimestampError(f"could not read {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise TimestampError(
+            f"{path.name} root must be a JSON object, not {type(data).__name__}"
+        )
+    return data
+
+
 class TimestampExtractor:
     def __init__(self, config: Config) -> None:
         self.config = config

@@ -5,11 +5,12 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[lint-empty-narration.md](lint-empty-narration.md)** —
-lint / validate must fail when narration has no spoken prose after markdown
-stripping.
+**Active:** **[timing-json-parse.md](timing-json-parse.md)** —
+corrupt `timing.json` must not be treated as empty words at compile/validate.
 
 **Shipped:**
+- **[lint-empty-narration.md](lint-empty-narration.md)** — lint / validate fail
+  when narration has no spoken prose after markdown stripping (#88).
 - **[segment-id-strings.md](segment-id-strings.md)** — unquoted YAML `01`
   must not become integer segment ids (#87).
 - **[visual-map-row-types.md](visual-map-row-types.md)** — `visual_map` rows

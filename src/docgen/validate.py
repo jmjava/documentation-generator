@@ -732,7 +732,12 @@ class Validator:
             return CheckResult("timing_sync", True, ["Audio is an LFS pointer (skipped)"])
 
         is_manim = self.config.visual_map.get(seg_id, {}).get("type") == "manim"
-        block = self._load_timing_block(seg_id)
+        from docgen.timestamps import TimestampError
+
+        try:
+            block = self._load_timing_block(seg_id)
+        except TimestampError as exc:
+            return CheckResult("timing_sync", False, [str(exc)])
         if block is None:
             if is_manim:
                 return CheckResult(
@@ -811,7 +816,12 @@ class Validator:
                 "story_end", True, ["No animations/specs/*.scene.yaml (skipped)"]
             )
 
-        block = self._load_timing_block(seg_id)
+        from docgen.timestamps import TimestampError
+
+        try:
+            block = self._load_timing_block(seg_id)
+        except TimestampError as exc:
+            return CheckResult("story_end", False, [str(exc)])
         words = block.get("words") if isinstance(block, dict) else None
         words_ok = isinstance(words, list) and bool(words)
 
@@ -905,7 +915,12 @@ class Validator:
         except Exception:
             return CheckResult("av_sync", True, ["tesseract binary not installed (skipped)"])
 
-        block = self._load_timing_block(seg_id)
+        from docgen.timestamps import TimestampError
+
+        try:
+            block = self._load_timing_block(seg_id)
+        except TimestampError as exc:
+            return CheckResult("av_sync", False, [str(exc)])
         if block is None:
             return CheckResult(
                 "av_sync", True, ["No timing.json entry (skipped) — run `docgen timestamps`"]
@@ -927,13 +942,9 @@ class Validator:
 
     def _load_timing_block(self, seg_id: str) -> dict[str, Any] | None:
         """One segment's block from ``animations/timing.json`` (keyed by narration stem)."""
-        timing_path = self.config.animations_dir / "timing.json"
-        if not timing_path.is_file():
-            return None
-        try:
-            data = json.loads(timing_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
+        from docgen.timestamps import load_bundle_timing
+
+        data = load_bundle_timing(self.config)
         stem = self.config.resolve_segment_name(seg_id)
         block = data.get(stem)
         if not isinstance(block, dict):
