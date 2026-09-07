@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[visual-beats-numeric.md](visual-beats-numeric.md)** —
-`visual_beats` / `default_visual_beats` must be YAML numbers (bool
-`true` used to become one beat; invalid types auto-estimated).
+**Active:** **[compose-ffmpeg-timeout.md](compose-ffmpeg-timeout.md)** —
+compose must not treat a timed-out ffmpeg mux as success because a
+partial output file exists.
 
 **Shipped:**
+- **[visual-beats-numeric.md](visual-beats-numeric.md)** —
+  `visual_beats` / `default_visual_beats` must be YAML numbers (#120).
 - **[validation-enable-bools.md](validation-enable-bools.md)** —
   validation / manim enable flags must be YAML booleans (#119).
 - **[validation-numeric-tunables.md](validation-numeric-tunables.md)** —
