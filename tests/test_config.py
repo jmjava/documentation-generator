@@ -948,3 +948,65 @@ def test_from_yaml_generation_numeric_tunables_allowed(tmp_path: Path) -> None:
     assert c.raw["narration_from_source"]["max_context_bytes"] == 90000
     assert c.raw["manim_scene_generation"]["temperature"] == 0.4
     assert c.raw["manim_scene_generation"]["max_whisper_words_in_prompt"] == 12
+
+
+def test_from_yaml_bool_av_sync_tolerance_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  av_sync:\n    tolerance_sec: true\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="validation.av_sync.tolerance_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_ocr_min_confidence_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n  ocr:\n    min_confidence:\n      - 40\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.ocr.min_confidence must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_story_end_max_early_sec_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  story_end:\n    max_early_sec: true\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="validation.story_end.max_early_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_timing_sync_tail_gap_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'validation:\n  timing_sync:\n    max_tail_gap_sec: "3.0"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.timing_sync.max_tail_gap_sec must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_validation_nested_numerics_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n"
+        "  ocr:\n    sample_interval_sec: 3\n    min_confidence: 50\n"
+        "  layout:\n    min_spacing_px: 12\n    edge_margin_px: 18\n"
+        "  av_sync:\n    tolerance_sec: 2.5\n    min_anchors_per_segment: 3\n"
+        "  timing_sync:\n    max_tail_gap_sec: 4.0\n    max_end_overrun_sec: 1.5\n"
+        "  story_end:\n    max_early_sec: 30\n    max_early_ratio: 0.4\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.ocr_config["sample_interval_sec"] == 3
+    assert c.ocr_config["min_confidence"] == 50
+    assert c.layout_config["min_spacing_px"] == 12
+    assert c.av_sync_config["tolerance_sec"] == 2.5
+    assert c.timing_sync_config["max_tail_gap_sec"] == 4.0
+    assert c.story_end_config["max_early_sec"] == 30

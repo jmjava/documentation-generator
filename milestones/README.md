@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[generation-numeric-tunables.md](generation-numeric-tunables.md)** —
-narration / scene-generation temperature and context-byte tunables must
-be YAML numbers (`true` used to become `1.0` / 1-byte context).
+**Active:** **[validation-numeric-tunables.md](validation-numeric-tunables.md)** —
+nested validation OCR / layout / av_sync / timing / story_end numerics
+must be YAML numbers (`true` used to become `1`).
 
 **Shipped:**
+- **[generation-numeric-tunables.md](generation-numeric-tunables.md)** —
+  narration / scene-generation temperature and context-byte tunables
+  must be YAML numbers (#117).
 - **[hint-segment-create-bool.md](hint-segment-create-bool.md)** —
   hint `docgen.segment.create` must be a YAML boolean (#116).
 - **[numeric-config-tunables.md](numeric-config-tunables.md)** —

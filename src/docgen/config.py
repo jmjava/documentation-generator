@@ -607,6 +607,42 @@ class Config:
                 label="validation.narration_lint.post_tts_deny_patterns",
                 source=src,
             )
+        for nkey in ("sample_interval_sec", "min_confidence"):
+            if ocr.get(nkey) is not None:
+                require_yaml_number(
+                    ocr[nkey], label=f"validation.ocr.{nkey}", source=src
+                )
+        layout = self._sub_block(validation, "layout", label="validation.layout")
+        for nkey in ("min_spacing_px", "edge_margin_px"):
+            if layout.get(nkey) is not None:
+                require_yaml_number(
+                    layout[nkey], label=f"validation.layout.{nkey}", source=src
+                )
+        for nkey in (
+            "tolerance_sec",
+            "min_anchors_per_segment",
+            "max_anchors_per_segment",
+        ):
+            if avs.get(nkey) is not None:
+                require_yaml_number(
+                    avs[nkey], label=f"validation.av_sync.{nkey}", source=src
+                )
+        ts_sync = self._sub_block(
+            validation, "timing_sync", label="validation.timing_sync"
+        )
+        for nkey in ("max_tail_gap_sec", "max_end_overrun_sec"):
+            if ts_sync.get(nkey) is not None:
+                require_yaml_number(
+                    ts_sync[nkey],
+                    label=f"validation.timing_sync.{nkey}",
+                    source=src,
+                )
+        story = self._sub_block(validation, "story_end", label="validation.story_end")
+        for nkey in ("max_early_sec", "max_early_ratio"):
+            if story.get(nkey) is not None:
+                require_yaml_number(
+                    story[nkey], label=f"validation.story_end.{nkey}", source=src
+                )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"
