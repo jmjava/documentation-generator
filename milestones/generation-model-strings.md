@@ -1,7 +1,7 @@
 # Milestone: narration / scene-generation model and prompts must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#107](https://github.com/jmjava/documentation-generator/pull/107)  
 **Depends on:** `milestones/manim-font-quality.md` (PR #106),
 `milestones/wizard-prompt-strings.md` (PR #100)
 
@@ -35,9 +35,9 @@ allowed (same as `wizard.system_prompt`).
 - [x] Present `manim_scene_generation.system_prompt` /
       `scene_spec_system_prompt` must be YAML strings (empty allowed).
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
