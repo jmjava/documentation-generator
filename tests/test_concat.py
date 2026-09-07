@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -71,3 +72,45 @@ def test_concat_builder_rejects_integer_segment_id() -> None:
     )
     with pytest.raises(ConcatError, match="quoted string segment id"):
         ConcatBuilder(cfg).build()  # type: ignore[arg-type]
+
+
+def _seed_recordings(tmp_path: Path) -> None:
+    rec = tmp_path / "recordings"
+    rec.mkdir()
+    (rec / "01-a.mp4").write_bytes(b"seg-a")
+    (rec / "02-b.mp4").write_bytes(b"seg-b")
+
+
+def test_concat_ffmpeg_timeout_removes_incomplete_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    _seed_recordings(tmp_path)
+    out = tmp_path / "recordings" / "full.mp4"
+    out.write_bytes(b"partial-concat")
+
+    def fake_run(cmd, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=300)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ConcatError, match="removed incomplete full.mp4"):
+        ConcatBuilder(cfg).build(name="full")
+    assert not out.exists()
+    assert not list((tmp_path / "recordings").glob(".concat-*.txt"))
+
+
+def test_concat_ffmpeg_failure_removes_incomplete_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    _seed_recordings(tmp_path)
+    out = tmp_path / "recordings" / "full.mp4"
+    out.write_bytes(b"partial-concat")
+
+    def fake_run(cmd, **_kwargs):
+        raise subprocess.CalledProcessError(1, cmd, stderr="mux error")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ConcatError, match="ffmpeg failed"):
+        ConcatBuilder(cfg).build(name="full")
+    assert not out.exists()
