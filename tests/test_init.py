@@ -105,6 +105,7 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     cfg = yaml.safe_load(cfg_text.split("\n\n", 1)[-1])
     assert cfg["segments"]["all"] == ["01", "02"]
     assert cfg["segment_names"]["01"] == "01-intro"
+    assert cfg["ai"]["provider"] == "openai"
     assert "manim" not in cfg
     assert "vhs" not in cfg
     assert "test-project" in cfg["tts"]["instructions"]

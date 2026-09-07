@@ -6,6 +6,24 @@ AGENTS.md "Testing (downstream relevance)".
 
 from __future__ import annotations
 
+import pytest
+
+_CLEAR_ENV = (
+    "DOCGEN_REPO",
+    "DOCGEN_AI_PROVIDER",
+    "DOCGEN_AI_BASE_URL",
+    "DOCGEN_AI_API_KEY_ENV",
+    "DOCGEN_REPO_CACHE",
+)
+
+
+@pytest.fixture(autouse=True)
+def _clear_docgen_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep provider/repo env from leaking into CLI and AI-client tests."""
+    for key in _CLEAR_ENV:
+        monkeypatch.delenv(key, raising=False)
+
+
 _FFMPEG_ONLY_VALIDATE_TESTS = frozenset(
     {
         "tests/test_validate.py::TestComposeGuard::test_compose_rejects_short_video",

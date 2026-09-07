@@ -41,7 +41,7 @@ def _docgen_env_override_mode() -> str | set[str] | None:
 
 
 def _load_env(cfg: Config | None) -> None:
-    """Load .env file from config if specified, so OPENAI_API_KEY etc. are available.
+    """Load .env file from config if specified, so OPENAI_API_KEY / XAI_API_KEY etc. are available.
 
     By default **shell environment wins**: ``os.environ.setdefault`` does not
     replace keys already exported. Set ``DOCGEN_ENV_OVERRIDES=1`` so every key
@@ -57,20 +57,19 @@ def _load_env(cfg: Config | None) -> None:
             os.environ[k] = v
         return
     override_keys = mode if isinstance(mode, set) else set()
+    from docgen.ai_client import conflicting_api_key_envs
+
+    warn_keys = set(conflicting_api_key_envs())
     for k, v in pairs:
         if k in override_keys:
             os.environ[k] = v
             continue
-        if (
-            k == "OPENAI_API_KEY"
-            and v
-            and os.environ.get("OPENAI_API_KEY")
-        ):
+        if k in warn_keys and v and os.environ.get(k):
             click.echo(
-                "[docgen] OPENAI_API_KEY already set in the process environment; "
+                f"[docgen] {k} already set in the process environment; "
                 "env_file value is ignored for this key (shell wins). "
-                "Unset OPENAI_API_KEY or set DOCGEN_ENV_OVERRIDES=1 to load all keys "
-                "from env_file, or DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY to override just "
+                f"Unset {k} or set DOCGEN_ENV_OVERRIDES=1 to load all keys "
+                f"from env_file, or DOCGEN_ENV_OVERRIDES={k} to override just "
                 "this key.",
                 err=True,
             )
@@ -96,6 +95,18 @@ def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool)
     help="Path to docgen.yaml (parents of cwd are searched when omitted).",
 )
 @click.option(
+    "--repo",
+    "repo_spec",
+    default=None,
+    envvar="DOCGEN_REPO",
+    help=(
+        "Consumer git checkout or clone URL (also DOCGEN_REPO). docgen stays an "
+        "external tool — nothing is copied into that repo's src/. Looks for "
+        "docs/demos/docgen.yaml (or any docgen.yaml under the checkout). "
+        "GitHub org/repo shorthand is accepted. Clones into DOCGEN_REPO_CACHE."
+    ),
+)
+@click.option(
     "--version",
     is_flag=True,
     callback=_cli_version_string,
@@ -104,20 +115,63 @@ def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool)
     help="Show installed docgen version and the recommended pip install line.",
 )
 @click.pass_context
-def main(ctx: click.Context, config_path: str | None) -> None:
+def main(
+    ctx: click.Context,
+    config_path: str | None,
+    repo_spec: str | None,
+) -> None:
     """docgen — demo generation pipeline (install as an external tool; keep only the bundle in-repo).
 
-    Environment: keys already set in the shell are not replaced by ``env_file``
-    (see ``DOCGEN_ENV_OVERRIDES``). If no docgen.yaml is found, pass ``--config``.
+    Point at a consumer project with ``--repo PATH_OR_URL`` (or ``DOCGEN_REPO``);
+    do not vendor this library into that repo's ``src/``. Environment: keys
+    already set in the shell are not replaced by ``env_file`` (see
+    ``DOCGEN_ENV_OVERRIDES``). LLM / TTS / image calls use OpenAI by default;
+    set ``ai.provider: grok`` or ``DOCGEN_AI_PROVIDER=grok`` plus ``XAI_API_KEY``
+    to use xAI.
     """
     ctx.ensure_object(dict)
+    repo_root = None
+    if repo_spec:
+        from docgen.target_repo import TargetRepoError, resolve_repo
+
+        try:
+            repo_root = resolve_repo(repo_spec)
+        except TargetRepoError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"[docgen] target repo: {repo_root}", err=True)
+    ctx.obj["repo_root"] = repo_root
+
+    cfg = None
     try:
-        cfg = Config.from_yaml(config_path) if config_path else Config.discover()
+        if config_path:
+            cfg_path = Path(config_path)
+            if not cfg_path.is_absolute() and repo_root is not None:
+                nested = repo_root / cfg_path
+                if nested.exists():
+                    cfg_path = nested
+            cfg = Config.from_yaml(cfg_path)
+        elif repo_root is not None:
+            from docgen.target_repo import find_bundle_yaml
+
+            found = find_bundle_yaml(repo_root)
+            if found is not None:
+                click.echo(f"[docgen] bundle: {found}", err=True)
+                cfg = Config.from_yaml(found)
+            elif ctx.invoked_subcommand != "init":
+                click.echo(
+                    f"[docgen] No docgen.yaml under {repo_root}; "
+                    "run `docgen --repo … init --defaults` to scaffold "
+                    "docs/demos (docgen is not copied into the consumer src/).",
+                    err=True,
+                )
+        else:
+            cfg = Config.discover()
     except FileNotFoundError:
         cfg = None
         click.echo(
             "[docgen] No docgen.yaml found in this directory tree; pass "
-            "`--config PATH/to/docgen.yaml` or `cd` to your demos bundle directory.",
+            "`--config PATH/to/docgen.yaml`, `--repo PATH_OR_URL`, or `cd` "
+            "to your demos bundle directory.",
             err=True,
         )
     ctx.obj["config"] = cfg
@@ -160,15 +214,20 @@ def init(
     from docgen.init import build_defaults_plan, generate_files, print_summary, run_wizard
 
     td = Path(target_dir).resolve() if target_dir else None
+    repo_root = ctx.obj.get("repo_root")
     if defaults:
         plan = build_defaults_plan(
             td,
             segments_file=segments_file.resolve() if segments_file else None,
+            repo_root=Path(repo_root) if repo_root else None,
         )
     else:
         if segments_file is not None:
             raise click.ClickException("--segments-file requires --defaults.")
-        plan = run_wizard(target_dir=td)
+        plan = run_wizard(
+            target_dir=td,
+            repo_root=Path(repo_root) if repo_root else None,
+        )
 
     created = generate_files(plan)
     print_summary(plan, created)
@@ -318,7 +377,7 @@ def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
     help=(
         "Timing engine (default: timestamps.engine in docgen.yaml, local). "
         "local = offline narration-text alignment via ffmpeg silencedetect; "
-        "whisper = OpenAI whisper-1 transcription."
+        "whisper = OpenAI whisper-1 or xAI STT when ai.provider is grok."
     ),
 )
 @click.pass_context
@@ -500,10 +559,10 @@ def narration_generate(
     revise: bool,
     revision_notes: str,
 ) -> None:
-    """Generate or revise narration ``.md`` from repo sources + owner hints via OpenAI chat.
+    """Generate or revise narration ``.md`` from repo sources + owner hints via chat completions.
 
     Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
-    Requires ``OPENAI_API_KEY`` unless using a future offline stub.
+    Requires ``OPENAI_API_KEY``, or ``XAI_API_KEY`` with ``ai.provider: grok``.
 
     Use ``--segment <id>`` to drive a single segment, or ``--all`` to iterate
     every id in ``segments.all`` (used by full-reset orchestration).

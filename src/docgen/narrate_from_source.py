@@ -1,4 +1,4 @@
-"""Generate narration ``.md`` from repository sources using OpenAI chat completions.
+"""Generate narration ``.md`` from repository sources using chat completions (OpenAI or Grok).
 
 The **project owner** defines optional **hints** (plain strings) in ``docgen.yaml`` under
 ``narration_from_source.hints`` and/or per-segment ``narration_from_source.segments.<id>.hints``.
@@ -223,7 +223,7 @@ def generate_narration_markdown(
     revision_notes: str = "",
     mode: str = "generate",
 ) -> str:
-    """Call OpenAI and return markdown body (does not write files).
+    """Call the chat model and return markdown body (does not write files).
 
     Owner hints from YAML and ``extra_hints`` from the caller are sent as guidance only;
     the returned markdown is model-generated.
@@ -272,6 +272,7 @@ def generate_narration_markdown(
         topic_label=topic,
         current_narration=current,
         mode=mode_norm,
+        cfg=cfg,
     )
 
 

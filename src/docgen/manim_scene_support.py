@@ -864,36 +864,24 @@ def extract_reference_classes(scenes_py_text: str, *, max_bytes: int = 30_000) -
 # ── LLM call (OpenAI chat completions) ─────────────────────────────────────
 
 
-def call_llm(*, system_prompt: str, user_message: str, model: str, temperature: float) -> str:
-    """Call OpenAI chat completions; convert auth/network errors into actionable RuntimeErrors."""
-    import openai
+def call_llm(
+    *,
+    system_prompt: str,
+    user_message: str,
+    model: str,
+    temperature: float,
+    cfg: "Config | None" = None,
+) -> str:
+    """Call chat completions (OpenAI or Grok); convert auth/network errors into RuntimeErrors."""
+    from docgen.ai_client import chat_completion
 
-    client = openai.OpenAI()
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=float(temperature),
-        )
-    except openai.AuthenticationError as exc:
-        raise RuntimeError(
-            f"OpenAI rejected OPENAI_API_KEY (authentication failed): {exc}. "
-            "Set a valid key or pass --dry-run to inspect the prompt only."
-        ) from exc
-    except openai.PermissionDeniedError as exc:
-        raise RuntimeError(
-            f"OpenAI permission denied for model {model!r}: {exc}. "
-            "Pick a model your account is allowed to use, or update YAML "
-            "manim_scene_generation.model."
-        ) from exc
-    except openai.APIConnectionError as exc:
-        raise RuntimeError(
-            f"OpenAI connection error: {exc} — re-run when connectivity is restored."
-        ) from exc
-    return response.choices[0].message.content or ""
+    return chat_completion(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        model=model,
+        temperature=temperature,
+        cfg=cfg,
+    )
 
 
 # ── Lint (compiled / hand-authored scene bodies) ───────────────────────────

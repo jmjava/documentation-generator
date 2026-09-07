@@ -74,6 +74,7 @@ def test_merge_defaults_adds_archive_exclude(tmp_path: Path) -> None:
     ch = merge_defaults(raw, cfg)
     assert any("archive" in c for c in ch)
     assert "**/archive/**" in raw["wizard"]["exclude_patterns"]
+    assert raw["ai"]["provider"] == "openai"
 
 
 def test_merge_defaults_idempotent_archive(tmp_path: Path) -> None:

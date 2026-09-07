@@ -110,6 +110,21 @@ class Config:
     def concat_map(self) -> dict[str, list[str]]:
         return self.raw.get("concat", {})
 
+    # -- AI provider (OpenAI / Grok) ------------------------------------------
+
+    @property
+    def ai_config(self) -> dict[str, Any]:
+        """``ai.provider`` plus optional ``base_url`` / ``api_key_env``.
+
+        ``provider`` is ``openai`` (default) or ``grok`` (xAI). Environment
+        ``DOCGEN_AI_PROVIDER`` overrides YAML. See :mod:`docgen.ai_client`.
+        """
+        defaults: dict[str, Any] = {"provider": "openai"}
+        block = self.raw.get("ai")
+        if isinstance(block, dict):
+            defaults.update(block)
+        return defaults
+
     # -- TTS -------------------------------------------------------------------
 
     @property
@@ -135,7 +150,7 @@ class Config:
 
         ``engine: local`` (default) aligns the known narration text against the
         mp3 offline (ffmpeg silencedetect); ``engine: whisper`` transcribes via
-        OpenAI whisper-1 (network + API key).
+        OpenAI whisper-1 (network + API key) or xAI STT when ``ai.provider`` is grok.
         """
         defaults: dict[str, Any] = {
             "engine": "local",
@@ -149,7 +164,7 @@ class Config:
 
     @property
     def image_generation_config(self) -> dict[str, Any]:
-        """Settings for ``docgen image-generate`` (OpenAI Images API).
+        """Settings for ``docgen image-generate`` (OpenAI Images or xAI Imagine).
 
         ``quality`` is passed through only when set (model-specific values,
         e.g. ``low`` / ``medium`` / ``high`` for gpt-image-1).
