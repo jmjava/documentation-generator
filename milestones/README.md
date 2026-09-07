@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[generation-zero-values.md](generation-zero-values.md)** —
-`temperature: 0` / `max_whisper_segment_text_chars: 0` must not be
-replaced by ``or`` defaults.
+**Active:** **[concat-ffmpeg-timeout.md](concat-ffmpeg-timeout.md)** —
+concat must not leave a truncated full-demo mp4 after ffmpeg
+timeout or failure.
 
 **Shipped:**
+- **[generation-zero-values.md](generation-zero-values.md)** —
+  `temperature: 0` / `max_whisper_segment_text_chars: 0` must not be
+  replaced by ``or`` defaults (#122).
 - **[compose-ffmpeg-timeout.md](compose-ffmpeg-timeout.md)** —
   compose must not treat a timed-out ffmpeg mux as success (#121).
 - **[visual-beats-numeric.md](visual-beats-numeric.md)** —

@@ -1,6 +1,6 @@
 # Milestone: honor explicit generation zeros (temperature / max_chars)
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#122](https://github.com/jmjava/documentation-generator/pull/122)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/compose-ffmpeg-timeout.md` (PR #121)

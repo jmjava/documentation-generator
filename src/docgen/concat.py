@@ -89,11 +89,25 @@ class ConcatBuilder:
                 cwd=str(recordings_dir),
             )
         except FileNotFoundError as exc:
+            _unlink_incomplete(out)
             raise ConcatError("[concat] ffmpeg not found in PATH") from exc
         except subprocess.CalledProcessError as exc:
+            _unlink_incomplete(out)
             detail = (exc.stderr or exc.stdout or "")[:400]
             raise ConcatError(f"[concat] ffmpeg failed: {detail}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise ConcatError("[concat] ffmpeg timed out") from exc
+        except subprocess.TimeoutExpired as ext:
+            existed = out.exists()
+            _unlink_incomplete(out)
+            extra = f" (removed incomplete {out.name})" if existed else ""
+            raise ConcatError(f"[concat] ffmpeg timed out{extra}") from ext
         finally:
             concat_list.unlink(missing_ok=True)
+
+
+def _unlink_incomplete(path: Path) -> None:
+    """Remove a truncated concat output so later stages cannot treat it as finished."""
+    if path.exists():
+        try:
+            path.unlink()
+        except OSError:
+            pass
