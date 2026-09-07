@@ -1,7 +1,7 @@
 # Milestone: image-generate must not write empty assets
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #103  
 **Depends on:** `milestones/hint-front-matter-yaml.md` (PR #102),
 `milestones/tts-empty-audio.md` (PR #99)
 
