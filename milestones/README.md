@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[timing-inner-lists.md](timing-inner-lists.md)** —
-`timing.json` `words` / `segments` must be JSON arrays of objects.
+**Active:** **[wizard-state-segments.md](wizard-state-segments.md)** —
+wizard `.docgen-state.json` `segments` must be a mapping of objects.
 
 **Shipped:**
+- **[timing-inner-lists.md](timing-inner-lists.md)** —
+  `timing.json` `words` / `segments` must be JSON arrays of objects
+  (#127).
 - **[timing-stem-objects.md](timing-stem-objects.md)** —
   `timing.json` per-stem values must be JSON objects (not lists/scalars)
   (#126).

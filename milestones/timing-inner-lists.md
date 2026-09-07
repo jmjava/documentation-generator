@@ -1,6 +1,6 @@
 # Milestone: timing.json words/segments must be object arrays
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#127](https://github.com/jmjava/documentation-generator/pull/127)  
 **Depends on:** `milestones/timing-stem-objects.md` (PR #126)
 

@@ -12,6 +12,31 @@ from flask import Flask, jsonify, render_template, request
 STATE_FILENAME = ".docgen-state.json"
 
 
+class WizardError(RuntimeError):
+    """Raised when wizard persisted state or API payload is invalid."""
+
+
+def _json_kind(value: Any) -> str:
+    return "null" if value is None else type(value).__name__
+
+
+def require_state_segments(data: dict[str, Any], *, label: str) -> dict[str, Any]:
+    """Return the ``segments`` mapping, or raise if it is present but not objects."""
+    segs = data.get("segments")
+    if segs is None:
+        return {}
+    if not isinstance(segs, dict):
+        raise WizardError(
+            f"{label} segments must be a JSON object, not {_json_kind(segs)}"
+        )
+    for sid, row in segs.items():
+        if not isinstance(row, dict):
+            raise WizardError(
+                f"{label} segments[{sid!r}] must be a JSON object, not {_json_kind(row)}"
+            )
+    return segs
+
+
 def session_payload(config: Any | None) -> dict[str, Any]:
     """GUI session: frozen shell vs pip CLI, and whether a bundle is attached."""
     from docgen.resources import is_frozen
@@ -229,7 +254,11 @@ def load_state(base_dir: Path) -> dict[str, Any]:
         data = json.loads(p.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return {"segments": {}}
-    return data if isinstance(data, dict) else {"segments": {}}
+    if not isinstance(data, dict):
+        return {"segments": {}}
+    out = dict(data)
+    out["segments"] = require_state_segments(data, label=".docgen-state.json")
+    return out
 
 
 def save_state(base_dir: Path, state: dict[str, Any]) -> None:
@@ -648,13 +677,26 @@ def create_app(config: Any | None = None) -> Flask:
     def api_get_state():
         cfg = _cfg()
         base = cfg.base_dir if cfg else Path.cwd()
-        return jsonify(load_state(base))
+        try:
+            return jsonify(load_state(base))
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 500
 
     @app.route("/api/state", methods=["POST"])
     def api_set_state():
         cfg = _cfg()
         base = cfg.base_dir if cfg else Path.cwd()
-        state = request.json or {}
+        raw = request.get_json(silent=True)
+        if raw is None:
+            raw = {}
+        if not isinstance(raw, dict):
+            return jsonify({"error": "state must be a JSON object"}), 400
+        try:
+            segs = require_state_segments(raw, label="state")
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 400
+        state = dict(raw)
+        state["segments"] = segs
         save_state(base, state)
         return jsonify({"ok": True})
 
@@ -668,7 +710,10 @@ def create_app(config: Any | None = None) -> Flask:
         from docgen.yaml_generate import read_hint_focus_paths
 
         base = cfg.base_dir
-        state = load_state(base)
+        try:
+            state = load_state(base)
+        except WizardError as exc:
+            return jsonify({"error": str(exc)}), 500
         result = []
         for seg_id in cfg.segments_all:
             seg_name = cfg.resolve_segment_name(seg_id)
