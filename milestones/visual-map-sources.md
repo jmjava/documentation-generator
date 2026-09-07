@@ -1,7 +1,7 @@
 # Milestone: visual_map mixed sources must be a list of strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#112](https://github.com/jmjava/documentation-generator/pull/112)  
 **Depends on:** `milestones/visual-map-field-strings.md` (PR #108),
 `milestones/pages-config-strings.md` (PR #111)
 
@@ -25,9 +25,9 @@ must be a YAML list of non-empty strings.
 
 - [x] Present `visual_map.<id>.sources` must be a YAML list of strings.
 - [x] Tests for a string value and a nested-list item.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
