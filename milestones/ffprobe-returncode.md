@@ -1,7 +1,7 @@
 # Milestone: ffprobe duration probes must honor returncode
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#135](https://github.com/jmjava/documentation-generator/pull/135)  
 **Depends on:** `milestones/compose-ffmpeg-timeout.md` (PR #121),
 `milestones/timing-start-end.md` (PR #134)
 
