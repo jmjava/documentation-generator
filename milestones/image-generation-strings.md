@@ -1,7 +1,7 @@
 # Milestone: image_generation.model / size / quality must be strings
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #104  
 **Depends on:** `milestones/image-empty-bytes.md` (PR #103),
 `milestones/tts-empty-audio.md` (PR #99)
 

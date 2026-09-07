@@ -486,3 +486,31 @@ def test_from_yaml_list_image_generation_quality_raises(tmp_path: Path) -> None:
     p.write_text("image_generation:\n  quality:\n    - high\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="image_generation.quality must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_ai_provider_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("ai:\n  provider:\n    - openai\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="ai.provider must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_ai_base_url_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("ai:\n  base_url:\n    - https://api.openai.com/v1\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="ai.base_url must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_timestamps_engine_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("timestamps:\n  engine:\n    - local\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="timestamps.engine must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_tts_language_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("tts:\n  language:\n    - en\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="tts.language must be a YAML string"):
+        Config.from_yaml(p)

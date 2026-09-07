@@ -289,6 +289,18 @@ class Config:
             require_yaml_string(ig["size"], label="image_generation.size", source=src)
         if ig.get("quality") is not None:
             require_yaml_string(ig["quality"], label="image_generation.quality", source=src)
+        ai = self._block("ai")
+        if ai.get("provider") is not None:
+            require_yaml_string(ai["provider"], label="ai.provider", source=src)
+        if ai.get("base_url") is not None:
+            require_yaml_string(ai["base_url"], label="ai.base_url", source=src)
+        if ai.get("api_key_env") is not None:
+            require_yaml_string(ai["api_key_env"], label="ai.api_key_env", source=src)
+        ts = self._block("timestamps")
+        if ts.get("engine") is not None:
+            require_yaml_string(ts["engine"], label="timestamps.engine", source=src)
+        if tts.get("language") is not None:
+            require_yaml_string(tts["language"], label="tts.language", source=src)
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(
