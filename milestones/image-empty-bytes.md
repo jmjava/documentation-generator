@@ -25,9 +25,9 @@ Empty provider bytes raise `ImageGenerationError` **before** writing.
 - [x] `--force` with empty bytes leaves an existing asset unchanged.
 - [x] Empty b64 / URL download raises in `generate_image_bytes`.
 - [x] Tests for the spec write path.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
