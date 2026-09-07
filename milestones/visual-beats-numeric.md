@@ -1,6 +1,6 @@
 # Milestone: visual_beats must be YAML numbers (no silent auto-fallback)
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#120](https://github.com/jmjava/documentation-generator/pull/120)  
 **Depends on:** `milestones/generation-numeric-tunables.md` (PR #117),
 `milestones/validation-enable-bools.md` (PR #119)

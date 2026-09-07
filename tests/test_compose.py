@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -265,3 +266,48 @@ def test_cli_compose_empty_segments_is_click_error(tmp_path: Path) -> None:
     result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
     assert result.exit_code != 0
     assert "no segments to compose" in (result.output + result.stderr).lower()
+
+
+def test_run_ffmpeg_timeout_with_partial_output_raises(tmp_path: Path, monkeypatch) -> None:
+    """A timed-out mux must not count as success just because a partial file exists."""
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    out = tmp_path / "recordings" / "01-demo.mp4"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(b"partial-mux")
+
+    def fake_run(cmd, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=1)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    composer = Composer(c)
+    composer.ffmpeg_timeout_sec = 1
+    with pytest.raises(ComposeError, match="removed incomplete 01-demo.mp4"):
+        composer._run_ffmpeg(["ffmpeg", "-y", str(out)])
+    assert not out.exists()
+
+
+def test_run_ffmpeg_timeout_without_output_raises(tmp_path: Path, monkeypatch) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    missing = tmp_path / "recordings" / "missing.mp4"
+    missing.parent.mkdir(parents=True, exist_ok=True)
+
+    def fake_run(cmd, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=2)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    composer = Composer(c)
+    composer.ffmpeg_timeout_sec = 2
+    with pytest.raises(ComposeError, match="ffmpeg timed out after 2s"):
+        composer._run_ffmpeg(["ffmpeg", "-y", str(missing)])
+    assert not missing.exists()

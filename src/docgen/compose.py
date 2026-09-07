@@ -331,14 +331,17 @@ class Composer:
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or exc.stdout or "")[:400]
             raise ComposeError(f"ffmpeg failed: {detail}")
-        except subprocess.TimeoutExpired:
-            if out_path and out_path.exists() and out_path.stat().st_size > 0:
-                print(
-                    f"    WARNING: ffmpeg timed out after {timeout_sec}s, "
-                    f"but output exists at {out_path}."
-                )
-                return
-            raise ComposeError(f"ffmpeg timed out after {timeout_sec}s")
+        except subprocess.TimeoutExpired as exc:
+            removed = ""
+            if out_path is not None and out_path.exists():
+                try:
+                    out_path.unlink()
+                    removed = f" (removed incomplete {out_path.name})"
+                except OSError:
+                    removed = f" (incomplete {out_path.name} still present)"
+            raise ComposeError(
+                f"ffmpeg timed out after {timeout_sec}s{removed}"
+            ) from exc
 
     def _manim_video_dirs(self) -> list[Path]:
         root = self.config.animations_dir / "media" / "videos"
