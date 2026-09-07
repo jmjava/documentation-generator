@@ -136,6 +136,35 @@ def test_api_state_post_rejects_list_body(tmp_path):
     assert res.get_json()["error"] == "request body must be a JSON object, not list"
 
 
+def test_api_state_post_rejects_invalid_json(tmp_path):
+    client, cfg = _wizard_client(tmp_path)
+    res = client.post(
+        "/api/state",
+        data="{not-json",
+        content_type="application/json",
+    )
+    assert res.status_code == 400
+    assert "not valid JSON" in res.get_json()["error"]
+    assert not (cfg.base_dir / ".docgen-state.json").exists()
+
+
+def test_api_state_post_rejects_json_null(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post("/api/state", data="null", content_type="application/json")
+    assert res.status_code == 400
+    assert res.get_json()["error"] == "request body must be a JSON object, not null"
+
+
+def test_api_state_post_empty_body_is_empty_object(tmp_path):
+    client, cfg = _wizard_client(tmp_path)
+    res = client.post("/api/state")
+    assert res.status_code == 200
+    got = client.get("/api/state")
+    assert got.status_code == 200
+    assert got.get_json()["segments"] == {}
+    assert (cfg.base_dir / ".docgen-state.json").is_file()
+
+
 def test_api_state_post_rejects_list_segments(tmp_path):
     client, cfg = _wizard_client(tmp_path)
     res = client.post("/api/state", json={"segments": ["01"]})

@@ -41,11 +41,17 @@ def request_json_object() -> dict[str, Any]:
     """Return the JSON request body as an object. A missing body is ``{}``.
 
     A JSON array, string, number, bool, or ``null`` raises :class:`WizardError`
-    so handlers cannot ``.get`` on a list.
+    so handlers cannot ``.get`` on a list. Garbage JSON raises instead of
+    looking like an empty object (``get_json(silent=True)`` used to return
+    ``None`` for both missing and invalid bodies).
     """
-    raw = request.get_json(silent=True)
-    if raw is None:
+    raw_bytes = request.get_data(cache=True)
+    if not raw_bytes or not raw_bytes.strip():
         return {}
+    try:
+        raw = json.loads(raw_bytes)
+    except json.JSONDecodeError as exc:
+        raise WizardError(f"request body is not valid JSON ({exc})") from exc
     if not isinstance(raw, dict):
         raise WizardError(
             f"request body must be a JSON object, not {_json_kind(raw)}"
