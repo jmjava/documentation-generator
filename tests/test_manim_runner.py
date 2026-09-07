@@ -137,3 +137,47 @@ def test_render_raises_when_scenes_py_missing(tmp_path: Path) -> None:
     runner = ManimRunner(cfg)
     with pytest.raises(RuntimeError, match="scenes.py not found"):
         runner.render(scene="Scene01")
+
+
+def test_render_uses_visual_map_when_manim_scenes_empty(tmp_path: Path) -> None:
+    cfg_raw = {
+        "dirs": {"animations": "animations"},
+        "manim": {"quality": "720p30", "scenes": []},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "visual_map": {"01": {"type": "manim", "scene": "FromMapScene"}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg_raw), encoding="utf-8")
+    (tmp_path / "animations").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "animations" / "scenes.py").write_text("# stub\n", encoding="utf-8")
+    cfg = Config.from_yaml(p)
+    runner = ManimRunner(cfg)
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **_kwargs):  # type: ignore[no-untyped-def]
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    with (
+        patch.object(runner, "_resolve_manim_binary", return_value="manim"),
+        patch.object(runner, "_check_font"),
+        patch("docgen.manim_runner.subprocess.run", side_effect=fake_run),
+    ):
+        runner.render()
+    assert calls
+    assert calls[0][-1] == "FromMapScene"
+
+
+def test_render_raises_when_manim_rows_have_no_class(tmp_path: Path) -> None:
+    cfg_raw = {
+        "dirs": {"animations": "animations"},
+        "manim": {"quality": "720p30", "scenes": []},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "visual_map": {"01": {"type": "manim"}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg_raw), encoding="utf-8")
+    (tmp_path / "animations").mkdir(parents=True, exist_ok=True)
+    cfg = Config.from_yaml(p)
+    with pytest.raises(RuntimeError, match="no scene class names"):
+        ManimRunner(cfg).render()

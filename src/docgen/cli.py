@@ -1079,6 +1079,18 @@ def image_generate_cmd(
     elif all_segments:
         targets = spec_files_for_bundle(cfg)
         if not targets:
+            manim_ids = [
+                sid
+                for sid in cfg.segments_all
+                if isinstance(cfg.visual_map.get(sid), dict)
+                and str(cfg.visual_map[sid].get("type", "")).strip().lower() == "manim"
+            ]
+            if manim_ids:
+                raise click.ClickException(
+                    "[image-generate] no *.scene.yaml specs in animations/specs/ "
+                    f"but manim segments exist ({', '.join(manim_ids)}) — "
+                    "run `docgen scene-spec-generate` first"
+                )
             click.echo("[image-generate] no *.scene.yaml specs found in animations/specs/")
             return
     else:

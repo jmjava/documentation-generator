@@ -491,7 +491,15 @@ class Validator:
     def _check_narration_lint(self, seg_id: str) -> CheckResult:
         narr = self._find_narration(seg_id)
         if not narr:
-            return CheckResult("narration_lint", True, ["No narration file (skipped)"])
+            return CheckResult(
+                "narration_lint",
+                False,
+                [
+                    f"No narration file for listed segment {seg_id} "
+                    f"(expected {self.config.resolve_segment_name(seg_id)}.md) — "
+                    "same contract as `docgen lint`"
+                ],
+            )
         from docgen.narration_lint import lint_pre_tts
         text = narr.read_text(encoding="utf-8")
         deny = self.config.narration_lint_config.get("pre_tts_deny_patterns")
@@ -788,7 +796,7 @@ class Validator:
             return CheckResult("story_end", True, ["non-manim (skipped)"])
 
         from docgen.scene_retime import list_scene_spec_paths
-        from docgen.scene_spec import last_paced_reveal_time, load_scene_spec
+        from docgen.scene_spec import last_paced_reveal_time, load_scene_spec, pacing_violations
 
         paths = list_scene_spec_paths(self.config, segment_id=seg_id)
         if not paths:
@@ -797,16 +805,24 @@ class Validator:
             )
 
         block = self._load_timing_block(seg_id)
-        if block is None:
+        words = block.get("words") if isinstance(block, dict) else None
+        words_ok = isinstance(words, list) and bool(words)
+
+        if not words_ok:
+            for path in paths:
+                try:
+                    spec = load_scene_spec(path)
+                except Exception as exc:
+                    return CheckResult(
+                        "story_end",
+                        False,
+                        [f"Cannot load scene spec {path.name}: {exc}"],
+                    )
+                pace_issues = pacing_violations(spec, words_present=False)
+                if pace_issues:
+                    return CheckResult("story_end", False, pace_issues[:8])
             return CheckResult(
-                "story_end",
-                True,
-                ["No timing.json entry (skipped) — run `docgen timestamps`"],
-            )
-        words = block.get("words")
-        if not isinstance(words, list) or not words:
-            return CheckResult(
-                "story_end", True, ["No timing words (skipped)"]
+                "story_end", True, ["No timing words (skipped — no paced labels)"]
             )
 
         last_reveal: float | None = None
@@ -832,7 +848,7 @@ class Validator:
 
         audio = self._find_audio(seg_id)
         audio_end = self._probe_media_duration(audio) if audio and not _is_lfs_pointer(audio) else None
-        transcript_end = self._timing_last_end(block)
+        transcript_end = self._timing_last_end(block if isinstance(block, dict) else {})
         # Prefer audio duration; fall back to transcript end when probe fails.
         end_t = audio_end if audio_end is not None else transcript_end
         if end_t is None or end_t <= 0:

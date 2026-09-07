@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from docgen.config import Config
@@ -55,6 +56,18 @@ def test_collect_source_snippets_respects_extra_paths(tmp_path: Path) -> None:
     snips = collect_source_snippets(cfg, s, extra_paths=["b.txt"], max_context_bytes=10_000)
     labels = {x[0] for x in snips}
     assert "a.txt" in labels and "b.txt" in labels
+
+
+def test_collect_source_snippets_missing_declared_path_raises(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"narration_from_source": {"context": {"paths": ["missing.py"]}}}),
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    s = merged_narration_from_source_settings(cfg, "01")
+    with pytest.raises(ValueError, match="declared context path"):
+        collect_source_snippets(cfg, s, extra_paths=[], max_context_bytes=10_000)
 
 
 def test_build_owner_hints_guidance() -> None:
