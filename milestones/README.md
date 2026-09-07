@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[yaml-generate-mappings.md](yaml-generate-mappings.md)** —
-`yaml-generate` merge/discover must not replace a list/scalar `visual_map` or
-narration/manim block with `{}`.
+**Active:** **[asset-graph-timing.md](asset-graph-timing.md)** — wizard
+freshness must not treat corrupt `timing.json` as a missing timestamps entry.
 
 **Shipped:**
+- **[yaml-generate-mappings.md](yaml-generate-mappings.md)** — `yaml-generate`
+  merge/discover must not replace a list/scalar `visual_map` or narration/manim
+  block with `{}` (#91).
 - **[context-path-lists.md](context-path-lists.md)** — `pages.segments` and
   narration/manim context path lists must be typed (#90).
 - **[timing-json-parse.md](timing-json-parse.md)** — corrupt `timing.json`
