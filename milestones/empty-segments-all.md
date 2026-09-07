@@ -1,6 +1,6 @@
 # Milestone: empty segments.all must not fall through to default
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#124](https://github.com/jmjava/documentation-generator/pull/124)  
 **Depends on:** `milestones/concat-ffmpeg-timeout.md` (PR #123),
 `milestones/yaml-generate-mappings.md` (PR #91)

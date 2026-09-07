@@ -683,7 +683,7 @@ def narration_generate(
         click.echo(f"  -> {out}" if all_segments else f"[narration-generate] wrote {out}")
 
     if all_segments:
-        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
+        ids = list(cfg.segments_all)
         if not ids:
             raise click.ClickException("segments.all is empty in docgen.yaml")
         for seg_id in ids:
@@ -933,10 +933,10 @@ def scene_spec_generate_cmd(
             )
 
     if all_segments:
-        ids = list((cfg.raw.get("segments") or {}).get("all") or [])
+        ids = list(cfg.segments_all)
         if not ids:
             raise click.ClickException("segments.all is empty in docgen.yaml")
-        names = (cfg.raw.get("segment_names") or {})
+        names = cfg.segment_names
         scripts_dir = cfg.base_dir / "scripts"
         failures: list[str] = []
         for seg_id in ids:

@@ -248,3 +248,62 @@ def test_narration_generate_cli_dry_run(tmp_path: Path) -> None:
     assert r.exit_code == 0, r.output
     assert "CLI out." in r.output
     assert not (tmp_path / "narration").exists() or not list((tmp_path / "narration").glob("*.md"))
+
+
+def test_narration_generate_all_uses_default_when_all_missing(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "segments": {"default": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {"context": {"paths": ["x.md"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "x.md").write_text("# src\nbody", encoding="utf-8")
+    runner = CliRunner()
+    with patch("docgen.wizard.generate_narration_via_llm") as m:
+        m.return_value = "From default.\n"
+        r = runner.invoke(
+            main,
+            [
+                "--config",
+                str(tmp_path / "docgen.yaml"),
+                "narration-generate",
+                "--all",
+                "--dry-run",
+            ],
+        )
+    assert r.exit_code == 0, r.output
+    assert "segments.all is empty" not in (r.output + r.stderr)
+    assert "From default." in r.output
+    assert m.called
+
+
+def test_narration_generate_all_empty_all_raises_even_with_default(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "segments": {"default": ["01"], "all": []},
+                "segment_names": {"01": "01-demo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["--config", str(tmp_path / "docgen.yaml"), "narration-generate", "--all"],
+    )
+    assert r.exit_code != 0
+    assert "segments.all is empty" in (r.output + r.stderr)
