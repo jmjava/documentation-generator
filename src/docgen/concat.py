@@ -10,37 +10,55 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+class ConcatError(RuntimeError):
+    """Raised when concat cannot build a complete output."""
+
+
 class ConcatBuilder:
     def __init__(self, config: Config) -> None:
         self.config = config
 
     def build(self, name: str | None = None) -> None:
         concat_map = self.config.concat_map
-        if not concat_map:
+        if not isinstance(concat_map, dict) or not concat_map:
             print("[concat] No concat map in config")
             return
 
-        targets = {name: concat_map[name]} if name and name in concat_map else concat_map
+        if name:
+            if name not in concat_map:
+                raise ConcatError(
+                    f"[concat] unknown target {name!r}; "
+                    f"known: {', '.join(sorted(concat_map))}"
+                )
+            targets = {name: concat_map[name]}
+        else:
+            targets = concat_map
         for out_name, seg_ids in targets.items():
             self._build_one(out_name, seg_ids)
 
     def _build_one(self, out_name: str, seg_ids: list[str]) -> None:
         recordings_dir = self.config.recordings_dir
         if not recordings_dir.exists():
-            print("[concat] Recordings dir not found")
-            return
+            raise ConcatError(f"[concat] recordings dir not found: {recordings_dir}")
 
         files: list[Path] = []
+        missing: list[str] = []
         for seg_id in seg_ids:
-            found = self.config.find_segment_asset(recordings_dir, seg_id, ".mp4")
+            found = self.config.find_segment_asset(recordings_dir, str(seg_id), ".mp4")
             if found:
                 files.append(found)
             else:
-                print(f"[concat] Missing recording for segment {seg_id}")
-
-        if not files:
-            print(f"[concat] No files to concatenate for {out_name}")
-            return
+                missing.append(str(seg_id))
+        if missing:
+            raise ConcatError(
+                "[concat] missing recording(s) for "
+                + ", ".join(missing)
+                + f" (needed for {out_name})"
+            )
+        if len(files) != len(seg_ids):
+            raise ConcatError(
+                f"[concat] {out_name}: expected {len(seg_ids)} files, got {len(files)}"
+            )
 
         fname = out_name if out_name.endswith(".mp4") else f"{out_name}.mp4"
         out = recordings_dir / fname
@@ -57,7 +75,12 @@ class ConcatBuilder:
                 check=True, capture_output=True, text=True, timeout=300,
                 cwd=str(recordings_dir),
             )
-        except Exception as exc:
-            print(f"[concat] Failed: {exc}")
+        except FileNotFoundError as exc:
+            raise ConcatError("[concat] ffmpeg not found in PATH") from exc
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or "")[:400]
+            raise ConcatError(f"[concat] ffmpeg failed: {detail}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ConcatError("[concat] ffmpeg timed out") from exc
         finally:
             concat_list.unlink(missing_ok=True)

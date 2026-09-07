@@ -140,3 +140,21 @@ def test_find_audio_does_not_use_substring_glob(tmp_path: Path) -> None:
     found = composer._find_audio("01")
     assert found is not None
     assert found.name == "01-demo.mp3"
+
+
+def test_cli_compose_exits_nonzero_when_nothing_composed(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
+    assert result.exit_code != 0
+    assert "0/" in result.output or "produced" in result.output

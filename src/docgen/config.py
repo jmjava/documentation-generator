@@ -57,8 +57,10 @@ class Config:
     def find_segment_asset(self, directory: Path, seg_id: str, suffix: str) -> Path | None:
         """Resolve a per-segment file without substring glob collisions (``01`` vs ``101``).
 
-        Prefers ``segment_names[id]`` stem, then ``{id}{suffix}``, then ``{id}-*{suffix}``.
-        Does not use ``*{id}*``.
+        Prefers ``segment_names[id]`` stem. If the stem is the id itself, also
+        accepts ``{id}-*{suffix}``. Does not use ``*{id}*`` and does not treat
+        a bare ``{id}{suffix}`` as a match for a longer stem (orphan ``01.mp3``
+        must not satisfy segment ``01-intro``).
         """
         if not directory.is_dir():
             return None
@@ -69,9 +71,7 @@ class Config:
         if exact.is_file():
             return exact
         if stem != sid:
-            by_id = directory / f"{sid}{ext}"
-            if by_id.is_file():
-                return by_id
+            return None
         prefixed = sorted(p for p in directory.glob(f"{sid}-*{ext}") if p.is_file())
         return prefixed[0] if prefixed else None
 

@@ -581,10 +581,15 @@ def create_app(config: Any | None = None) -> Flask:
 
         source_texts = []
         for rel in source_paths:
-            fpath = root / rel
+            rel_s = str(rel).strip().replace("\\", "/")
+            if not rel_s or rel_s.startswith("/") or ".." in rel_s.split("/"):
+                return jsonify({"error": f"invalid path: {rel!r}"}), 400
+            fpath = (root / rel_s).resolve()
+            if not _is_under_root(fpath, root):
+                return jsonify({"error": f"path escapes repo_root: {rel_s}"}), 400
             if fpath.exists() and fpath.is_file():
                 source_texts.append(
-                    f"## File: {rel}\n{fpath.read_text(encoding='utf-8', errors='replace')}"
+                    f"## File: {rel_s}\n{fpath.read_text(encoding='utf-8', errors='replace')}"
                 )
 
         try:
@@ -913,21 +918,45 @@ def create_app(config: Any | None = None) -> Flask:
 
             runner = ManimRunner(cfg)
             vmap = cfg.visual_map.get(segment_id, {})
-            scene = vmap.get("scene")
-            if scene:
-                runner.render(scene=scene)
+            scene = None
+            if isinstance(vmap, dict):
+                scene = vmap.get("scene") or vmap.get("class")
+            if not scene:
+                raise RuntimeError(
+                    f"no manim scene for segment {segment_id} "
+                    "(set visual_map scene/class)"
+                )
+            runner.render(scene=str(scene))
             return {"ok": True, "step": "manim", "segment": segment_id}
 
         if step == "compose":
             from docgen.compose import Composer
 
-            Composer(cfg).compose_segments([segment_id])
+            n = Composer(cfg).compose_segments([segment_id])
+            if n < 1:
+                raise RuntimeError(
+                    f"compose produced no video for segment {segment_id}"
+                )
             return {"ok": True, "step": "compose", "segment": segment_id}
 
         if step == "validate":
             from docgen.validate import Validator
 
             report = Validator(cfg).validate_segment(segment_id)
+            passed = True
+            if isinstance(report, dict):
+                if "passed" in report:
+                    passed = bool(report["passed"])
+                else:
+                    checks = report.get("checks") or []
+                    passed = all(
+                        (not isinstance(c, dict)) or c.get("passed", True)
+                        for c in checks
+                    )
+            if not passed:
+                raise RuntimeError(
+                    f"validate failed for segment {segment_id}"
+                )
             return {
                 "ok": True,
                 "step": "validate",
