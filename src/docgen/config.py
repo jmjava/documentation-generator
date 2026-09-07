@@ -338,6 +338,13 @@ class Config:
                         f"{src}: visual_map.{sid_s}.{fname} must be a YAML string, "
                         f"not {type(val).__name__}"
                     )
+            if spec.get("sources") is not None:
+                string_list_block(
+                    spec,
+                    "sources",
+                    label=f"visual_map.{sid_s}.sources",
+                    source=src,
+                )
         wiz = self._block("wizard")
         if wiz.get("exclude_patterns") is not None:
             string_list_block(

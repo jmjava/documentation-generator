@@ -1,7 +1,7 @@
 # Milestone: pages docs_dir / title / extra_links must be typed
 
-**Status:** Active  
-**PR:** [#111](https://github.com/jmjava/documentation-generator/pull/111)  
+**Status:** Shipped  
+**PR:** #111  
 **Depends on:** `milestones/generation-segment-strings.md` (PR #110),
 `milestones/path-config-strings.md` (PR #109),
 `milestones/concat-segment-lists.md` (PR #84)
