@@ -193,6 +193,10 @@ class PagesGenerator:
         a parallel hand-curated block in ``docgen.yaml``.
         """
         explicit = self.pages_cfg.get("segments")
+        if explicit is not None and not isinstance(explicit, dict):
+            raise RuntimeError(
+                f"pages.segments must be a YAML mapping, not {type(explicit).__name__}"
+            )
         if isinstance(explicit, dict) and explicit:
             for sid, meta in explicit.items():
                 if not isinstance(meta, dict):

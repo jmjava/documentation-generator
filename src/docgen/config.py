@@ -113,6 +113,42 @@ def string_list_block(
     ]
 
 
+def require_hint_and_context_lists(
+    block: dict[str, Any],
+    *,
+    prefix: str,
+    source: str,
+) -> None:
+    """Fail closed when hints/context.paths/globs or per-segment blocks have the wrong YAML type."""
+    if block.get("hints") is not None:
+        string_list_block(block, "hints", label=f"{prefix}.hints", source=source)
+    ctx = block.get("context")
+    if ctx is not None:
+        if not isinstance(ctx, dict):
+            raise ConfigError(
+                f"{source}: {prefix}.context must be a YAML mapping, not {type(ctx).__name__}"
+            )
+        string_list_block(ctx, "paths", label=f"{prefix}.context.paths", source=source)
+        string_list_block(ctx, "globs", label=f"{prefix}.context.globs", source=source)
+    segs = block.get("segments")
+    if segs is None:
+        return
+    if not isinstance(segs, dict):
+        raise ConfigError(
+            f"{source}: {prefix}.segments must be a YAML mapping, not {type(segs).__name__}"
+        )
+    for sid, spec in segs.items():
+        sid_s = require_yaml_string(sid, label=f"{prefix}.segments key", source=source)
+        if spec is None:
+            continue
+        if not isinstance(spec, dict):
+            raise ConfigError(
+                f"{source}: {prefix}.segments.{sid_s} must be a YAML mapping, "
+                f"not {type(spec).__name__}"
+            )
+        require_hint_and_context_lists(spec, prefix=f"{prefix}.segments.{sid_s}", source=source)
+
+
 @dataclass
 class Config:
     """Parsed and validated project configuration."""
@@ -151,6 +187,7 @@ class Config:
             "image_generation",
             "ai",
             "narration_from_source",
+            "manim_scene_generation",
             "discovery",
         ):
             self._block(key)
@@ -184,9 +221,23 @@ class Config:
         for key in self._block("segment_names"):
             require_yaml_string(key, label="segment_names key", source=src)
         pages_segs = self._block("pages").get("segments")
+        if pages_segs is not None and not isinstance(pages_segs, dict):
+            raise ConfigError(
+                f"{src}: pages.segments must be a YAML mapping, not {type(pages_segs).__name__}"
+            )
         if isinstance(pages_segs, dict):
             for key in pages_segs:
                 require_yaml_string(key, label="pages.segments key", source=src)
+        require_hint_and_context_lists(
+            self._block("narration_from_source"),
+            prefix="narration_from_source",
+            source=src,
+        )
+        require_hint_and_context_lists(
+            self._block("manim_scene_generation"),
+            prefix="manim_scene_generation",
+            source=src,
+        )
         vm = self._block("visual_map")
         for sid, spec in vm.items():
             sid_s = require_yaml_string(sid, label="visual_map key", source=src)
