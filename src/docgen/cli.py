@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 from docgen.yaml_generate import DEFAULT_LLM_MODEL
 
 
@@ -202,6 +202,8 @@ def main(
             "to your demos bundle directory.",
             err=True,
         )
+    except ConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
     ctx.obj["config"] = cfg
     _load_env(cfg)
 
@@ -1179,10 +1181,14 @@ def yaml_generate_cmd(
     Rewrites the config file with PyYAML (comments are not preserved). Use Git to review.
     """
     from docgen import yaml_generate as yg
+    from docgen.config import load_yaml_mapping
 
     cfg = _require_config(ctx)
     path = cfg.yaml_path
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        raw = load_yaml_mapping(path)
+    except ConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if list_gaps:
         gaps = yg.narration_not_in_segments(raw, cfg.narration_dir)

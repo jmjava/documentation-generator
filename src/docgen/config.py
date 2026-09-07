@@ -13,6 +13,31 @@ import yaml
 _YAML_FILENAME = "docgen.yaml"
 
 
+class ConfigError(ValueError):
+    """Raised when ``docgen.yaml`` cannot be parsed as a mapping."""
+
+
+def load_yaml_mapping(path: Path) -> dict[str, Any]:
+    """Load *path* as a YAML mapping.
+
+    An empty document becomes ``{}``. Invalid YAML or a non-mapping root
+    (list, scalar) raises :class:`ConfigError`.
+    """
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ConfigError(f"could not read {path}: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{path.name} is not valid YAML: {exc}") from exc
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError(
+            f"{path.name} root must be a YAML mapping, not {type(raw).__name__}"
+        )
+    return raw
+
+
 @dataclass
 class Config:
     """Parsed and validated project configuration."""
@@ -468,8 +493,7 @@ class Config:
             path = path / _YAML_FILENAME
         if not path.exists():
             raise FileNotFoundError(f"Config not found: {path}")
-        with open(path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
+        raw = load_yaml_mapping(path)
         return cls(yaml_path=path, base_dir=path.parent, raw=raw)
 
     @classmethod

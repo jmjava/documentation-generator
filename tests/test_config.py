@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 
 
 @pytest.fixture
@@ -177,3 +177,24 @@ def test_find_segment_asset_does_not_match_substring_ids(tmp_path: Path) -> None
     assert found.name == "01-intro.mp3"
     (audio / "01-intro.mp3").unlink()
     assert c.find_segment_asset(audio, "01", ".mp3") is None
+
+
+def test_from_yaml_invalid_yaml_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segments: [\n  unclosed\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="not valid YAML"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_root_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("- just a list\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="mapping"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_empty_document_is_empty_mapping(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("", encoding="utf-8")
+    c = Config.from_yaml(p)
+    assert c.raw == {}

@@ -146,3 +146,20 @@ def test_wizard_scan_api_returns_extensions(tmp_path: Path) -> None:
     paths = {f["path"] for f in data["files"]}
     assert "src/app.py" in paths
     assert ".py" in data["extensions"]
+
+
+def test_wizard_focus_yaml_generate_does_not_wipe_list_root(tmp_path: Path) -> None:
+    cfg = _bundle_cfg(tmp_path)
+    app = create_app(cfg)
+    client = app.test_client()
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text("- not a mapping\n", encoding="utf-8")
+    before = yaml_path.read_text(encoding="utf-8")
+    put_res = client.put(
+        "/api/segments/01/focus",
+        json={"paths": ["README.md"], "yaml_generate": True},
+    )
+    assert put_res.status_code == 500
+    err = put_res.get_json()["error"]
+    assert "mapping" in err.lower() or "yaml-generate failed" in err.lower()
+    assert yaml_path.read_text(encoding="utf-8") == before

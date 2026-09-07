@@ -525,7 +525,14 @@ class Validator:
 
         scenes = self.config.animations_dir / "scenes.py"
         if not scenes.exists():
-            result = CheckResult("manim_scene_lint", True, ["No animations/scenes.py (skipped)"])
+            result = CheckResult(
+                "manim_scene_lint",
+                False,
+                [
+                    "animations/scenes.py is missing — run `docgen scene-compile` "
+                    "before validate (this check only runs for manim visual_map rows)"
+                ],
+            )
             self._manim_lint_cache = result
             return result
 

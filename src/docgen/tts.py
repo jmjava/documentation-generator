@@ -63,7 +63,15 @@ class TTSGenerator:
         self.config = config
 
     def generate(self, segment: str | None = None, dry_run: bool = False) -> None:
-        segments = [segment] if segment else self.config.segments_all
+        if segment is not None:
+            segments = [segment]
+        else:
+            segments = list(self.config.segments_all)
+            if not segments:
+                raise TTSError(
+                    "segments.all is empty — add segment ids in docgen.yaml "
+                    "(or hints + yaml-generate) before TTS"
+                )
         for seg_id in segments:
             self._generate_one(seg_id, dry_run)
 
