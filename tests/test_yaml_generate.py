@@ -607,6 +607,39 @@ def test_parse_hint_docgen_front_matter_returns_docgen_block(tmp_path: Path) -> 
     assert doc["segment"]["stem"] == "02-x"
 
 
+def test_parse_hint_docgen_front_matter_invalid_yaml_raises(tmp_path: Path) -> None:
+    h = tmp_path / "broken.md"
+    h.write_text("---\ndocgen:\n  segment: [\n---\nbody\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid YAML front matter"):
+        parse_hint_docgen_front_matter(h)
+
+
+def test_parse_hint_docgen_front_matter_list_docgen_raises(tmp_path: Path) -> None:
+    h = tmp_path / "list.md"
+    h.write_text("---\ndocgen:\n  - not a mapping\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="docgen must be a YAML mapping"):
+        parse_hint_docgen_front_matter(h)
+
+
+def test_parse_hint_docgen_front_matter_non_docgen_mapping_is_none(tmp_path: Path) -> None:
+    h = tmp_path / "other.md"
+    h.write_text("---\ntitle: not a docgen hint\n---\n", encoding="utf-8")
+    assert parse_hint_docgen_front_matter(h) is None
+
+
+def test_merge_defaults_invalid_hint_yaml_raises(tmp_path: Path) -> None:
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"segments": {"all": ["01"]}, "discovery": {"auto_visual_map": False}}),
+        encoding="utf-8",
+    )
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "01-x.md").write_text("---\ndocgen: { segment: [\n---\n", encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    with pytest.raises(ValueError, match="invalid YAML front matter"):
+        merge_defaults(cfg.raw, cfg)
+
+
 def test_collect_hint_wirings_requires_segment_and_wiring(tmp_path: Path) -> None:
     hints = tmp_path / "hints"
     hints.mkdir()

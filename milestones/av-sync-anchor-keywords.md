@@ -1,7 +1,7 @@
 # Milestone: av_sync.anchor_keywords must be a mapping of lists
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #101  
 **Depends on:** `milestones/wizard-prompt-strings.md` (PR #100),
 `milestones/av-sync-scene-spec.md` (PR #98),
 `milestones/validation-list-keys.md` (PR #95)

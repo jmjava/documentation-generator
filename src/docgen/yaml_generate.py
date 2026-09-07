@@ -210,22 +210,39 @@ def _segment_id_sort_key(sid: str) -> tuple[int, str]:
 
 
 def parse_hint_docgen_front_matter(md_path: Path) -> dict[str, Any] | None:
-    """Return the ``docgen`` mapping from hint file YAML front matter, if present."""
+    """Return the ``docgen`` mapping from hint file YAML front matter, if present.
+
+    Missing front matter, empty front matter, or a mapping without ``docgen``
+    is ``None`` (not a docgen hint). Invalid YAML or a non-mapping ``docgen``
+    key raises ``ValueError`` so ``yaml-generate`` cannot skip hint wiring
+    (including ``visual_map``) as if the file were prose-only.
+    """
     try:
         text = md_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
+    except OSError as exc:
+        raise ValueError(f"{md_path.name}: could not read hint file: {exc}") from exc
     m = _HINT_FRONT_MATTER_RE.match(text)
     if not m:
         return None
     try:
         data = yaml.safe_load(m.group("body"))
-    except yaml.YAMLError:
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{md_path.name}: invalid YAML front matter: {exc}") from exc
+    if data is None:
         return None
     if not isinstance(data, dict):
-        return None
+        raise ValueError(
+            f"{md_path.name}: front matter root must be a YAML mapping, "
+            f"not {type(data).__name__}"
+        )
     doc = data.get("docgen")
-    return doc if isinstance(doc, dict) else None
+    if doc is None:
+        return None
+    if not isinstance(doc, dict):
+        raise ValueError(
+            f"{md_path.name}: docgen must be a YAML mapping, not {type(doc).__name__}"
+        )
+    return doc
 
 
 def parse_hint_segment_declaration(md_path: Path) -> tuple[str, str] | None:
