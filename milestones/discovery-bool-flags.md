@@ -1,7 +1,7 @@
 # Milestone: discovery flags must be YAML booleans
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#114](https://github.com/jmjava/documentation-generator/pull/114)  
 **Depends on:** `milestones/wizard-default-guidance.md` (PR #113),
 `milestones/yaml-generate-mappings.md` (PR #91)
 
@@ -37,8 +37,8 @@ booleans.
       `"false"` instead of treating them as off or on.
 - [x] Tests for integer `0`, quoted `"false"`, and real YAML bools.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (662 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
