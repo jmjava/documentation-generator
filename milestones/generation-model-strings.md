@@ -1,7 +1,7 @@
 # Milestone: narration / scene-generation model and prompts must be strings
 
-**Status:** Active  
-**PR:** [#107](https://github.com/jmjava/documentation-generator/pull/107)  
+**Status:** Shipped  
+**PR:** #107  
 **Depends on:** `milestones/manim-font-quality.md` (PR #106),
 `milestones/wizard-prompt-strings.md` (PR #100)
 
