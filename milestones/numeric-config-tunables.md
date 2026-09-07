@@ -1,7 +1,7 @@
 # Milestone: pipeline numeric tunables must be YAML numbers
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#115](https://github.com/jmjava/documentation-generator/pull/115)  
 **Depends on:** `milestones/discovery-bool-flags.md` (PR #114),
 `milestones/manim-font-quality.md` (PR #106)
 
@@ -37,8 +37,8 @@ defaults.
 - [x] Tests for bool ``ffmpeg_timeout_sec`` / ``min_font_size``, list
       ``silence_noise_db`` / ``max_drift_sec``, and valid numbers.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (669 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
