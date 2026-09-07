@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[tts-empty-audio.md](tts-empty-audio.md)** —
-TTS must not succeed with an empty mp3; `tts.model` / `voice` / `instructions`
-must be YAML strings.
+**Active:** **[wizard-prompt-strings.md](wizard-prompt-strings.md)** —
+`wizard.system_prompt` / `llm_model` must be YAML strings at config load.
 
 **Shipped:**
+- **[tts-empty-audio.md](tts-empty-audio.md)** —
+  TTS must not succeed with an empty mp3; `tts.model` / `voice` /
+  `instructions` must be YAML strings (#99).
 - **[av-sync-scene-spec.md](av-sync-scene-spec.md)** —
   Unreadable `*.scene.yaml` must fail `av_sync`, not fall back to transcript
   nouns (#98).

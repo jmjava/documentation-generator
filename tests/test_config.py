@@ -402,3 +402,20 @@ def test_from_yaml_list_tts_model_raises(tmp_path: Path) -> None:
     p.write_text("tts:\n  model:\n    - gpt-4o-mini-tts\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="tts.model must be a YAML string"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_wizard_system_prompt_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "wizard:\n  system_prompt:\n    - Write narration\n    - No markdown\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="wizard.system_prompt must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_wizard_llm_model_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("wizard:\n  llm_model:\n    - gpt-4o\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="wizard.llm_model must be a YAML string"):
+        Config.from_yaml(p)

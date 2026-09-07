@@ -275,6 +275,13 @@ class Config:
                 f"{src}: tts.instructions must be a YAML string, "
                 f"not {type(inst).__name__}"
             )
+        if wiz.get("system_prompt") is not None and not isinstance(wiz["system_prompt"], str):
+            raise ConfigError(
+                f"{src}: wizard.system_prompt must be a YAML string, "
+                f"not {type(wiz['system_prompt']).__name__}"
+            )
+        if wiz.get("llm_model") is not None:
+            require_yaml_string(wiz["llm_model"], label="wizard.llm_model", source=src)
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(
