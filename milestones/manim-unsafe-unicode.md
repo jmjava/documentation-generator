@@ -24,9 +24,9 @@ Evaluate `manim_unsafe_unicode` during `Config.from_yaml` (same as
 - [x] Missing / null still uses the built-in Pango fallback character list.
 - [x] Empty list still disables the unicode lint (`[]`).
 - [x] Test for a string value at `Config.from_yaml`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
