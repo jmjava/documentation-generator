@@ -26,12 +26,12 @@ dropping ``-t``.
 
 ## Done when
 
-- [ ] Compose / TTS / validate probes ignore stdout when ffprobe fails
-- [ ] Image compose does not run ffmpeg without a duration
-- [ ] Local ``probe_duration`` raises on nonzero ffprobe
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Compose / TTS / validate probes ignore stdout when ffprobe fails
+- [x] Image compose does not run ffmpeg without a duration
+- [x] Local ``probe_duration`` raises on nonzero ffprobe
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (770 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
