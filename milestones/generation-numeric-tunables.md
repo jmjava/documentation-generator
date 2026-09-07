@@ -1,7 +1,7 @@
 # Milestone: LLM generation numeric tunables must be YAML numbers
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#117](https://github.com/jmjava/documentation-generator/pull/117)  
 **Depends on:** `milestones/hint-segment-create-bool.md` (PR #116),
 `milestones/numeric-config-tunables.md` (PR #115),
 `milestones/generation-model-strings.md` (PR #107)
@@ -39,8 +39,8 @@ defaults.
 - [x] Tests for bool temperature, list ``max_context_bytes``, quoted
       whisper cap, and valid numbers.
 - [x] `ruff check src/ tests/`
-- [x] `pytest tests/`
-- [x] `docgen benchmark` (no clock change)
+- [x] `pytest tests/` (677 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
