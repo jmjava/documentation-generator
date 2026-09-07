@@ -1,7 +1,7 @@
 # Milestone: pages docs_dir / title / extra_links must be typed
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#111](https://github.com/jmjava/documentation-generator/pull/111)  
 **Depends on:** `milestones/generation-segment-strings.md` (PR #110),
 `milestones/path-config-strings.md` (PR #109),
 `milestones/concat-segment-lists.md` (PR #84)
@@ -38,9 +38,9 @@ Fail closed at `Config.from_yaml`. Missing keys still use defaults
 - [x] `pages.extra_links` must be a list of mappings with non-empty
       `href` strings.
 - [x] Tests for list / non-mapping values.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
