@@ -21,5 +21,6 @@ Follows **[pipeline-fail-closed.md](pipeline-fail-closed.md)** (#77).
 
 ## Not this milestone
 
-- Issue #56 residual quality (unpaced compile when `pace: none` is explicit)
+- Issue #56 residual (unpaced compile when timing words are missing) —
+  see **[scene-compile-pace.md](scene-compile-pace.md)**
 - Archived Playwright / Embabel / slides

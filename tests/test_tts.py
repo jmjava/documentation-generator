@@ -85,6 +85,23 @@ def test_tts_pre_lint_blocks_generate(tmp_path: Path) -> None:
         TTSGenerator(cfg).generate(segment="01", dry_run=True)
 
 
+def test_tts_empty_stripped_narration_raises(tmp_path: Path) -> None:
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "validation": {"narration_lint": {"block_tts_on_pre_lint": False}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    (narr / "01-intro.md").write_text("# Title only\n---\n*(pause)*\n", encoding="utf-8")
+    cfg = Config.from_yaml(p)
+    with pytest.raises(TTSError, match="empty"):
+        TTSGenerator(cfg).generate(segment="01", dry_run=True)
+
+
 def test_tts_finds_named_stem_not_substring_id(tmp_path: Path) -> None:
     raw = {
         "dirs": {"narration": "narration", "audio": "audio"},

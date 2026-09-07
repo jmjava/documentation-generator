@@ -642,15 +642,18 @@ def _pace_none(obj: dict[str, Any]) -> bool:
 
 
 def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]:
-    """Return issues when timing words exist but story boxes lack ``wait_word``.
+    """Return issues when paced story boxes cannot bind to timing words.
 
     Unpaced cascading ``timed_play`` finishes the board early and freezes through
     the rest of the narration. Opt out per box/row with ``pace: none``.
     Unlabeled image elements are exempt (no spoken anchor).
+
+    If any labeled story box is still paced, ``timing.json`` must have a nonempty
+    ``words`` list (run ``docgen timestamps``). Missing words is not an implicit
+    opt-out.
     """
-    if not words_present:
-        return []
     issues: list[str] = []
+    paced_anchors: list[str] = []
     pages = _spec_pages_rows(spec)
     for pi, rows in enumerate(pages):
         for ri, row in enumerate(rows):
@@ -671,12 +674,22 @@ def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]
                 label = str(box.get("label", "")).strip()
                 if not label:
                     continue
-                if box.get("wait_word") is None:
+                loc = f"{prefix}.boxes[{bi}]: label {label!r}"
+                paced_anchors.append(loc)
+                if words_present and box.get("wait_word") is None:
                     issues.append(
-                        f"{prefix}.boxes[{bi}]: label {label!r} has no wait_word match in "
+                        f"{loc} has no wait_word match in "
                         "timing.json words — use a spoken phrase from the narration, or set "
                         "pace: none to opt out of beat sync"
                     )
+    if paced_anchors and not words_present:
+        shown = paced_anchors[0]
+        more = f" (+{len(paced_anchors) - 1} more)" if len(paced_anchors) > 1 else ""
+        return [
+            f"{shown}{more} is paced but timing.json has no word-level `words` — "
+            "run `docgen timestamps` before scene-compile, or set pace: none to opt "
+            "out of beat sync"
+        ]
     return issues
 
 

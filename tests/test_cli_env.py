@@ -113,3 +113,65 @@ def test_tts_without_bundle_is_click_error(tmp_path: Path) -> None:
     assert "docgen.yaml" in (result.output + result.stderr)
     assert "AttributeError" not in (result.output + result.stderr)
     assert result.exception is None or not isinstance(result.exception, AttributeError)
+
+
+def test_cli_generate_all_empty_segments_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"default": ["01"], "all": []},
+        "visual_map": {},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--config",
+            str(p),
+            "generate-all",
+            "--skip-tts",
+            "--skip-manim",
+            "--skip-scene-retime",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "segments.all is empty" in (result.output + result.stderr)
+    assert not isinstance(result.exception, RuntimeError)
+
+
+def test_cli_generate_all_does_not_swallow_systemexit(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+    from docgen.pipeline import Pipeline
+
+    def boom(self, **_kwargs):  # noqa: ANN001
+        raise SystemExit(1)
+
+    monkeypatch.setattr(Pipeline, "run", boom)
+    cfg = _minimal_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--config",
+            str(cfg.yaml_path),
+            "generate-all",
+            "--skip-tts",
+            "--skip-manim",
+            "--skip-scene-retime",
+        ],
+    )
+    assert result.exit_code == 1

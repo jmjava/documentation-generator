@@ -963,7 +963,35 @@ def test_pacing_violations_allow_pace_none_opt_out() -> None:
         ],
     }
     assert pacing_violations(spec, words_present=True) == []
+    missing = pacing_violations(spec, words_present=False)
+    assert missing
+    assert "docgen timestamps" in missing[0]
+    assert "Spoken" in missing[0]
+
+
+def test_pacing_violations_pace_none_allows_missing_words() -> None:
+    spec = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Decor",
+                        "color": "C_BLUE",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "pace": "none",
+                    },
+                ],
+            }
+        ],
+    }
     assert pacing_violations(spec, words_present=False) == []
+    assert pacing_violations(spec, words_present=True) == []
 
 
 def test_validate_pace_none_rejects_unknown_values() -> None:

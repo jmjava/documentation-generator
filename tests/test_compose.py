@@ -158,3 +158,39 @@ def test_cli_compose_exits_nonzero_when_nothing_composed(tmp_path: Path) -> None
     result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
     assert result.exit_code != 0
     assert "0/" in result.output or "produced" in result.output
+
+
+def test_cli_compose_falls_back_to_segments_all_when_default_empty(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": [], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
+    assert result.exit_code != 0
+    assert "Composing 1 segments" in result.output
+
+
+def test_cli_lint_exits_nonzero_when_narration_missing(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"narration": "narration"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    (tmp_path / "narration").mkdir(parents=True, exist_ok=True)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "lint"])
+    assert result.exit_code == 1
+    assert "no narration file" in result.output

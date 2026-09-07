@@ -151,6 +151,84 @@ def test_linted_class_block_succeeds_when_label_spoken(tmp_path: Path) -> None:
     assert merged["rows"][0]["boxes"][0]["wait_word"] == 0
 
 
+def test_linted_class_block_fails_closed_when_timing_words_missing(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match="timestamps|pacing failed"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
+def test_linted_class_block_fails_closed_when_timing_words_empty(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    _write_timing(tmp_path, [])
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match="timestamps|pacing failed"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
+def test_linted_class_block_allows_pace_none_without_words(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                        "pace": "none",
+                    }
+                ],
+            }
+        ],
+    }
+    block, merged = linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+    assert "class DemoScene" in block
+    assert merged["rows"][0]["boxes"][0].get("pace") == "none"
+
+
 def test_retime_compile_spec_rewrites_scenes_py(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     path = _write_spec(tmp_path, label="Hello")

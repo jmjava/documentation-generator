@@ -37,6 +37,11 @@ class Pipeline:
         regen_scene_specs: bool = False,
         skip_scene_retime: bool = False,
     ) -> None:
+        if not self.config.segments_all:
+            raise RuntimeError(
+                "segments.all is empty — add segment ids in docgen.yaml "
+                "(or hints + yaml-generate) before generate-all."
+            )
         if not skip_tts:
             from docgen.ai_client import AIError, resolve_ai_settings
 
