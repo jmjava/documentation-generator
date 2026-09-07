@@ -1,7 +1,7 @@
 # Milestone: wizard POST bodies must be JSON objects
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#129](https://github.com/jmjava/documentation-generator/pull/129)  
 **Depends on:** `milestones/wizard-state-segments.md` (PR #128)
 
 ## Problem
@@ -21,12 +21,12 @@ Boolean fields (``with_manim``, ``update_requirements``, ``also_manim``,
 
 ## Done when
 
-- [ ] List / scalar POST bodies return 400 on all wizard JSON endpoints
-- [ ] String ``"false"`` / ``"true"`` for bool fields return 400
-- [ ] Existing object-body tests still pass
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] List / scalar POST bodies return 400 on all wizard JSON endpoints
+- [x] String ``"false"`` / ``"true"`` for bool fields return 400
+- [x] Existing object-body tests still pass
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (745 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 

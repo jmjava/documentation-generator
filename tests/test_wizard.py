@@ -133,7 +133,7 @@ def test_api_state_post_rejects_list_body(tmp_path):
     client, _cfg = _wizard_client(tmp_path)
     res = client.post("/api/state", json=["not", "an", "object"])
     assert res.status_code == 400
-    assert res.get_json()["error"] == "request body must be a JSON object"
+    assert res.get_json()["error"] == "request body must be a JSON object, not list"
 
 
 def test_api_state_post_rejects_list_segments(tmp_path):
@@ -171,7 +171,7 @@ def test_api_post_rejects_list_json_bodies(tmp_path):
     for method, path in endpoints:
         res = client.open(path, method=method, json=["not", "an", "object"])
         assert res.status_code == 400, path
-        assert res.get_json()["error"] == "request body must be a JSON object"
+        assert res.get_json()["error"] == "request body must be a JSON object, not list"
 
 
 def test_api_tool_update_rejects_string_with_manim(tmp_path):
