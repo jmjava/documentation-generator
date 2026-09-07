@@ -298,6 +298,35 @@ class Config:
                 label="validation.av_sync.visual_types",
                 source=src,
             )
+        anchors = avs.get("anchor_keywords")
+        if anchors is not None:
+            if not isinstance(anchors, dict):
+                raise ConfigError(
+                    f"{src}: validation.av_sync.anchor_keywords must be a YAML mapping, "
+                    f"not {type(anchors).__name__}"
+                )
+            for sid, rows in anchors.items():
+                sid_s = require_yaml_string(
+                    sid, label="validation.av_sync.anchor_keywords key", source=src
+                )
+                if rows is None:
+                    continue
+                if not isinstance(rows, list):
+                    raise ConfigError(
+                        f"{src}: validation.av_sync.anchor_keywords.{sid_s} must be a "
+                        f"YAML list, not {type(rows).__name__}"
+                    )
+                for i, row in enumerate(rows):
+                    if not isinstance(row, dict):
+                        raise ConfigError(
+                            f"{src}: validation.av_sync.anchor_keywords.{sid_s}[{i}] "
+                            f"must be a YAML mapping, not {type(row).__name__}"
+                        )
+                    require_yaml_string(
+                        row.get("keyword"),
+                        label=f"validation.av_sync.anchor_keywords.{sid_s}[{i}].keyword",
+                        source=src,
+                    )
         nl = self._sub_block(validation, "narration_lint", label="validation.narration_lint")
         if nl.get("pre_tts_deny_patterns") is not None:
             string_list_block(
