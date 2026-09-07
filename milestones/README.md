@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-source-paths.md](wizard-source-paths.md)** —
-wizard `source_paths` must be a string array; prose fields must be strings.
+**Active:** **[wizard-json-parse.md](wizard-json-parse.md)** —
+wizard JSON bodies must parse; garbage JSON must not look like `{}`.
 
 **Shipped:**
+- **[wizard-source-paths.md](wizard-source-paths.md)** —
+  wizard `source_paths` must be a string array; prose fields must be strings
+  (#131).
 - **[bootstrap-timing-helpers.md](bootstrap-timing-helpers.md)** —
   Manim `_load_timing` helpers must fail closed on corrupt `timing.json`
   (#130).

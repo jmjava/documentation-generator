@@ -1,6 +1,6 @@
 # Milestone: wizard source_paths and string fields must be typed
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#131](https://github.com/jmjava/documentation-generator/pull/131)  
 **Depends on:** `milestones/wizard-json-object.md` (PR #129),
 `milestones/bootstrap-timing-helpers.md` (PR #130)
