@@ -1,6 +1,6 @@
 # Milestone: hint segment create must be a YAML boolean
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#116](https://github.com/jmjava/documentation-generator/pull/116)  
 **Depends on:** `milestones/numeric-config-tunables.md` (PR #115),
 `milestones/hint-front-matter-yaml.md` (PR #102),
