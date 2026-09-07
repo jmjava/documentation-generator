@@ -216,7 +216,7 @@ def run_wizard(
         click.echo(f"  Found .env: {plan.env_file_rel}")
     else:
         env_input = click.prompt(
-            "  Path to .env (for OPENAI_API_KEY / XAI_API_KEY, blank to skip)",
+            "  Path to .env (for OPENAI_API_KEY / CURSOR_API_KEY / ANTHROPIC_API_KEY / XAI_API_KEY, blank to skip)",
             default="", type=str,
         )
         if env_input:

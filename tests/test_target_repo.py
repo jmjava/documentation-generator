@@ -149,3 +149,26 @@ def test_cli_repo_init_defaults_writes_bundle_only(tmp_path: Path) -> None:
     assert cfg["repo_root"] in ("../..", "..\\..")
     assert cfg["ai"]["provider"] == "openai"
     assert (consumer / "docs" / "demos" / "requirements-docgen.txt").is_file()
+
+
+def test_clone_git_repo_keeps_github_token_off_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    from docgen.target_repo import clone_git_repo
+
+    captured: dict = {}
+
+    def _run(cmd, **kwargs):  # noqa: ANN003
+        captured["cmd"] = list(cmd)
+        captured["env"] = kwargs.get("env") or {}
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghs_secret_token")
+    with patch("docgen.target_repo.subprocess.run", side_effect=_run):
+        clone_git_repo("https://github.com/acme/app.git", tmp_path / "app")
+    joined = " ".join(captured["cmd"])
+    assert "ghs_secret_token" not in joined
+    assert captured["env"]["GIT_CONFIG_VALUE_0"] == "https://github.com/"
+    assert "ghs_secret_token" in captured["env"]["GIT_CONFIG_KEY_0"]
