@@ -116,8 +116,10 @@ class Config:
     def ai_config(self) -> dict[str, Any]:
         """``ai.provider`` plus optional ``base_url`` / ``api_key_env``.
 
-        ``provider`` is ``openai`` (default) or ``grok`` (xAI). Environment
-        ``DOCGEN_AI_PROVIDER`` overrides YAML. See :mod:`docgen.ai_client`.
+        ``provider`` is ``openai`` (default), ``grok`` (xAI), or ``anthropic``
+        (Claude chat). Environment ``DOCGEN_AI_PROVIDER`` overrides YAML. When
+        omitted, a usable Cursor/OpenAI key keeps ``openai``; only
+        ``ANTHROPIC_API_KEY`` selects Claude. See :mod:`docgen.ai_client`.
         """
         defaults: dict[str, Any] = {"provider": "openai"}
         block = self.raw.get("ai")

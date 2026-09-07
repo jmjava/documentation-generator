@@ -63,6 +63,12 @@ def generate_image_bytes(
     )
 
     settings = resolve_ai_settings(cfg)
+    if settings.is_anthropic:
+        raise ImageGenerationError(
+            "Anthropic has no image API. Use OPENAI_API_KEY / CURSOR_API_KEY "
+            "(ai.provider: openai) or XAI_API_KEY (ai.provider: grok) for "
+            f"`docgen image-generate`. {settings.auth_help()}"
+        )
     resolved = resolve_image_model(model, settings)
     client = openai_client(cfg)
     kwargs: dict = {"model": resolved, "prompt": prompt, "n": 1}

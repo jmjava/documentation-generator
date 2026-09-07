@@ -125,11 +125,11 @@ def main(
     Point at a consumer project with ``--repo PATH_OR_URL`` (or ``DOCGEN_REPO``);
     do not vendor this library into that repo's ``src/``. Environment: keys
     already set in the shell are not replaced by ``env_file`` (see
-    ``DOCGEN_ENV_OVERRIDES``). LLM / TTS / image calls use OpenAI by default
-    (``CURSOR_API_KEY`` first, then ``OPENAI_API_KEY``). Image model is
-    ``image_generation.model`` / ``image-generate --model``. Set
-    ``ai.provider: grok`` or ``DOCGEN_AI_PROVIDER=grok`` plus ``XAI_API_KEY``
-    to use xAI.
+    ``DOCGEN_ENV_OVERRIDES``). Same CLI in Cursor Cloud, local Cursor, Claude
+    Code, Copilot, or a plain shell. Chat/TTS/images use OpenAI by default
+    (``CURSOR_API_KEY`` then ``OPENAI_API_KEY``). With only ``ANTHROPIC_API_KEY``,
+    chat uses Claude (TTS/images still need OpenAI or Grok). ``ai.provider: grok``
+    plus ``XAI_API_KEY`` uses xAI. Run ``docgen ai-status`` to see the resolved key.
     """
     ctx.ensure_object(dict)
     repo_root = None
@@ -178,6 +178,23 @@ def main(
         )
     ctx.obj["config"] = cfg
     _load_env(cfg)
+
+
+@main.command("ai-status")
+@click.pass_context
+def ai_status_cmd(ctx: click.Context) -> None:
+    """Print the resolved AI provider and which key will be used (secret not shown).
+
+    Same CLI in Cursor Cloud, local Cursor, Claude Code, Copilot, or CI.
+    """
+    from docgen.ai_client import format_ai_status_line, resolve_ai_settings
+
+    cfg = ctx.obj.get("config")
+    st = resolve_ai_settings(cfg)
+    click.echo(format_ai_status_line(st))
+    click.echo(st.auth_help())
+    if not st.api_key:
+        raise SystemExit(1)
 
 
 @main.command()
@@ -364,9 +381,12 @@ def wizard(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def tts(ctx: click.Context, segment: str | None, dry_run: bool) -> None:
     """Generate TTS audio from narration markdown."""
+    from docgen.ai_client import echo_ai_status
     from docgen.tts import TTSGenerator
 
     cfg = ctx.obj["config"]
+    if not dry_run:
+        echo_ai_status(cfg)
     gen = TTSGenerator(cfg)
     gen.generate(segment=segment, dry_run=dry_run)
 
@@ -564,8 +584,9 @@ def narration_generate(
     """Generate or revise narration ``.md`` from repo sources + owner hints via chat completions.
 
     Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
-    Requires ``CURSOR_API_KEY`` (preferred) or ``OPENAI_API_KEY``, or
-    ``XAI_API_KEY`` with ``ai.provider: grok``.
+    Requires ``CURSOR_API_KEY`` (Cursor Cloud), ``OPENAI_API_KEY`` (local /
+    Claude Code / CI), ``ANTHROPIC_API_KEY`` (Claude chat), or ``XAI_API_KEY``
+    with ``ai.provider: grok``. TTS and images still need OpenAI or Grok.
 
     Use ``--segment <id>`` to drive a single segment, or ``--all`` to iterate
     every id in ``segments.all`` (used by full-reset orchestration).
@@ -582,9 +603,11 @@ def narration_generate(
     if revise and not str(revision_notes or "").strip():
         raise click.ClickException("--revise requires --revision-notes")
 
+    from docgen.ai_client import echo_ai_status
     from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
 
     cfg = ctx.obj["config"]
+    echo_ai_status(cfg)
     mode = "revise" if revise else "generate"
     # Revising always overwrites the existing script.
     write_force = force or revise
@@ -819,6 +842,10 @@ def scene_spec_generate_cmd(
     )
 
     cfg = ctx.obj["config"]
+    if not dry_run:
+        from docgen.ai_client import echo_ai_status
+
+        echo_ai_status(cfg)
 
     def _one_sid(sid: str) -> None:
         try:
@@ -1019,6 +1046,10 @@ def image_generate_cmd(
     from docgen.scene_spec import SceneSpecError
 
     cfg = ctx.obj["config"]
+    from docgen.ai_client import echo_ai_status
+
+    if not dry_run:
+        echo_ai_status(cfg)
 
     if spec_path is not None:
         targets = [spec_path]
@@ -1134,6 +1165,9 @@ def yaml_generate_cmd(
     if merge_defaults:
         changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
     if llm:
+        from docgen.ai_client import echo_ai_status
+
+        echo_ai_status(cfg)
         try:
             hints = yg.generate_llm_hints(cfg, model=model)
         except ValueError as exc:
@@ -1290,8 +1324,10 @@ def generate_all(
     - ``--skip-scene-retime`` skips the whole scene-spec stage (legacy hand scenes).
     """
     from docgen.pipeline import Pipeline
+    from docgen.ai_client import echo_ai_status
 
     cfg = ctx.obj["config"]
+    echo_ai_status(cfg)
     pipeline = Pipeline(cfg)
     pipeline.run(
         skip_tts=skip_tts,
