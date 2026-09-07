@@ -1,6 +1,6 @@
 # Milestone: pipeline numeric tunables must be YAML numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#115](https://github.com/jmjava/documentation-generator/pull/115)  
 **Depends on:** `milestones/discovery-bool-flags.md` (PR #114),
 `milestones/manim-font-quality.md` (PR #106)

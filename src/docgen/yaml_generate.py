@@ -264,20 +264,40 @@ def parse_hint_docgen_front_matter(md_path: Path) -> dict[str, Any] | None:
 
 
 def parse_hint_segment_declaration(md_path: Path) -> tuple[str, str] | None:
-    """If ``md_path`` has YAML front matter declaring ``docgen.segment`` with ``create: true``, return (id, stem)."""
+    """If ``md_path`` has YAML front matter declaring ``docgen.segment`` with ``create: true``, return (id, stem).
+
+    ``create`` must be a YAML boolean when present. Quoted ``\"false\"`` used
+    to be truthy and still insert the segment into ``segments.all``.
+    Integer ``id`` values (unquoted ``01`` → ``1``) are still padded to two
+    digits; ``stem`` must be a YAML string.
+    """
+    from docgen.config import require_yaml_bool, require_yaml_string
+
     doc = parse_hint_docgen_front_matter(md_path)
     if not doc:
         return None
     seg = doc.get("segment")
-    if not isinstance(seg, dict) or not seg.get("create"):
+    if not isinstance(seg, dict):
+        return None
+    create = seg.get("create")
+    if create is None:
+        return None
+    src = md_path.name
+    if not require_yaml_bool(create, label="docgen.segment.create", source=src):
         return None
     sid = seg.get("id")
     stem = seg.get("stem")
     if sid is None or stem is None:
         return None
+    if isinstance(sid, bool) or not isinstance(sid, (int, str)):
+        raise ValueError(
+            f"{src}: docgen.segment.id must be a YAML string or integer, not "
+            f"{type(sid).__name__} ({sid!r})"
+        )
+    require_yaml_string(stem, label="docgen.segment.stem", source=src)
     sid_s = str(sid).strip()
-    stem_s = str(stem).strip()
-    if not sid_s or not stem_s:
+    stem_s = stem.strip()
+    if not sid_s:
         return None
     if sid_s.isdigit():
         sid_s = sid_s.zfill(2)

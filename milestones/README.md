@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[numeric-config-tunables.md](numeric-config-tunables.md)** —
-timestamps / compose / manim / validation numeric tunables must be YAML
-numbers (`true` used to become `int` 1).
+**Active:** **[hint-segment-create-bool.md](hint-segment-create-bool.md)** —
+hint `docgen.segment.create` must be a YAML boolean (`"false"` used to
+still insert the segment).
 
 **Shipped:**
+- **[numeric-config-tunables.md](numeric-config-tunables.md)** —
+  timestamps / compose / manim / validation numeric tunables must be
+  YAML numbers (#115).
 - **[discovery-bool-flags.md](discovery-bool-flags.md)** —
   `discovery.auto_visual_map` / `merge_hint_segments` must be YAML
   booleans (#114).
