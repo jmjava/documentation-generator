@@ -33,9 +33,9 @@ Fail closed with `ValueError` (CLI `yaml-generate` already maps that to
       `narration_from_source` / `segments` / `segment_names`.
 - [x] Tests for list/string blocks via `merge_defaults`, `merge_hint_wiring`,
       `discover_visual_map`, `merge_hint_project`, `merge_hint_declared_segments`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
