@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[timestamps-fail-closed.md](timestamps-fail-closed.md)** — timestamps,
-concat, Anthropic `base_url`, and remaining CLI/wizard silent-success paths.
+**Active:** **[scene-compile-pace.md](scene-compile-pace.md)** — paced
+`scene-compile` requires timing words; `yaml-generate` keeps committed Manim
+rows; lint / compose / TTS / generate-all fail closed.
 
 **Shipped:**
+- **[timestamps-fail-closed.md](timestamps-fail-closed.md)** — timestamps,
+  concat, Anthropic `base_url`, and remaining CLI/wizard silent-success paths.
 - **[pipeline-fail-closed.md](pipeline-fail-closed.md)** — `generate-all` /
   `yaml-generate` fail closed (preserve still/recording wiring; no silent
   compose/validate skip).

@@ -638,15 +638,26 @@ def _visual_entry_type(spec: Any) -> str:
     return str(spec.get("type") or "").strip().lower()
 
 
+def _manim_row_class_name(spec: Any) -> str:
+    if not isinstance(spec, dict):
+        return ""
+    return str(spec.get("scene") or spec.get("class") or "").strip()
+
+
 def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
-    """Fill manim ``visual_map`` slots from ``animations/scenes.py`` (file order).
+    """Fill empty manim ``visual_map`` slots from ``animations/scenes.py``.
 
     Non-manim rows (still / recording / mixed / image) are **preserved**. Scene
     classes are assigned only to manim-eligible segments so a still cannot be
     retargeted by positional zip with ``segments.all``.
 
-    A manim-eligible segment is only wired when a ``class …Scene`` remains for
-    it; otherwise it is **left out** so greenfield repos are not given fake wiring.
+    Existing manim ``scene`` / ``class`` names are **kept** even when the class
+    is missing from ``scenes.py`` (including an empty file). Unused classes
+    fill only slots that have no committed class, in file order.
+
+    A greenfield manim-eligible segment is only wired when a ``class …Scene``
+    remains for it; otherwise it is **left out** so repos are not given fake
+    wiring.
 
     Set ``discovery: { auto_visual_map: false }`` to skip and keep existing ``visual_map``.
     """
@@ -673,9 +684,11 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
             leftover_non_manim[str(key)] = spec
 
     eligible: list[str] = []
+    existing_for: dict[str, Any] = {}
     for seg_id in all_ids:
         sid = str(seg_id)
         spec = existing.get(sid, existing.get(seg_id))
+        existing_for[sid] = spec
         vt = _visual_entry_type(spec)
         if vt and vt != "manim":
             new_vm[sid] = spec
@@ -683,12 +696,28 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
             continue
         eligible.append(sid)
 
-    for idx, sid in enumerate(eligible):
-        if idx >= len(manim_classes):
-            break
-        scene = manim_classes[idx]
-        prev = existing.get(sid)
-        row: dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
+    claimed: set[str] = set()
+    empty_slots: list[str] = []
+    for sid in eligible:
+        prev = existing_for.get(sid)
+        name = _manim_row_class_name(prev)
+        if name:
+            row: dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
+            row["type"] = "manim"
+            if not str(row.get("scene") or "").strip():
+                row["scene"] = name
+            if not str(row.get("source") or "").strip():
+                row["source"] = f"{name}.mp4"
+            new_vm[sid] = row
+            if name in manim_classes:
+                claimed.add(name)
+        else:
+            empty_slots.append(sid)
+
+    unused = [cls for cls in manim_classes if cls not in claimed]
+    for sid, scene in zip(empty_slots, unused):
+        prev = existing_for.get(sid)
+        row = dict(prev) if isinstance(prev, dict) else {}
         row["type"] = "manim"
         row["scene"] = scene
         row["source"] = f"{scene}.mp4"

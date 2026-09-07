@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class TTSError(RuntimeError):
-    """Raised when TTS cannot run (missing narration or pre-lint failure)."""
+    """Raised when TTS cannot run (missing/empty narration or pre-lint failure)."""
 
 
 def _probe_duration(path: Path) -> float | None:
@@ -79,6 +79,11 @@ class TTSGenerator:
             )
         raw = src.read_text(encoding="utf-8")
         plain = markdown_to_tts_plain(raw)
+        if not plain.strip():
+            raise TTSError(
+                f"Narration for segment {seg_id} is empty after markdown stripping "
+                f"({src.name}) — add spoken prose before TTS"
+            )
 
         lint_cfg = self.config.narration_lint_config
         if lint_cfg.get("block_tts_on_pre_lint", True):

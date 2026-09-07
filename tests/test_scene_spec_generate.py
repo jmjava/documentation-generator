@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,25 @@ def _bundle(tmp_path: Path) -> Config:
     narr = tmp_path / "narration"
     narr.mkdir()
     (narr / "08-extras.md").write_text("# Demo\n\nHello world.", encoding="utf-8")
+    anim = tmp_path / "animations"
+    anim.mkdir(exist_ok=True)
+    (anim / "timing.json").write_text(
+        json.dumps(
+            {
+                "08-extras": {
+                    "text": "Hello world",
+                    "segments": [{"start": 0.0, "end": 2.0, "text": "Hello world"}],
+                    "words": [
+                        {"word": "Hello", "start": 0.0, "end": 0.4},
+                        {"word": "world", "start": 0.5, "end": 0.9},
+                        {"word": "Hello", "start": 1.0, "end": 1.3},
+                        {"word": "world", "start": 1.4, "end": 1.8},
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     return Config.from_yaml(p)
 
 
@@ -135,6 +155,41 @@ def test_generate_scene_spec_retries_when_sparse(tmp_path: Path) -> None:
         "Hotel finishes the set after sunset.\n",
         encoding="utf-8",
     )
+    (tmp_path / "animations" / "timing.json").write_text(
+        json.dumps(
+            {
+                "08-extras": {
+                    "text": "Alpha lands Bravo follows Charlie closes Delta keeps "
+                    "Echo wraps Foxtrot continues Golf arrives Hotel finishes",
+                    "segments": [{"start": 0.0, "end": 20.0, "text": "dense"}],
+                    "words": [
+                        {"word": w, "start": float(i), "end": float(i) + 0.4}
+                        for i, w in enumerate(
+                            [
+                                "Alpha",
+                                "lands",
+                                "Bravo",
+                                "follows",
+                                "Charlie",
+                                "closes",
+                                "Delta",
+                                "keeps",
+                                "Echo",
+                                "wraps",
+                                "Foxtrot",
+                                "continues",
+                                "Golf",
+                                "arrives",
+                                "Hotel",
+                                "finishes",
+                            ]
+                        )
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     calls = {"n": 0}
 
     def fake_llm(**_kwargs: object) -> str:
@@ -224,7 +279,7 @@ def test_inject_updates_scenes_py(tmp_path: Path) -> None:
                 "run_time": 1.0,
                 "boxes": [
                     {
-                        "label": "One",
+                        "label": "Hello",
                         "color": "C_GREEN",
                         "width": 3.0,
                         "height": 1.0,

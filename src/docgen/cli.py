@@ -92,6 +92,16 @@ def _require_config(ctx: click.Context) -> Config:
     return cfg
 
 
+def _run_pipeline(pipeline: object, **kwargs: object) -> None:
+    """Run ``Pipeline.run``; map library ``RuntimeError`` to Click without eating ``SystemExit``."""
+    try:
+        pipeline.run(**kwargs)  # type: ignore[attr-defined]
+    except SystemExit:
+        raise
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
 def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
         return
@@ -480,7 +490,7 @@ def compose(
 
     cfg = _require_config(ctx)
     comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
-    target = list(segments) if segments else list(cfg.segments_default)
+    target = list(segments) if segments else list(cfg.segments_default or cfg.segments_all)
     target = filter_segments_by_visual_types(cfg, target, only_visual_types)
     if only_visual_types and not target:
         raise click.ClickException(
@@ -532,10 +542,12 @@ def lint(ctx: click.Context, segment: str | None) -> None:
     segments = [segment] if segment else cfg.segments_all
     issues_total = 0
 
+    missing = 0
     for seg_id in segments:
         path = cfg.find_segment_asset(cfg.narration_dir, seg_id, ".md")
         if not path:
             click.echo(f"  [{seg_id}] no narration file")
+            missing += 1
             continue
         result = linter.lint_text(path.read_text(encoding="utf-8"))
         status = "PASS" if result.passed else "FAIL"
@@ -544,7 +556,7 @@ def lint(ctx: click.Context, segment: str | None) -> None:
             click.echo(f"    {issue}")
             issues_total += 1
 
-    if issues_total:
+    if issues_total or missing:
         raise SystemExit(1)
 
 
@@ -1333,8 +1345,8 @@ def generate_all(
 
     cfg = _require_config(ctx)
     _echo_ai_status(cfg)
-    pipeline = Pipeline(cfg)
-    pipeline.run(
+    _run_pipeline(
+        Pipeline(cfg),
         skip_tts=skip_tts,
         skip_manim=skip_manim,
         retry_manim_on_freeze=retry_manim,
@@ -1355,8 +1367,7 @@ def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
     from docgen.pipeline import Pipeline
 
     cfg = _require_config(ctx)
-    pipeline = Pipeline(cfg)
-    pipeline.run(skip_tts=True, regen_scene_specs=regen_scene_specs)
+    _run_pipeline(Pipeline(cfg), skip_tts=True, regen_scene_specs=regen_scene_specs)
 
 
 @main.command("benchmark")

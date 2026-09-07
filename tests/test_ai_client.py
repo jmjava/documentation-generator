@@ -424,7 +424,13 @@ def test_pipeline_fails_fast_when_provider_has_no_tts(
     from docgen.pipeline import Pipeline
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    cfg = _cfg(tmp_path, {"ai": {"provider": "openai"}})
+    cfg = _cfg(
+        tmp_path,
+        {
+            "ai": {"provider": "openai"},
+            "segments": {"all": ["01"], "default": ["01"]},
+        },
+    )
     with pytest.raises(AIError, match="needs TTS"):
         Pipeline(cfg).run(skip_manim=True, skip_scene_retime=True)
 

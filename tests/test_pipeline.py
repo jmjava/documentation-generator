@@ -317,3 +317,30 @@ def test_pipeline_fails_when_segments_have_no_visual_map(tmp_path, monkeypatch) 
         Pipeline(cfg).run(skip_tts=True, skip_manim=True, skip_scene_retime=True)
 
     assert "compose" not in calls
+
+
+def test_pipeline_fails_when_segments_all_empty(tmp_path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    class OkComposer:
+        def __init__(self, _config) -> None:
+            pass
+
+        def compose_segments(self, _segments) -> int:
+            calls.append("compose")
+            return 0
+
+    _patch_pipeline_stages(monkeypatch, OkComposer, calls)
+    cfg = SimpleNamespace(
+        animations_dir=tmp_path / "animations",
+        segments_all=[],
+        visual_map={},
+        pipeline_manim_scene_names=lambda: [],
+    )
+    (cfg.animations_dir).mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="segments.all is empty"):
+        Pipeline(cfg).run(skip_tts=True, skip_manim=True, skip_scene_retime=True)
+
+    assert "timestamps" not in calls
+    assert "compose" not in calls

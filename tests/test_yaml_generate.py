@@ -278,6 +278,58 @@ def test_discover_visual_map_preserves_still_and_fills_manim_slots(tmp_path: Pat
     assert raw["visual_map"]["03"]["scene"] == "SecondScene"
 
 
+def test_discover_visual_map_preserves_committed_manim_class(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class FirstScene(Scene):\n    pass\nclass SecondScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": ["01", "02"], "default": ["01", "02"]},
+        "segment_names": {"01": "01-a", "02": "02-b"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "SecondScene", "source": "SecondScene.mp4"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    discover_visual_map(raw, cfg)
+    assert raw["visual_map"]["01"]["scene"] == "SecondScene"
+    assert raw["visual_map"]["01"]["source"] == "SecondScene.mp4"
+    assert raw["visual_map"]["02"]["scene"] == "FirstScene"
+
+
+def test_discover_visual_map_keeps_manim_when_scenes_py_empty(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text("# no Scene classes yet\n", encoding="utf-8")
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    discover_visual_map(raw, cfg)
+    assert raw["visual_map"]["01"]["scene"] == "KeepScene"
+    assert raw["visual_map"]["01"]["source"] == "KeepScene.mp4"
+
+
 def test_sync_manim_segments_preserves_per_segment_hints(tmp_path: Path) -> None:
     raw = {
         "segments": {"all": ["01"], "default": ["01"]},
