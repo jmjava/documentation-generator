@@ -28,9 +28,9 @@ current `segments.all` jobs, preserve other keys. Garbage JSON raises
 - [x] `extract_all` merges into `load_bundle_timing()` instead of replacing.
 - [x] Corrupt JSON / non-object root fails closed; file unchanged.
 - [x] Tests: extra stem preserved; corrupt file not rewritten.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
