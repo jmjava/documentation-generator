@@ -301,6 +301,13 @@ class Config:
             require_yaml_string(ts["engine"], label="timestamps.engine", source=src)
         if tts.get("language") is not None:
             require_yaml_string(tts["language"], label="tts.language", source=src)
+        manim = self._block("manim")
+        if manim.get("font") is not None:
+            require_yaml_string(manim["font"], label="manim.font", source=src)
+        if manim.get("quality") is not None:
+            require_yaml_string(manim["quality"], label="manim.quality", source=src)
+        if manim.get("manim_path") is not None:
+            require_yaml_string(manim["manim_path"], label="manim.manim_path", source=src)
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(
