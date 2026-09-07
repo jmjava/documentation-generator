@@ -485,6 +485,18 @@ class Config:
                 label="narration_from_source.system_prompt",
                 source=src,
             )
+        if nfs.get("temperature") is not None:
+            require_yaml_number(
+                nfs["temperature"],
+                label="narration_from_source.temperature",
+                source=src,
+            )
+        if nfs.get("max_context_bytes") is not None:
+            require_yaml_number(
+                nfs["max_context_bytes"],
+                label="narration_from_source.max_context_bytes",
+                source=src,
+            )
         msg = self._block("manim_scene_generation")
         if msg.get("model") is not None:
             require_yaml_string(
@@ -502,6 +514,29 @@ class Config:
                 label="manim_scene_generation.scene_spec_system_prompt",
                 source=src,
             )
+        if msg.get("temperature") is not None:
+            require_yaml_number(
+                msg["temperature"],
+                label="manim_scene_generation.temperature",
+                source=src,
+            )
+        if msg.get("max_context_bytes") is not None:
+            require_yaml_number(
+                msg["max_context_bytes"],
+                label="manim_scene_generation.max_context_bytes",
+                source=src,
+            )
+        for wkey in (
+            "max_whisper_segments_in_prompt",
+            "max_whisper_words_in_prompt",
+            "max_whisper_segment_text_chars",
+        ):
+            if msg.get(wkey) is not None:
+                require_yaml_number(
+                    msg[wkey],
+                    label=f"manim_scene_generation.{wkey}",
+                    source=src,
+                )
         if self.raw.get("env_file") is not None:
             require_yaml_string(self.raw["env_file"], label="env_file", source=src)
         if self.raw.get("repo_root") is not None:

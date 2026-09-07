@@ -888,3 +888,63 @@ def test_from_yaml_numeric_tunables_allowed(tmp_path: Path) -> None:
     assert c.ffmpeg_timeout_sec == 120
     assert c.max_drift_sec == 3.0
     assert c.max_freeze_ratio == 0.4
+
+
+def test_from_yaml_bool_nfs_temperature_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("narration_from_source:\n  temperature: true\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="narration_from_source.temperature must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_nfs_max_context_bytes_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "narration_from_source:\n  max_context_bytes:\n    - 120000\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="narration_from_source.max_context_bytes must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_msg_temperature_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("manim_scene_generation:\n  temperature: true\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="manim_scene_generation.temperature must be a YAML number"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_max_whisper_words_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        'manim_scene_generation:\n  max_whisper_words_in_prompt: "0"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.max_whisper_words_in_prompt must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_generation_numeric_tunables_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "narration_from_source:\n  temperature: 0.5\n  max_context_bytes: 90000\n"
+        "manim_scene_generation:\n  temperature: 0.4\n  max_context_bytes: 80000\n"
+        "  max_whisper_segments_in_prompt: 0\n  max_whisper_words_in_prompt: 12\n"
+        "  max_whisper_segment_text_chars: 200\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.raw["narration_from_source"]["temperature"] == 0.5
+    assert c.raw["narration_from_source"]["max_context_bytes"] == 90000
+    assert c.raw["manim_scene_generation"]["temperature"] == 0.4
+    assert c.raw["manim_scene_generation"]["max_whisper_words_in_prompt"] == 12

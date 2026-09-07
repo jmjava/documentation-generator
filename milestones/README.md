@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[hint-segment-create-bool.md](hint-segment-create-bool.md)** —
-hint `docgen.segment.create` must be a YAML boolean (`"false"` used to
-still insert the segment).
+**Active:** **[generation-numeric-tunables.md](generation-numeric-tunables.md)** —
+narration / scene-generation temperature and context-byte tunables must
+be YAML numbers (`true` used to become `1.0` / 1-byte context).
 
 **Shipped:**
+- **[hint-segment-create-bool.md](hint-segment-create-bool.md)** —
+  hint `docgen.segment.create` must be a YAML boolean (#116).
 - **[numeric-config-tunables.md](numeric-config-tunables.md)** —
   timestamps / compose / manim / validation numeric tunables must be
   YAML numbers (#115).
