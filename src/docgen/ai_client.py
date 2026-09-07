@@ -15,8 +15,11 @@ Resolution order for ``ai.provider``:
 2. ``ai.provider`` in ``docgen.yaml``
 3. default ``openai`` (unchanged behaviour)
 
-Grok auth reads ``XAI_API_KEY``, then ``OPENAI_API_KEY``. OpenAI auth
-reads ``OPENAI_API_KEY`` only (unless ``ai.api_key_env`` overrides).
+OpenAI-provider auth prefers ``CURSOR_API_KEY``, then ``OPENAI_API_KEY``.
+Cursor Cloud often injects a ``crsr_`` proxy into ``OPENAI_API_KEY`` that
+the OpenAI API rejects; those values are skipped. Grok auth reads
+``XAI_API_KEY``, then a usable ``OPENAI_API_KEY``. ``ai.api_key_env`` /
+``DOCGEN_AI_API_KEY_ENV`` still override the default name.
 """
 
 from __future__ import annotations
@@ -78,7 +81,8 @@ _OPENAI_TO_GROK_VOICE = {
     "verse": "sal",
 }
 
-_API_KEY_ENVS = ("OPENAI_API_KEY", "XAI_API_KEY")
+_API_KEY_ENVS = ("CURSOR_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY")
+_CURSOR_CLOUD_PROXY_PREFIX = "crsr_"
 _MAX_HTTP_ATTEMPTS = 10
 _BASE_DELAY_SEC = 1.0
 _MAX_BACKOFF_SEC = 120.0
@@ -103,8 +107,8 @@ class AISettings:
                 "and ai.provider: grok / DOCGEN_AI_PROVIDER=grok."
             )
         return (
-            f"Set {self.api_key_env}, or switch to Grok with ai.provider: grok "
-            "and XAI_API_KEY."
+            "Set CURSOR_API_KEY (preferred) or OPENAI_API_KEY. "
+            "Cursor Cloud's crsr_ OPENAI_API_KEY proxy is skipped."
         )
 
 
@@ -118,6 +122,49 @@ def normalize_provider(raw: str | None) -> str:
         f"Unknown AI provider {raw!r}; use 'openai' or 'grok' "
         "(aliases: xai, x.ai)."
     )
+
+
+def _env_secret(name: str) -> str | None:
+    value = (os.environ.get(name) or "").strip()
+    return value or None
+
+
+def _usable_secret(name: str) -> str | None:
+    """Return a key that the target HTTP API can actually accept.
+
+    Cursor Cloud injects ``OPENAI_API_KEY=crsr_…``; OpenAI's API 401s that
+    token. Skip it so ``CURSOR_API_KEY`` (``sk-proj-…``) can win.
+    """
+    value = _env_secret(name)
+    if not value:
+        return None
+    if name == "OPENAI_API_KEY" and value.lower().startswith(_CURSOR_CLOUD_PROXY_PREFIX):
+        return None
+    return value
+
+
+def _pick_api_key(provider: str, *, explicit_env: str) -> tuple[str | None, str]:
+    """Return ``(api_key, env_name)``. OpenAI provider: Cursor key first."""
+    if explicit_env:
+        key = _usable_secret(explicit_env)
+        if key:
+            return key, explicit_env
+        # Explicit OPENAI_API_KEY that is a crsr_ proxy: fall through.
+        if not (_env_secret(explicit_env) and not key):
+            return None, explicit_env
+
+    if provider == "grok":
+        for name in ("XAI_API_KEY", "OPENAI_API_KEY"):
+            key = _usable_secret(name)
+            if key:
+                return key, name
+        return None, "XAI_API_KEY"
+
+    for name in ("CURSOR_API_KEY", "OPENAI_API_KEY"):
+        key = _usable_secret(name)
+        if key:
+            return key, name
+    return None, "CURSOR_API_KEY"
 
 
 def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
@@ -151,20 +198,8 @@ def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
 
     env_key_name = (os.environ.get("DOCGEN_AI_API_KEY_ENV") or "").strip()
     yaml_key_name = str(block.get("api_key_env") or "").strip()
-    if env_key_name:
-        api_key_env = env_key_name
-    elif yaml_key_name:
-        api_key_env = yaml_key_name
-    elif provider == "grok":
-        api_key_env = "XAI_API_KEY"
-    else:
-        api_key_env = "OPENAI_API_KEY"
-
-    api_key = (os.environ.get(api_key_env) or "").strip() or None
-    if not api_key and provider == "grok":
-        api_key = (os.environ.get("OPENAI_API_KEY") or "").strip() or None
-        if api_key:
-            api_key_env = "OPENAI_API_KEY"
+    explicit_env = env_key_name or yaml_key_name
+    api_key, api_key_env = _pick_api_key(provider, explicit_env=explicit_env)
 
     return AISettings(
         provider=provider,

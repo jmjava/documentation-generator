@@ -90,10 +90,28 @@ docgen --repo github.com/acme/course-builder generate-all
 the checkout). `repo_root` in that yaml still points at the consumer so
 narration/scene prompts read *their* sources.
 
-### OpenAI or Grok (xAI)
+### OpenAI / Cursor or Grok (xAI)
 
-Default provider is **OpenAI** (`OPENAI_API_KEY`). To substitute **Grok** for
-chat, TTS, Whisper, and image calls:
+Default provider is **OpenAI Images / Chat** authenticated with
+**`CURSOR_API_KEY` first**, then `OPENAI_API_KEY`. Cursor Cloud often injects
+a `crsr_…` proxy into `OPENAI_API_KEY` that OpenAI rejects; docgen skips it.
+
+Image models stay the same knob as before — they are **not** remapped when
+using the Cursor key:
+
+```yaml
+image_generation:
+  model: gpt-image-1      # or dall-e-3, gpt-image-1-mini, …
+  size: 1536x1024
+  # quality: high
+```
+
+```bash
+docgen image-generate --all --model gpt-image-1
+docgen image-generate --all --model dall-e-3 --size 1024x1024
+```
+
+To substitute **Grok** for chat, TTS, Whisper, and image calls:
 
 ```yaml
 ai:
@@ -113,9 +131,9 @@ STT use xAI `POST /v1/tts` and `POST /v1/stt`. Keep `timestamps.engine: local`
 unless you specifically want network STT.
 
 A Cursor Cloud environment that already has ffmpeg / tesseract / Manim build
-deps can run the full pipeline: add `XAI_API_KEY` or `OPENAI_API_KEY` as an
-environment secret (and grant the consumer as a repository dependency if you
-clone by URL).
+deps can run the full pipeline using the injected **`CURSOR_API_KEY`**. Optional:
+add `OPENAI_API_KEY` or `XAI_API_KEY` as an environment secret (and grant the
+consumer as a repository dependency if you clone by URL).
 
 ## Install (external tool — do not vendor into project `src/`)
 
@@ -228,7 +246,7 @@ your IDE or CI) is **not** replaced by the file. To make the file win, set
 environment, or **`DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY,OTHER_KEY`** for specific
 keys only.
 
-When `OPENAI_API_KEY` or `XAI_API_KEY` is present in both the shell and `env_file`,
+When `CURSOR_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` is present in both the shell and `env_file`,
 docgen prints a one-line hint to stderr so a silent 401 from the wrong key is
 easier to diagnose.
 
@@ -292,7 +310,7 @@ timestamps:
   min_silence_sec: 0.3
 
 image_generation:            # scene-spec image elements (docgen image-generate)
-  model: gpt-image-1
+  model: gpt-image-1         # Cursor/OpenAI Images; Grok remaps gpt-image-* to Imagine
   size: 1536x1024
   # quality: high            # optional, model-specific
 

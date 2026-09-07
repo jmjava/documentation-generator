@@ -11,6 +11,7 @@ from docgen.yaml_generate import (
     collect_hint_project_blocks,
     collect_hint_segment_declarations,
     collect_hint_wirings_by_segment,
+    default_header,
     discover_visual_map,
     manim_scene_class_names_in_order,
     merge_defaults,
@@ -49,6 +50,12 @@ def _minimal_cfg(tmp_path: Path) -> Config:
     )
 
 
+def test_default_header_uses_filename_not_absolute_path(tmp_path: Path) -> None:
+    header = default_header(tmp_path / "cache" / "docgen.yaml")
+    assert "File: docgen.yaml" in header
+    assert str(tmp_path) not in header
+
+
 def test_narration_segment_pairs_skips_readme(tmp_path: Path) -> None:
     nd = tmp_path / "narration"
     nd.mkdir()
@@ -75,6 +82,8 @@ def test_merge_defaults_adds_archive_exclude(tmp_path: Path) -> None:
     assert any("archive" in c for c in ch)
     assert "**/archive/**" in raw["wizard"]["exclude_patterns"]
     assert raw["ai"]["provider"] == "openai"
+    assert raw["image_generation"]["model"] == "gpt-image-1"
+    assert raw["image_generation"]["size"] == "1536x1024"
 
 
 def test_merge_defaults_idempotent_archive(tmp_path: Path) -> None:
