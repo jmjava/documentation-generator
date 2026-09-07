@@ -28,9 +28,9 @@ matter, empty front matter, and a mapping without `docgen` stay `None`.
 - [x] `docgen:` as a list/scalar raises.
 - [x] Non-docgen front matter (e.g. `title:`) still returns `None`.
 - [x] `merge_defaults` surfaces the error from a broken `hints/*.md`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
