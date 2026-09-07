@@ -1,7 +1,7 @@
 # Milestone: timing.json words/segments must be object arrays
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#127](https://github.com/jmjava/documentation-generator/pull/127)  
 **Depends on:** `milestones/timing-stem-objects.md` (PR #126)
 
 ## Problem
@@ -25,14 +25,14 @@ means no timings; paced compile already fails).
 
 ## Done when
 
-- [ ] ``load_bundle_timing`` rejects non-array ``words`` / ``segments``
-- [ ] ``load_bundle_timing`` rejects non-object array items
-- [ ] ``pace: none`` compile fails with the parse error (not silent empty)
-- [ ] validate / wizard / ``extract_all`` surface the error and do not
+- [x] ``load_bundle_timing`` rejects non-array ``words`` / ``segments``
+- [x] ``load_bundle_timing`` rejects non-object array items
+- [x] ``pace: none`` compile fails with the parse error (not silent empty)
+- [x] validate / wizard / ``extract_all`` surface the error and do not
       rewrite the file
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (734 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
