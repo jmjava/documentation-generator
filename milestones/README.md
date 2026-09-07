@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-json-parse.md](wizard-json-parse.md)** —
-wizard JSON bodies must parse; garbage JSON must not look like `{}`.
+**Active:** **[wizard-path-ref.md](wizard-path-ref.md)** —
+wizard `open-bundle` `path` and `tool/update` `ref` must be JSON strings.
 
 **Shipped:**
+- **[wizard-json-parse.md](wizard-json-parse.md)** —
+  wizard JSON bodies must parse; garbage JSON must not look like `{}`
+  (#132).
 - **[wizard-source-paths.md](wizard-source-paths.md)** —
   wizard `source_paths` must be a string array; prose fields must be strings
   (#131).

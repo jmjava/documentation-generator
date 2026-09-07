@@ -210,6 +210,21 @@ def test_api_tool_update_rejects_string_with_manim(tmp_path):
     assert "with_manim must be a JSON boolean" in res.get_json()["error"]
 
 
+def test_api_open_bundle_rejects_non_string_path(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    res = client.post("/api/open-bundle", json={"path": [str(tmp_path)]})
+    assert res.status_code == 400
+    assert "path must be a JSON string" in res.get_json()["error"]
+
+
+def test_api_tool_update_rejects_non_string_ref(tmp_path):
+    client, _cfg = _wizard_client(tmp_path)
+    for payload in ({"ref": True}, {"ref": 0}, {"ref": False}, {"ref": ["main"]}):
+        res = client.post("/api/tool/update", json=payload)
+        assert res.status_code == 400, payload
+        assert "ref must be a JSON string" in res.get_json()["error"]
+
+
 def test_api_run_from_rejects_string_llm_scene_spec(tmp_path):
     client, _cfg = _wizard_client(tmp_path)
     res = client.post("/api/run-from/tts/01", json={"llm_scene_spec": "true"})

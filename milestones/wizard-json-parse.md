@@ -1,7 +1,7 @@
 # Milestone: wizard JSON bodies must parse
 
-**Status:** Active  
-**PR:** (pending)  
+**Status:** Shipped  
+**PR:** [#132](https://github.com/jmjava/documentation-generator/pull/132)  
 **Depends on:** `milestones/wizard-source-paths.md` (PR #131)
 
 ## Problem
@@ -20,12 +20,12 @@ Empty / whitespace-only bodies stay ``{}``. Invalid JSON raises
 
 ## Done when
 
-- [ ] Invalid JSON POST returns 400 and does not write state
-- [ ] JSON ``null`` returns 400
-- [ ] Empty body still succeeds as ``{}``
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Invalid JSON POST returns 400 and does not write state
+- [x] JSON ``null`` returns 400
+- [x] Empty body still succeeds as ``{}``
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (758 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
