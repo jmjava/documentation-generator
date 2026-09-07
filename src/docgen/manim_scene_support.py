@@ -666,11 +666,17 @@ def build_timing_enrichment_for_prompt(
     seg_block = manim_scene_generation_segment_block(cfg, seg_id)
     max_seg = int(root.get("max_whisper_segments_in_prompt", 0) or 0)
     max_words = int(root.get("max_whisper_words_in_prompt", 0) or 0)
-    try:
-        max_chars = int(root.get("max_whisper_segment_text_chars", 200) or 200)
-    except (TypeError, ValueError):
+    raw_chars = root.get("max_whisper_segment_text_chars", 200)
+    if raw_chars is None:
         max_chars = 200
-    max_chars = max(0, max_chars)
+    else:
+        # ``0 or 200`` used to ignore an explicit 0 (no truncation).
+        if isinstance(raw_chars, bool) or not isinstance(raw_chars, (int, float)):
+            raise SceneGenerationError(
+                "manim_scene_generation.max_whisper_segment_text_chars must be a "
+                f"YAML number, not {type(raw_chars).__name__} ({raw_chars!r})"
+            )
+        max_chars = max(0, int(raw_chars))
 
     whisper_words = _load_timing_words_from_cfg(cfg, seg_name)
     n_words_total = len(whisper_words)

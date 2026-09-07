@@ -50,8 +50,6 @@ from docgen.scene_spec import (
 if TYPE_CHECKING:
     from docgen.config import Config
 
-DEFAULT_SCENE_SPEC_TEMPERATURE = 0.35
-
 _SCENE_SPEC_SYSTEM_BASE = f"""You author **declarative Manim scene specs** as a single YAML document (not Python).
 
 **Planning / lookahead (mandatory before you write YAML):**
@@ -565,11 +563,11 @@ def generate_scene_spec(
         )
 
     model = (model_override or "").strip() or settings.model
-    temperature = (
-        float(temperature_override)
-        if temperature_override is not None
-        else float(settings.temperature or DEFAULT_SCENE_SPEC_TEMPERATURE)
-    )
+    if temperature_override is not None:
+        temperature = float(temperature_override)
+    else:
+        # ``0.0 or 0.35`` used to replace an explicit deterministic temperature.
+        temperature = float(settings.temperature)
     invoke = llm or (lambda **kw: _invoke_llm(cfg=cfg, **kw))
     n_beats = len(cluster_subject_beats(narration_sentences(narration_text)))
     # Near-miss: allow a couple uncovered beats after retry, not a blind label quota.

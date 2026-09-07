@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[compose-ffmpeg-timeout.md](compose-ffmpeg-timeout.md)** —
-compose must not treat a timed-out ffmpeg mux as success because a
-partial output file exists.
+**Active:** **[generation-zero-values.md](generation-zero-values.md)** —
+`temperature: 0` / `max_whisper_segment_text_chars: 0` must not be
+replaced by ``or`` defaults.
 
 **Shipped:**
+- **[compose-ffmpeg-timeout.md](compose-ffmpeg-timeout.md)** —
+  compose must not treat a timed-out ffmpeg mux as success (#121).
 - **[visual-beats-numeric.md](visual-beats-numeric.md)** —
   `visual_beats` / `default_visual_beats` must be YAML numbers (#120).
 - **[validation-enable-bools.md](validation-enable-bools.md)** —
