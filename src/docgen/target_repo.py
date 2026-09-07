@@ -25,8 +25,11 @@ _SKIP_DIR_NAMES = frozenset(
         "archive",
         ".tox",
         ".mypy_cache",
+        ".ruff_cache",
         "dist",
         "build",
+        "recordings",
+        "media",
     }
 )
 
@@ -86,22 +89,19 @@ def find_bundle_yaml(repo_root: Path) -> Path | None:
     root = repo_root.resolve()
     preferred = (
         root / "docs" / "demos" / "docgen.yaml",
+        root / "demos" / "docgen.yaml",
         root / "docgen.yaml",
     )
     for path in preferred:
         if path.is_file():
             return path
-    found: list[Path] = []
     if not root.is_dir():
         return None
-    for path in root.rglob("docgen.yaml"):
-        try:
-            rel_parts = path.relative_to(root).parts
-        except ValueError:
-            continue
-        if any(part in _SKIP_DIR_NAMES for part in rel_parts[:-1]):
-            continue
-        found.append(path)
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
+        if "docgen.yaml" in filenames:
+            found.append(Path(dirpath) / "docgen.yaml")
     if not found:
         return None
     found.sort(
@@ -149,13 +149,24 @@ def resolve_repo(
 
 
 def _git_auth_env(url: str) -> dict[str, str]:
-    """Put a GitHub token in the child env, not on the argv that ``ps`` shows."""
+    """Put a GitHub token in the child env, not on the argv that ``ps`` shows.
+
+    Appends a ``GIT_CONFIG_KEY_*`` slot instead of overwriting a count the
+    parent process already set (CI images often inject ``user.name`` this way).
+    """
     env = os.environ.copy()
     token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
-    if token and "github.com" in url and url.startswith("https://"):
-        env["GIT_CONFIG_COUNT"] = "1"
-        env["GIT_CONFIG_KEY_0"] = f"url.https://x-access-token:{token}@github.com/.insteadOf"
-        env["GIT_CONFIG_VALUE_0"] = "https://github.com/"
+    if not (token and "github.com" in url and url.startswith("https://")):
+        return env
+    try:
+        count = max(0, int(env.get("GIT_CONFIG_COUNT") or "0"))
+    except ValueError:
+        count = 0
+    env["GIT_CONFIG_COUNT"] = str(count + 1)
+    env[f"GIT_CONFIG_KEY_{count}"] = (
+        f"url.https://x-access-token:{token}@github.com/.insteadOf"
+    )
+    env[f"GIT_CONFIG_VALUE_{count}"] = "https://github.com/"
     return env
 
 
