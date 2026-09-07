@@ -29,7 +29,9 @@ def filter_segments_by_visual_types(
         return list(segment_ids)
     out: list[str] = []
     for sid in segment_ids:
-        vm = config.visual_map.get(sid, {})
+        vm = config.visual_map.get(sid)
+        if not isinstance(vm, dict):
+            continue
         vt = str(vm.get("type", "")).strip().lower()
         if vt in allowed:
             out.append(sid)

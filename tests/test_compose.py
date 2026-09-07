@@ -194,3 +194,20 @@ def test_cli_lint_exits_nonzero_when_narration_missing(tmp_path: Path) -> None:
     result = runner.invoke(main, ["--config", str(c.yaml_path), "lint"])
     assert result.exit_code == 1
     assert "no narration file" in result.output
+
+
+def test_cli_compose_empty_segments_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": [], "all": []},
+        "visual_map": {},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
+    assert result.exit_code != 0
+    assert "no segments to compose" in (result.output + result.stderr).lower()

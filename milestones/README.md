@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[manim-lint-config.md](manim-lint-config.md)** — missing
-`scenes.py` must fail `validate`; invalid `docgen.yaml` must not traceback
-or be rewritten as `{}`; TTS empty-all must not succeed.
+**Active:** **[config-mapping-keys.md](config-mapping-keys.md)** — nested
+`docgen.yaml` mapping/list keys must not traceback; lint/compose empty-all
+must not succeed.
 
 **Shipped:**
+- **[manim-lint-config.md](manim-lint-config.md)** — missing `scenes.py`
+  fails validate; invalid `docgen.yaml` is `ConfigError`; TTS empty-all
+  fails (#82).
 - **[wizard-narration-paths.md](wizard-narration-paths.md)** — wizard
   generate-narration must not drop missing sources; timestamps must not wipe
   corrupt `timing.json` (#81).
