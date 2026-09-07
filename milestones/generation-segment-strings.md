@@ -1,7 +1,7 @@
 # Milestone: per-segment generation prompts must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#110](https://github.com/jmjava/documentation-generator/pull/110)  
 **Depends on:** `milestones/generation-model-strings.md` (PR #107),
 `milestones/path-config-strings.md` (PR #109)
 
@@ -29,9 +29,9 @@ Fail closed at `Config.from_yaml` while walking those segment maps.
       `scene_spec_system_prompt` must be YAML strings (empty allowed).
 - [x] Present per-segment `class_name` must be a non-empty YAML string.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
