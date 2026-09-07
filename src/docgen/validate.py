@@ -765,7 +765,14 @@ class Validator:
 
         audio_dur = self._probe_media_duration(audio)
         if audio_dur is None:
-            return CheckResult("timing_sync", True, ["Cannot probe audio duration (skipped)"])
+            return CheckResult(
+                "timing_sync",
+                False,
+                [
+                    f"cannot probe audio duration for {audio.name} — "
+                    "ffprobe failed; timing_sync cannot compare the mp3 to timing.json"
+                ],
+            )
 
         max_tail = float(ts_cfg.get("max_tail_gap_sec", 3.0))
         max_overrun = float(ts_cfg.get("max_end_overrun_sec", 1.0))

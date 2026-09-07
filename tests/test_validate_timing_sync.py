@@ -40,7 +40,7 @@ def _write_timing(cfg: Config, last_end: float) -> None:
     )
 
 
-def _patch_audio_duration(monkeypatch, seconds: float) -> None:
+def _patch_audio_duration(monkeypatch, seconds: float | None) -> None:
     monkeypatch.setattr(
         Validator, "_probe_media_duration", staticmethod(lambda p: seconds)
     )
@@ -59,6 +59,13 @@ class TestTimingSync:
         _patch_audio_duration(monkeypatch, 10.4)
         check = Validator(cfg)._check_timing_sync("01")
         assert check.passed, check.details
+
+    def test_unprobed_audio_duration_fails(self, cfg, monkeypatch) -> None:
+        _write_timing(cfg, last_end=10.0)
+        _patch_audio_duration(monkeypatch, None)
+        check = Validator(cfg)._check_timing_sync("01")
+        assert not check.passed
+        assert any("cannot probe audio duration" in d for d in check.details)
 
     def test_audio_much_longer_than_transcript_fails(self, cfg, monkeypatch) -> None:
         """Regenerated (longer) mp3 with old timing.json → stale."""
