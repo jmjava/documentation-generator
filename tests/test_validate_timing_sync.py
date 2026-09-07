@@ -298,6 +298,14 @@ def test_narration_lint_fails_when_file_missing(tmp_path: Path) -> None:
     assert any("No narration file" in d for d in check.details)
 
 
+def test_narration_lint_fails_when_file_empty(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    (cfg.narration_dir / "01-x.md").write_text("\n", encoding="utf-8")
+    check = Validator(cfg)._check_narration_lint("01")
+    assert not check.passed
+    assert any("empty after markdown stripping" in d for d in check.details)
+
+
 def test_story_end_fails_when_paced_spec_has_no_timing_words(cfg) -> None:
     _write_scene_spec(cfg, labels=["Alpha"])
     check = Validator(cfg)._check_story_end("01")

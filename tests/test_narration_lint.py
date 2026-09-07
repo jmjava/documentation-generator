@@ -30,6 +30,24 @@ def test_pre_tts_link():
     assert not result.passed
 
 
+def test_pre_tts_empty_text_fails():
+    result = lint_pre_tts("")
+    assert not result.passed
+    assert any("empty after markdown stripping" in i for i in result.issues)
+
+
+def test_pre_tts_whitespace_only_fails():
+    result = lint_pre_tts("   \n\n\t  \n")
+    assert not result.passed
+    assert any("empty after markdown stripping" in i for i in result.issues)
+
+
+def test_pre_tts_heading_only_fails_as_empty_spoken():
+    result = lint_pre_tts("# Title\n\n## Subtitle\n")
+    assert not result.passed
+    assert any("empty after markdown stripping" in i for i in result.issues)
+
+
 def test_post_tts_clean():
     result = lint_post_tts("Welcome to tekton dag a stack aware CI CD system.")
     assert result.passed

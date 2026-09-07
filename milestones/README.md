@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[segment-id-strings.md](segment-id-strings.md)** —
-unquoted YAML `01` must not become integer segment ids.
+**Active:** **[lint-empty-narration.md](lint-empty-narration.md)** —
+lint / validate must fail when narration has no spoken prose after markdown
+stripping.
 
 **Shipped:**
+- **[segment-id-strings.md](segment-id-strings.md)** — unquoted YAML `01`
+  must not become integer segment ids (#87).
 - **[visual-map-row-types.md](visual-map-row-types.md)** — `visual_map` rows
   and `pages.segments` entries must be mappings; unknown compose `type`
   fails closed (#86).
