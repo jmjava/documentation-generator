@@ -29,9 +29,9 @@ anchors”.
 - [x] Present `anchor_keywords` must be a mapping of segment-id strings to
       lists of mappings with a string `keyword`.
 - [x] Tests for list/string shapes and a valid mapping.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
