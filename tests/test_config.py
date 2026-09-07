@@ -359,3 +359,15 @@ def test_from_yaml_string_pre_tts_deny_patterns_raises(tmp_path: Path) -> None:
         ConfigError, match="validation.narration_lint.pre_tts_deny_patterns must be a YAML list"
     ):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_post_tts_deny_patterns_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n  narration_lint:\n    post_tts_deny_patterns: edit for voice\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.narration_lint.post_tts_deny_patterns must be a YAML list"
+    ):
+        Config.from_yaml(p)
