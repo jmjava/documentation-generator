@@ -263,6 +263,37 @@ class Config:
                 label="wizard.scan_extensions",
                 source=src,
             )
+        ocr = self._sub_block(validation, "ocr", label="validation.ocr")
+        if ocr.get("error_patterns") is not None:
+            string_list_block(
+                ocr,
+                "error_patterns",
+                label="validation.ocr.error_patterns",
+                source=src,
+            )
+        avs = self._sub_block(validation, "av_sync", label="validation.av_sync")
+        if avs.get("visual_types") is not None:
+            string_list_block(
+                avs,
+                "visual_types",
+                label="validation.av_sync.visual_types",
+                source=src,
+            )
+        nl = self._sub_block(validation, "narration_lint", label="validation.narration_lint")
+        if nl.get("pre_tts_deny_patterns") is not None:
+            string_list_block(
+                nl,
+                "pre_tts_deny_patterns",
+                label="validation.narration_lint.pre_tts_deny_patterns",
+                source=src,
+            )
+        if nl.get("post_tts_deny_patterns") is not None:
+            string_list_block(
+                nl,
+                "post_tts_deny_patterns",
+                label="validation.narration_lint.post_tts_deny_patterns",
+                source=src,
+            )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"

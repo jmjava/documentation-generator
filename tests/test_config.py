@@ -333,3 +333,41 @@ def test_from_yaml_string_wizard_scan_extensions_raises(tmp_path: Path) -> None:
     p.write_text("wizard:\n  scan_extensions: .md\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="wizard.scan_extensions must be a YAML list"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_string_ocr_error_patterns_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  ocr:\n    error_patterns: command not found\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="validation.ocr.error_patterns must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_av_sync_visual_types_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("validation:\n  av_sync:\n    visual_types: manim\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="validation.av_sync.visual_types must be a YAML list"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_pre_tts_deny_patterns_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n  narration_lint:\n    pre_tts_deny_patterns: edit for voice\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.narration_lint.pre_tts_deny_patterns must be a YAML list"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_post_tts_deny_patterns_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "validation:\n  narration_lint:\n    post_tts_deny_patterns: edit for voice\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError, match="validation.narration_lint.post_tts_deny_patterns must be a YAML list"
+    ):
+        Config.from_yaml(p)
