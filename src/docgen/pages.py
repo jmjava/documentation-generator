@@ -16,9 +16,10 @@ class PagesGenerator:
         self.config = config
         self.pages_cfg = config.pages_config
 
-    def generate_all(self, force: bool = False) -> None:
+    def generate_all(self, force: bool = False, *, force_workflow: bool | None = None) -> None:
         self.generate_index_html(force)
-        self.generate_pages_workflow(force)
+        wf = force if force_workflow is None else force_workflow
+        self.generate_pages_workflow(wf)
         self.generate_gitattributes()
         self.generate_gitignore()
 
@@ -214,19 +215,7 @@ class PagesGenerator:
         Prefer ``segment_names[id].mp4`` so a leftover ``18-roadmap.mp4`` does not
         win over ``18-roadmap-forward.mp4`` when both match a naive ``*18*`` glob.
         """
-        d = self.config.recordings_dir
-        if not d.exists():
-            return None
-        stem = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{stem}.mp4"
-        if exact.is_file():
-            return exact
-        # Fallbacks: id-prefixed stems, then broad glob (deterministic order).
-        prefixed = sorted(d.glob(f"{seg_id}-*.mp4"))
-        if prefixed:
-            return prefixed[0]
-        matches = sorted(d.glob(f"*{seg_id}*.mp4"))
-        return matches[0] if matches else None
+        return self.config.find_segment_asset(self.config.recordings_dir, seg_id, ".mp4")
 
     def _find_recording_name(self, seg_id: str) -> str:
         rec = self._find_recording(seg_id)

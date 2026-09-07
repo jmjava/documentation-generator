@@ -272,18 +272,7 @@ class Composer:
         return True
 
     def _find_audio(self, seg_id: str) -> Path | None:
-        d = self.config.audio_dir
-        if not d.exists():
-            return None
-        seg_name = self.config.resolve_segment_name(seg_id)
-        exact = d / f"{seg_name}.mp3"
-        if exact.exists():
-            return exact
-        for mp3 in d.glob(f"{seg_id}-*.mp3"):
-            return mp3
-        for mp3 in d.glob(f"*{seg_id}*.mp3"):
-            return mp3
-        return None
+        return self.config.find_segment_asset(self.config.audio_dir, seg_id, ".mp3")
 
     def _manim_path(self, vmap: dict[str, Any]) -> Path:
         src = str(vmap.get("source", "")).strip()

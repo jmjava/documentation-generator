@@ -121,3 +121,22 @@ def test_filter_segments_by_visual_types_respects_visual_map(tmp_path: Path) -> 
     ]
     assert filter_segments_by_visual_types(c, ["01", "06"], ()) == ["01", "06"]
     assert filter_segments_by_visual_types(c, ["01", "06"], None) == ["01", "06"]
+
+
+def test_find_audio_does_not_use_substring_glob(tmp_path: Path) -> None:
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "manim", "source": "Scene01.mp4"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    audio = tmp_path / "audio"
+    audio.mkdir()
+    (audio / "101-other.mp3").write_bytes(b"x")
+    composer = Composer(c)
+    assert composer._find_audio("01") is None
+    (audio / "01-demo.mp3").write_bytes(b"y")
+    found = composer._find_audio("01")
+    assert found is not None
+    assert found.name == "01-demo.mp3"

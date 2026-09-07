@@ -248,6 +248,58 @@ def test_discover_visual_map_skipped_when_disabled(tmp_path: Path) -> None:
     assert raw["visual_map"]["01"]["scene"] == "KeepScene"
 
 
+def test_discover_visual_map_preserves_still_and_fills_manim_slots(tmp_path: Path) -> None:
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class FirstScene(Scene):\n    pass\nclass SecondScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": ["01", "02", "03"], "default": ["01", "02", "03"]},
+        "segment_names": {"01": "01-still", "02": "02-a", "03": "03-b"},
+        "visual_map": {
+            "01": {"type": "still", "source": "shots/intro.png", "caption": "keep-me"},
+        },
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    discover_visual_map(raw, cfg)
+    assert raw["visual_map"]["01"]["type"] == "still"
+    assert raw["visual_map"]["01"]["source"] == "shots/intro.png"
+    assert raw["visual_map"]["01"]["caption"] == "keep-me"
+    assert raw["visual_map"]["02"]["scene"] == "FirstScene"
+    assert raw["visual_map"]["03"]["scene"] == "SecondScene"
+
+
+def test_sync_manim_segments_preserves_per_segment_hints(tmp_path: Path) -> None:
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {"01": {"type": "manim", "scene": "NewScene"}},
+        "manim_scene_generation": {
+            "segments": {
+                "01": {
+                    "class_name": "OldScene",
+                    "hints": ["keep this"],
+                    "temperature": 0.2,
+                }
+            }
+        },
+    }
+    cfg = _cfg(tmp_path, {"dirs": {"hints": "hints"}})
+    merge_hint_wiring(raw, cfg)
+    row = raw["manim_scene_generation"]["segments"]["01"]
+    assert row["class_name"] == "NewScene"
+    assert row["hints"] == ["keep this"]
+    assert row["temperature"] == 0.2
+
+
 def test_parse_hint_segment_declaration_requires_create_true(tmp_path: Path) -> None:
     h = tmp_path / "hints"
     h.mkdir()

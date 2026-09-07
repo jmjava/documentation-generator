@@ -197,9 +197,17 @@ def _pick_api_key(provider: ProviderName, *, explicit_env: str) -> tuple[str | N
 
 
 def _implicit_provider() -> ProviderName:
-    """When yaml/env omit provider: OpenAI if a Cursor/OpenAI key exists, else Anthropic."""
+    """When yaml/env omit provider: OpenAI, else Grok, else Anthropic.
+
+    ``docgen init`` writes ``ai.provider: openai`` as a default. Treat that as
+    implicit so a Grok-only ``XAI_API_KEY`` or Claude-only ``ANTHROPIC_API_KEY``
+    still selects the matching host. Prefer Grok over Anthropic when both are
+    present — Grok has TTS/images.
+    """
     if _usable_secret("CURSOR_API_KEY") or _usable_secret("OPENAI_API_KEY"):
         return "openai"
+    if _usable_secret("XAI_API_KEY"):
+        return "grok"
     if _usable_secret("ANTHROPIC_API_KEY"):
         return "anthropic"
     return "openai"

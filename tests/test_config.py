@@ -157,3 +157,23 @@ def test_pipeline_manim_scene_names_falls_back_to_visual_map_class(tmp_path):
     (tmp_path / "docgen.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
     c = Config.from_yaml(tmp_path / "docgen.yaml")
     assert c.pipeline_manim_scene_names() == ["FromClassScene", "FromSceneScene", "WinsScene"]
+
+
+def test_find_segment_asset_does_not_match_substring_ids(tmp_path: Path) -> None:
+    audio = tmp_path / "audio"
+    audio.mkdir()
+    (audio / "101-other.mp3").write_bytes(b"x")
+    (audio / "01-intro.mp3").write_bytes(b"y")
+    cfg = {
+        "segments": {"all": ["01", "101"]},
+        "segment_names": {"01": "01-intro", "101": "101-other"},
+        "dirs": {"audio": "audio"},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    c = Config.from_yaml(p)
+    found = c.find_segment_asset(audio, "01", ".mp3")
+    assert found is not None
+    assert found.name == "01-intro.mp3"
+    (audio / "01-intro.mp3").unlink()
+    assert c.find_segment_asset(audio, "01", ".mp3") is None

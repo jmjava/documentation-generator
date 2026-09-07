@@ -56,3 +56,34 @@ def test_snippet_populated(tmp_path):
     (tmp_path / "test.md").write_text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5", encoding="utf-8")
     files = scan_md_files(tmp_path)
     assert files[0]["snippet"].startswith("Line 1")
+
+
+def test_load_state_corrupt_json_returns_empty(tmp_path):
+    from docgen.wizard import load_state
+
+    (tmp_path / ".docgen-state.json").write_text("{not json", encoding="utf-8")
+    assert load_state(tmp_path) == {"segments": {}}
+
+
+def test_api_file_rejects_prefix_escape(tmp_path):
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    repo = tmp_path / "proj"
+    evil = tmp_path / "proj-evil"
+    repo.mkdir()
+    evil.mkdir()
+    (evil / "secret.md").write_text("leak", encoding="utf-8")
+    (repo / "ok.md").write_text("safe", encoding="utf-8")
+    yaml_path = repo / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    client = create_app(cfg).test_client()
+    ok = client.get("/api/file", query_string={"path": "ok.md"})
+    assert ok.status_code == 200
+    assert ok.get_json()["content"] == "safe"
+    escaped = client.get("/api/file", query_string={"path": "../proj-evil/secret.md"})
+    assert escaped.status_code == 404

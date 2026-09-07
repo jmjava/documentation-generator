@@ -11,6 +11,10 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+class TTSError(RuntimeError):
+    """Raised when TTS cannot run (missing narration or pre-lint failure)."""
+
+
 def _probe_duration(path: Path) -> float | None:
     """Return the duration of an audio file in seconds, or None on failure."""
     try:
@@ -67,13 +71,26 @@ class TTSGenerator:
         narration_dir = self.config.narration_dir
         audio_dir = self.config.audio_dir
 
-        candidates = list(narration_dir.glob(f"*{seg_id}*.md")) if narration_dir.exists() else []
-        if not candidates:
-            print(f"[tts] No narration file found for segment {seg_id}, skipping")
-            return
-        src = candidates[0]
+        src = self.config.find_segment_asset(narration_dir, seg_id, ".md")
+        if src is None:
+            raise TTSError(
+                f"No narration file found for segment {seg_id} "
+                f"(expected {self.config.resolve_segment_name(seg_id)}.md under {narration_dir})"
+            )
         raw = src.read_text(encoding="utf-8")
         plain = markdown_to_tts_plain(raw)
+
+        lint_cfg = self.config.narration_lint_config
+        if lint_cfg.get("block_tts_on_pre_lint", True):
+            from docgen.narration_lint import lint_pre_tts
+
+            deny = lint_cfg.get("pre_tts_deny_patterns")
+            result = lint_pre_tts(raw, deny_patterns=deny)
+            if not result.passed:
+                details = "; ".join(result.issues[:8])
+                raise TTSError(
+                    f"pre-TTS lint failed for {seg_id} (block_tts_on_pre_lint): {details}"
+                )
 
         if dry_run:
             print(f"[tts] {seg_id} — stripped text ({len(plain)} chars):")

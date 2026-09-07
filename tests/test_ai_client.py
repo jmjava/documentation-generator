@@ -345,6 +345,26 @@ def test_init_yaml_openai_still_falls_back_to_anthropic(
     assert st.api_key_env == "ANTHROPIC_API_KEY"
 
 
+def test_init_yaml_openai_falls_back_to_grok_when_only_xai_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("XAI_API_KEY", "xai-only")
+    st = resolve_ai_settings(_cfg(tmp_path, {"ai": {"provider": "openai"}}))
+    assert st.provider == "grok"
+    assert st.api_key_env == "XAI_API_KEY"
+    assert st.supports_tts is True
+
+
+def test_xai_key_preferred_over_anthropic_for_implicit_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("XAI_API_KEY", "xai-only")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.provider == "grok"
+    assert st.api_key_env == "XAI_API_KEY"
+
+
 def test_explicit_env_openai_does_not_fall_back_to_anthropic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
 ) -> None:
