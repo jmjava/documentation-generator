@@ -1,6 +1,6 @@
 # Milestone: Manim bootstrap timing loaders must type timing.json
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#130](https://github.com/jmjava/documentation-generator/pull/130)  
 **Depends on:** `milestones/timing-inner-lists.md` (PR #127),
 `milestones/wizard-json-object.md` (PR #129)

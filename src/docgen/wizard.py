@@ -63,6 +63,35 @@ def require_json_bool(data: dict[str, Any], key: str, *, default: bool) -> bool:
     return val
 
 
+def require_json_string(
+    data: dict[str, Any], key: str, *, default: str | None = ""
+) -> str | None:
+    """Return ``data[key]`` when present; reject non-string JSON."""
+    if key not in data or data[key] is None:
+        return default
+    val = data[key]
+    if not isinstance(val, str):
+        raise WizardError(f"{key} must be a JSON string, not {_json_kind(val)}")
+    return val
+
+
+def require_json_str_list(data: dict[str, Any], key: str) -> list[str]:
+    """Return ``data[key]`` as a string list. Missing / null is ``[]``."""
+    if key not in data or data[key] is None:
+        return []
+    val = data[key]
+    if not isinstance(val, list):
+        raise WizardError(f"{key} must be a JSON array, not {_json_kind(val)}")
+    out: list[str] = []
+    for i, item in enumerate(val):
+        if not isinstance(item, str):
+            raise WizardError(
+                f"{key}[{i}] must be a JSON string, not {_json_kind(item)}"
+            )
+        out.append(item)
+    return out
+
+
 def session_payload(config: Any | None) -> dict[str, Any]:
     """GUI session: frozen shell vs pip CLI, and whether a bundle is attached."""
     from docgen.resources import is_frozen
@@ -611,16 +640,16 @@ def create_app(config: Any | None = None) -> Flask:
         cfg = _cfg()
         try:
             data = request_json_object()
+            source_paths = require_json_str_list(data, "source_paths")
+            guidance = require_json_string(data, "guidance", default="") or ""
+            segment_name = require_json_string(data, "segment_name", default="untitled") or "untitled"
+            revision_notes = require_json_string(data, "revision_notes", default="") or ""
+            current_narration = require_json_string(data, "current_narration", default="") or ""
+            mode = require_json_string(data, "mode", default="generate") or "generate"
+            topic_label = require_json_string(data, "topic_label", default=None)
+            seg_id_hint = require_json_string(data, "segment_id", default=None)
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
-        source_paths: list[str] = list(data.get("source_paths") or [])
-        guidance: str = data.get("guidance", "")
-        segment_name: str = data.get("segment_name", "untitled")
-        revision_notes: str = data.get("revision_notes", "")
-        current_narration: str = data.get("current_narration", "") or ""
-        mode: str = data.get("mode", "generate") or "generate"
-        topic_label: str | None = data.get("topic_label") or None
-        seg_id_hint: str | None = data.get("segment_id")
         if topic_label is None and cfg is not None and seg_id_hint:
             try:
                 topic_label = cfg.narration_topic_label(seg_id_hint)
@@ -832,6 +861,11 @@ def create_app(config: Any | None = None) -> Flask:
         paths = data.get("paths")
         if not isinstance(paths, list):
             return jsonify({"error": "paths must be a list of repo-root-relative strings"}), 400
+        for i, raw in enumerate(paths):
+            if not isinstance(raw, str):
+                return jsonify({
+                    "error": f"paths[{i}] must be a JSON string, not {_json_kind(raw)}"
+                }), 400
 
         root = cfg.repo_root.resolve()
         clean: list[str] = []
@@ -915,9 +949,9 @@ def create_app(config: Any | None = None) -> Flask:
             return jsonify({"error": "no config"}), 400
         try:
             data = request_json_object()
+            text = require_json_string(data, "text", default="") or ""
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
-        text = data.get("text", "")
         seg_name = cfg.resolve_segment_name(segment_id)
         found = _find_asset(cfg.narration_dir, seg_name, segment_id, ".md")
         target = found or (cfg.narration_dir / f"{seg_name}.md")
