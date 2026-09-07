@@ -185,3 +185,48 @@ class TestExtractLocal:
         cfg = Config.from_yaml(tmp_path / "docgen.yaml")
         with pytest.raises(AIError, match="whisper"):
             TimestampExtractor(cfg).extract_all()
+
+
+    def test_extract_all_preserves_extra_timing_stems(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            json.dumps({"legacy-stem": {"text": "keep-me", "words": [{"word": "x"}]}}),
+            encoding="utf-8",
+        )
+        TimestampExtractor(cfg).extract_all()
+        timing = json.loads(out.read_text(encoding="utf-8"))
+        assert timing["legacy-stem"]["text"] == "keep-me"
+        assert "01-x" in timing
+        assert timing["01-x"]["words"]
+
+
+    def test_extract_all_rejects_corrupt_timing_json(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("{not-json", encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="not valid JSON"):
+            TimestampExtractor(cfg).extract_all()
+        assert out.read_text(encoding="utf-8") == "{not-json"
+
+
+    def test_extract_all_rejects_non_object_timing_json(self, cfg, monkeypatch) -> None:
+        _fake_audio_env(monkeypatch)
+        (cfg.narration_dir / "01-x.md").write_text("Alpha begins the story.\n", encoding="utf-8")
+        (cfg.audio_dir / "01-x.mp3").write_bytes(b"fake-mp3")
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("[1, 2]\n", encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="JSON object"):
+            TimestampExtractor(cfg).extract_all()
+        assert out.read_text(encoding="utf-8") == "[1, 2]\n"
