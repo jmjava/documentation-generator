@@ -540,10 +540,11 @@ def create_app(config: Any | None = None) -> Flask:
     def api_open_bundle():
         try:
             data = request_json_object()
+            path = require_json_string(data, "path", default="") or ""
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
         try:
-            cfg = open_bundle_config(str(data.get("path") or ""))
+            cfg = open_bundle_config(path)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         app.config["DOCGEN"] = cfg
@@ -582,9 +583,9 @@ def create_app(config: Any | None = None) -> Flask:
             data = request_json_object()
             with_manim = require_json_bool(data, "with_manim", default=False)
             update_req = require_json_bool(data, "update_requirements", default=True)
+            ref = require_json_string(data, "ref", default="main") or "main"
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
-        ref = str(data.get("ref") or "main")
         bundle = cfg.base_dir if cfg else None
         try:
             result = update_docgen_install(

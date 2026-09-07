@@ -197,6 +197,9 @@ def test_session_and_open_bundle(tmp_path: Path) -> None:
     assert missing.status_code == 400
     empty = client.post("/api/open-bundle", json={"path": ""})
     assert empty.status_code == 400
+    listed = client.post("/api/open-bundle", json={"path": [str(tmp_path)]})
+    assert listed.status_code == 400
+    assert "path must be a JSON string" in listed.get_json()["error"]
 
 
 def test_open_bundle_config_helper(tmp_path: Path) -> None:

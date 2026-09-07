@@ -133,8 +133,19 @@ def test_wizard_tool_api(tmp_path: Path) -> None:
     assert data["restart_required"] is True
     assert read_requirements_pin(tmp_path / "requirements-docgen.txt") == "main"
 
+    with patch("docgen.install_spec.subprocess.run", return_value=_Proc()):
+        missing_ref = client.post(
+            "/api/tool/update",
+            json={"update_requirements": True, "with_manim": False},
+        )
+    assert missing_ref.status_code == 200, missing_ref.get_json()
+    assert missing_ref.get_json()["ref"] == "main"
+
     bad = client.post("/api/tool/update", json={"ref": "main;id"})
     assert bad.status_code == 400
+    typed = client.post("/api/tool/update", json={"ref": True})
+    assert typed.status_code == 400
+    assert "ref must be a JSON string" in typed.get_json()["error"]
 
 
 def test_tool_info_without_requirements(tmp_path: Path) -> None:
