@@ -90,13 +90,25 @@ docgen --repo github.com/acme/course-builder generate-all
 the checkout). `repo_root` in that yaml still points at the consumer so
 narration/scene prompts read *their* sources.
 
-### OpenAI / Cursor or Grok (xAI)
+### Where this runs (not Cursor-only)
 
-Default provider is **OpenAI Images / Chat** authenticated with
-**`CURSOR_API_KEY` first**, then `OPENAI_API_KEY`. Cursor Cloud often injects
-a `crsr_…` proxy into `OPENAI_API_KEY` that OpenAI rejects; docgen skips it.
+The same `docgen` CLI runs in **Cursor Cloud automation**, **local Cursor**,
+and **Claude Code / Copilot / a plain shell**. It is not an editor plugin.
+`docgen ai-status` prints the resolved provider and which env var supplied
+the key (never the secret).
 
-Image models stay the same knob as before — they are **not** remapped when
+| Host | What to set |
+|---|---|
+| Cursor Cloud | `CURSOR_API_KEY` is injected. Cloud `OPENAI_API_KEY=crsr_…` is skipped. |
+| Local Cursor | `OPENAI_API_KEY` in `.env` (or `CURSOR_API_KEY` if you have one). |
+| Claude Code / Copilot / CI | `OPENAI_API_KEY` in `.env`. Or only `ANTHROPIC_API_KEY` for **chat** (`narration-generate`, `scene-spec-generate`). TTS and images still need OpenAI or Grok. |
+| Optional Grok | `ai.provider: grok` and `XAI_API_KEY`. |
+
+Default provider is OpenAI Chat/Images. Auth order: **`CURSOR_API_KEY`**, then
+`OPENAI_API_KEY`. If neither is usable and `ANTHROPIC_API_KEY` is set, chat
+switches to Claude automatically.
+
+Image models stay the same knob as OpenAI — they are **not** remapped when
 using the Cursor key:
 
 ```yaml
@@ -107,6 +119,7 @@ image_generation:
 ```
 
 ```bash
+docgen ai-status
 docgen image-generate --all --model gpt-image-1
 docgen image-generate --all --model dall-e-3 --size 1024x1024
 ```
@@ -115,7 +128,7 @@ To substitute **Grok** for chat, TTS, Whisper, and image calls:
 
 ```yaml
 ai:
-  provider: grok          # openai | grok
+  provider: grok          # openai | grok | anthropic
 ```
 
 ```bash
@@ -131,9 +144,10 @@ STT use xAI `POST /v1/tts` and `POST /v1/stt`. Keep `timestamps.engine: local`
 unless you specifically want network STT.
 
 A Cursor Cloud environment that already has ffmpeg / tesseract / Manim build
-deps can run the full pipeline using the injected **`CURSOR_API_KEY`**. Optional:
-add `OPENAI_API_KEY` or `XAI_API_KEY` as an environment secret (and grant the
-consumer as a repository dependency if you clone by URL).
+deps can run the full pipeline using the injected **`CURSOR_API_KEY`**. Local
+Cursor and Claude Code use `.env` (`OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` for
+chat). Optional: `XAI_API_KEY` for Grok. Grant the consumer as a repository
+dependency if you clone by URL.
 
 ## Install (external tool — do not vendor into project `src/`)
 
@@ -246,7 +260,7 @@ your IDE or CI) is **not** replaced by the file. To make the file win, set
 environment, or **`DOCGEN_ENV_OVERRIDES=OPENAI_API_KEY,OTHER_KEY`** for specific
 keys only.
 
-When `CURSOR_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` is present in both the shell and `env_file`,
+When `CURSOR_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, or `ANTHROPIC_API_KEY` is present in both the shell and `env_file`,
 docgen prints a one-line hint to stderr so a silent 401 from the wrong key is
 easier to diagnose.
 

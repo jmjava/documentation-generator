@@ -216,7 +216,7 @@ def run_wizard(
         click.echo(f"  Found .env: {plan.env_file_rel}")
     else:
         env_input = click.prompt(
-            "  Path to .env (for OPENAI_API_KEY / XAI_API_KEY, blank to skip)",
+            "  Path to .env (for OPENAI_API_KEY / CURSOR_API_KEY / ANTHROPIC_API_KEY / XAI_API_KEY, blank to skip)",
             default="", type=str,
         )
         if env_input:
@@ -514,10 +514,15 @@ def _write_bundle_readme(plan: InitPlan) -> str:
 
         ## API keys
 
-        Default provider is OpenAI Images / Chat. Auth prefers
-        ``CURSOR_API_KEY``, then ``OPENAI_API_KEY``. Pick the image model
-        with ``image_generation.model`` (same names as OpenAI:
-        ``gpt-image-1``, ``dall-e-3``, …) or ``docgen image-generate --model``.
+        Same CLI in Cursor Cloud, local Cursor, Claude Code, Copilot, or CI.
+        Run ``docgen ai-status`` to see which key will be used.
+
+        - Cursor Cloud: injected ``CURSOR_API_KEY``.
+        - Local Cursor / Claude Code / CI: ``OPENAI_API_KEY`` in ``.env``.
+        - Chat-only with Claude: ``ANTHROPIC_API_KEY`` (TTS/images still need
+          OpenAI or Grok).
+        - Image model: ``image_generation.model`` (``gpt-image-1``, ``dall-e-3``,
+          …) or ``docgen image-generate --model``.
         To use Grok / xAI instead:
 
         ```bash

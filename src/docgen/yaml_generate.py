@@ -109,7 +109,7 @@ def merge_defaults(
     if ai is None:
         raw["ai"] = {"provider": "openai"}
         changes.append(
-            "ai: added provider openai (set grok / DOCGEN_AI_PROVIDER=grok to use xAI)"
+            "ai: added provider openai (grok / anthropic via DOCGEN_AI_PROVIDER or ANTHROPIC_API_KEY)"
         )
     elif isinstance(ai, dict) and not str(ai.get("provider") or "").strip():
         ai["provider"] = "openai"

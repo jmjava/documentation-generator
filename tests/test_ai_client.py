@@ -36,11 +36,12 @@ def test_default_provider_is_openai(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     monkeypatch.delenv("CURSOR_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     cfg = _cfg(tmp_path, {})
     st = resolve_ai_settings(cfg)
     assert st.provider == "openai"
     assert st.base_url is None
-    assert st.api_key_env == "CURSOR_API_KEY"
+    assert st.api_key_env == "OPENAI_API_KEY"
     assert st.api_key is None
 
 
@@ -95,15 +96,24 @@ def test_openai_client_grok_passes_base_url(
     assert captured["base_url"] == GROK_BASE_URL
 
 
-def test_openai_client_default_no_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openai_client_raises_without_usable_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("CURSOR_API_KEY", raising=False)
     monkeypatch.delenv("XAI_API_KEY", raising=False)
-    with patch("openai.OpenAI") as m:
-        m.return_value = MagicMock()
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="No usable API key"):
         openai_client(None)
-    m.assert_called_once_with()
+
+
+def test_openai_client_does_not_fall_back_to_crsr_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "crsr_cloud_proxy")
+    with pytest.raises(RuntimeError, match="No usable API key"):
+        openai_client(_cfg(tmp_path, {"ai": {"provider": "openai"}}))
 
 
 def test_chat_completion_uses_remapped_model(
@@ -144,7 +154,7 @@ def test_grok_tts_posts_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     cfg = _cfg(tmp_path, {"tts": {"voice": "coral", "language": "en"}})
     out = tmp_path / "n.mp3"
 
-    def _http(url: str, *, data: bytes, headers: dict) -> bytes:
+    def _http(url: str, *, data: bytes, headers: dict, **_kwargs) -> bytes:
         assert url.endswith("/tts")
         payload = json.loads(data.decode())
         assert payload["voice_id"] == "eve"
@@ -238,3 +248,138 @@ def test_explicit_api_key_env_still_wins(
     st = resolve_ai_settings(cfg)
     assert st.api_key == "sk-openai"
     assert st.api_key_env == "OPENAI_API_KEY"
+
+
+def test_anthropic_only_key_selects_claude_chat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.provider == "anthropic"
+    assert st.is_anthropic
+    assert st.api_key == "sk-ant-test"
+    assert st.supports_tts is False
+    assert st.supports_images is False
+    from docgen.ai_client import DEFAULT_ANTHROPIC_CHAT_MODEL
+
+    assert resolve_chat_model("gpt-4o-mini", st) == DEFAULT_ANTHROPIC_CHAT_MODEL
+
+
+def test_cursor_key_beats_anthropic_for_default_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.provider == "openai"
+    assert st.api_key_env == "CURSOR_API_KEY"
+
+
+def test_anthropic_chat_posts_messages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from docgen.ai_client import DEFAULT_ANTHROPIC_CHAT_MODEL
+
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    cfg = _cfg(tmp_path, {})
+    captured: dict = {}
+
+    def _http(url: str, *, data: bytes, headers: dict, **_kwargs) -> bytes:
+        captured["url"] = url
+        captured["headers"] = headers
+        payload = json.loads(data.decode())
+        captured["payload"] = payload
+        return json.dumps(
+            {"content": [{"type": "text", "text": "spoken script"}]}
+        ).encode()
+
+    with patch("docgen.ai_client._http_with_retries", side_effect=_http):
+        out = chat_completion(
+            system_prompt="sys",
+            user_message="user",
+            model="gpt-4o-mini",
+            temperature=0.2,
+            cfg=cfg,
+        )
+    assert out == "spoken script"
+    assert captured["url"].endswith("/v1/messages")
+    assert captured["headers"]["x-api-key"] == "sk-ant-test"
+    assert captured["payload"]["model"] == DEFAULT_ANTHROPIC_CHAT_MODEL
+
+
+def test_anthropic_tts_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    with pytest.raises(RuntimeError, match="no TTS"):
+        synthesize_speech(
+            text="Hello",
+            model="gpt-4o-mini-tts",
+            voice="coral",
+            instructions="",
+            output_path=tmp_path / "n.mp3",
+            cfg=_cfg(tmp_path, {}),
+        )
+
+
+def test_init_yaml_openai_still_falls_back_to_anthropic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    st = resolve_ai_settings(_cfg(tmp_path, {"ai": {"provider": "openai"}}))
+    assert st.provider == "anthropic"
+    assert st.api_key_env == "ANTHROPIC_API_KEY"
+
+
+def test_explicit_env_openai_does_not_fall_back_to_anthropic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "openai")
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    st = resolve_ai_settings(_cfg(tmp_path, {"ai": {"provider": "openai"}}))
+    assert st.provider == "openai"
+    assert st.api_key is None
+
+
+def test_anthropic_empty_content_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    with patch(
+        "docgen.ai_client._http_with_retries",
+        return_value=json.dumps({"content": []}).encode(),
+    ):
+        with pytest.raises(RuntimeError, match="no text content"):
+            chat_completion(
+                system_prompt="s",
+                user_message="u",
+                model="claude-sonnet-4-5",
+                temperature=0.1,
+                cfg=_cfg(tmp_path, {}),
+            )
+
+
+def test_pipeline_fails_fast_when_provider_has_no_tts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from docgen.pipeline import Pipeline
+
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    cfg = _cfg(tmp_path, {"ai": {"provider": "openai"}})
+    with pytest.raises(RuntimeError, match="needs TTS"):
+        Pipeline(cfg).run(skip_manim=True, skip_scene_retime=True)

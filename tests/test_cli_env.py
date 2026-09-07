@@ -80,3 +80,21 @@ def test_load_env_docgen_env_overrides_selected_keys(tmp_path, monkeypatch) -> N
 
     assert os.environ["OPENAI_API_KEY"] == "sk-from-file"
     assert os.environ["KEEP_ME"] == "from-shell"
+
+
+def test_ai_status_exits_zero_when_cursor_key_present(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-test")
+    monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
+    cfg = _minimal_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(cfg.yaml_path), "ai-status"])
+    assert result.exit_code == 0, result.output
+    assert "provider=openai" in result.output
+    assert "CURSOR_API_KEY=present" in result.output
+    assert "not tied to one IDE" in result.output

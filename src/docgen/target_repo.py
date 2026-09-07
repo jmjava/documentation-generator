@@ -137,6 +137,7 @@ def resolve_repo(
     url = normalize_git_url(raw)
     dest = (cache_dir or default_cache_dir()) / repo_cache_name(url)
     if (dest / ".git").exists():
+        _try_update_cached_clone(dest, url)
         return dest.resolve()
     if dest.exists() and any(dest.iterdir()):
         raise TargetRepoError(
@@ -147,22 +148,36 @@ def resolve_repo(
     return dest.resolve()
 
 
+def _git_auth_env(url: str) -> dict[str, str]:
+    """Put a GitHub token in the child env, not on the argv that ``ps`` shows."""
+    env = os.environ.copy()
+    token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if token and "github.com" in url and url.startswith("https://"):
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = f"url.https://x-access-token:{token}@github.com/.insteadOf"
+        env["GIT_CONFIG_VALUE_0"] = "https://github.com/"
+    return env
+
+
+def _try_update_cached_clone(dest: Path, url: str) -> None:
+    """Best-effort ``git fetch`` so a reused ``DOCGEN_REPO_CACHE`` is not forever stale."""
+    try:
+        subprocess.run(
+            ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=_git_auth_env(url),
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return
+
+
 def clone_git_repo(url: str, dest: Path) -> None:
     """Shallow-clone ``url`` into ``dest`` (uses GITHUB_TOKEN / GH_TOKEN when set)."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["git", "clone", "--depth", "1", url, str(dest)]
-    token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
-    if token and "github.com" in url and url.startswith("https://"):
-        cmd = [
-            "git",
-            "-c",
-            f"url.https://x-access-token:{token}@github.com/.insteadOf=https://github.com/",
-            "clone",
-            "--depth",
-            "1",
-            url,
-            str(dest),
-        ]
     try:
         subprocess.run(
             cmd,
@@ -170,6 +185,7 @@ def clone_git_repo(url: str, dest: Path) -> None:
             capture_output=True,
             text=True,
             timeout=300,
+            env=_git_auth_env(url),
         )
     except FileNotFoundError as exc:
         raise TargetRepoError("git is not installed; cannot clone --repo") from exc

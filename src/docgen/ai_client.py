@@ -1,25 +1,29 @@
-"""OpenAI-compatible AI client with first-class xAI / Grok support.
+"""AI client used by narration, scene-spec, TTS, STT, and images.
 
-Chat completions and (most) image generation go through the official
-``openai`` SDK. xAI speaks that protocol at ``https://api.x.ai/v1``, so
-switching providers is ``base_url`` + key + model aliases.
+The CLI is **not** tied to Cursor. The same commands run in:
 
-TTS and speech-to-text are **not** drop-in compatible: OpenAI uses
-``/v1/audio/speech`` and ``whisper-1``; xAI uses ``POST /v1/tts`` and
-``POST /v1/stt``. Those paths are adapted here so ``docgen tts`` /
-``timestamps --engine whisper`` keep working.
+* Cursor Cloud automation (``CURSOR_API_KEY`` is injected)
+* local Cursor (``.env`` ``OPENAI_API_KEY``, or ``CURSOR_API_KEY``)
+* Claude Code / Copilot / plain shell (``.env`` ``OPENAI_API_KEY``, or
+  ``ANTHROPIC_API_KEY`` for chat, or ``XAI_API_KEY`` for Grok)
 
-Resolution order for ``ai.provider``:
+Chat + images for OpenAI/Grok go through the ``openai`` SDK. xAI is
+``base_url=https://api.x.ai/v1`` plus model aliases. Anthropic chat uses
+``POST https://api.anthropic.com/v1/messages`` (no TTS/images there).
 
-1. ``DOCGEN_AI_PROVIDER`` (``openai`` or ``grok`` / ``xai``)
+TTS/STT: OpenAI ``/v1/audio/speech`` + ``whisper-1``, or xAI ``/v1/tts``
+and ``/v1/stt``.
+
+Provider resolution:
+
+1. ``DOCGEN_AI_PROVIDER``
 2. ``ai.provider`` in ``docgen.yaml``
-3. default ``openai`` (unchanged behaviour)
+3. If a usable Cursor/OpenAI key exists → ``openai``
+4. Else if ``ANTHROPIC_API_KEY`` is set → ``anthropic``
+5. Else ``openai`` (error text then lists every key)
 
-OpenAI-provider auth prefers ``CURSOR_API_KEY``, then ``OPENAI_API_KEY``.
-Cursor Cloud often injects a ``crsr_`` proxy into ``OPENAI_API_KEY`` that
-the OpenAI API rejects; those values are skipped. Grok auth reads
-``XAI_API_KEY``, then a usable ``OPENAI_API_KEY``. ``ai.api_key_env`` /
-``DOCGEN_AI_API_KEY_ENV`` still override the default name.
+OpenAI-provider keys: ``CURSOR_API_KEY`` first, then ``OPENAI_API_KEY``.
+Cursor Cloud's ``crsr_`` ``OPENAI_API_KEY`` proxy is skipped.
 """
 
 from __future__ import annotations
@@ -39,13 +43,17 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 GROK_BASE_URL = "https://api.x.ai/v1"
+ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_GROK_CHAT_MODEL = "grok-4.6"
 DEFAULT_GROK_IMAGE_MODEL = "grok-imagine-image-2.0"
 DEFAULT_GROK_TTS_VOICE = "eve"
 DEFAULT_GROK_TTS_LANGUAGE = "en"
+DEFAULT_ANTHROPIC_CHAT_MODEL = "claude-sonnet-4-5"
 GROK_TTS_MAX_CHARS = 15_000
 
 _GROK_PROVIDERS = frozenset({"grok", "xai", "x.ai"})
+_ANTHROPIC_PROVIDERS = frozenset({"anthropic", "claude", "claude-code"})
 _OPENAI_PROVIDERS = frozenset({"openai", "oai", ""})
 
 # Existing yaml/init defaults keep OpenAI model names; remap at call time.
@@ -57,6 +65,16 @@ _GROK_CHAT_ALIASES = {
     "gpt-4.1-nano": DEFAULT_GROK_CHAT_MODEL,
     "gpt-4": DEFAULT_GROK_CHAT_MODEL,
     "gpt-3.5-turbo": DEFAULT_GROK_CHAT_MODEL,
+}
+
+_ANTHROPIC_CHAT_ALIASES = {
+    "gpt-4o": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-4o-mini": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-4.1": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-4.1-mini": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-4.1-nano": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-4": DEFAULT_ANTHROPIC_CHAT_MODEL,
+    "gpt-3.5-turbo": DEFAULT_ANTHROPIC_CHAT_MODEL,
 }
 
 _GROK_IMAGE_ALIASES = {
@@ -81,7 +99,7 @@ _OPENAI_TO_GROK_VOICE = {
     "verse": "sal",
 }
 
-_API_KEY_ENVS = ("CURSOR_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY")
+_API_KEY_ENVS = ("CURSOR_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "ANTHROPIC_API_KEY")
 _CURSOR_CLOUD_PROXY_PREFIX = "crsr_"
 _MAX_HTTP_ATTEMPTS = 10
 _BASE_DELAY_SEC = 1.0
@@ -90,7 +108,7 @@ _MAX_BACKOFF_SEC = 120.0
 
 @dataclass(frozen=True)
 class AISettings:
-    provider: str  # "openai" | "grok"
+    provider: str  # "openai" | "grok" | "anthropic"
     base_url: str | None
     api_key: str | None
     api_key_env: str
@@ -100,15 +118,27 @@ class AISettings:
     def is_grok(self) -> bool:
         return self.provider == "grok"
 
+    @property
+    def is_anthropic(self) -> bool:
+        return self.provider == "anthropic"
+
+    @property
+    def supports_tts(self) -> bool:
+        return self.provider in {"openai", "grok"}
+
+    @property
+    def supports_images(self) -> bool:
+        return self.provider in {"openai", "grok"}
+
     def auth_help(self) -> str:
-        if self.is_grok:
-            return (
-                f"Set {self.api_key_env} (xAI / Grok), or OPENAI_API_KEY, "
-                "and ai.provider: grok / DOCGEN_AI_PROVIDER=grok."
-            )
         return (
-            "Set CURSOR_API_KEY (preferred) or OPENAI_API_KEY. "
-            "Cursor Cloud's crsr_ OPENAI_API_KEY proxy is skipped."
+            "docgen is not tied to one IDE. Set a key for your host: "
+            "CURSOR_API_KEY (Cursor Cloud automation, injected), "
+            "OPENAI_API_KEY (local Cursor, Claude Code, Copilot, CI .env), "
+            "ANTHROPIC_API_KEY (Claude chat; ai.provider: anthropic, or auto "
+            "when no OpenAI/Cursor key is present — TTS/images still need "
+            "OpenAI or Grok), "
+            "XAI_API_KEY (Grok; ai.provider: grok)."
         )
 
 
@@ -116,11 +146,13 @@ def normalize_provider(raw: str | None) -> str:
     value = (raw or "").strip().lower()
     if value in _GROK_PROVIDERS:
         return "grok"
+    if value in _ANTHROPIC_PROVIDERS:
+        return "anthropic"
     if value in _OPENAI_PROVIDERS:
         return "openai"
     raise ValueError(
-        f"Unknown AI provider {raw!r}; use 'openai' or 'grok' "
-        "(aliases: xai, x.ai)."
+        f"Unknown AI provider {raw!r}; use 'openai', 'grok', or 'anthropic' "
+        "(aliases: xai, x.ai, claude, claude-code)."
     )
 
 
@@ -133,25 +165,25 @@ def _usable_secret(name: str) -> str | None:
     """Return a key that the target HTTP API can actually accept.
 
     Cursor Cloud injects ``OPENAI_API_KEY=crsr_…``; OpenAI's API 401s that
-    token. Skip it so ``CURSOR_API_KEY`` (``sk-proj-…``) can win.
+    token. Skip ``crsr_`` values so ``CURSOR_API_KEY`` / ``.env`` can win.
     """
     value = _env_secret(name)
     if not value:
         return None
-    if name == "OPENAI_API_KEY" and value.lower().startswith(_CURSOR_CLOUD_PROXY_PREFIX):
+    if value.lower().startswith(_CURSOR_CLOUD_PROXY_PREFIX):
         return None
     return value
 
 
 def _pick_api_key(provider: str, *, explicit_env: str) -> tuple[str | None, str]:
-    """Return ``(api_key, env_name)``. OpenAI provider: Cursor key first."""
+    """Return ``(api_key, env_name)`` for the resolved provider."""
     if explicit_env:
         key = _usable_secret(explicit_env)
         if key:
             return key, explicit_env
-        # Explicit OPENAI_API_KEY that is a crsr_ proxy: fall through.
-        if not (_env_secret(explicit_env) and not key):
+        if not _env_secret(explicit_env):
             return None, explicit_env
+        # Present but unusable (crsr_ proxy): fall through to the provider chain.
 
     if provider == "grok":
         for name in ("XAI_API_KEY", "OPENAI_API_KEY"):
@@ -160,11 +192,24 @@ def _pick_api_key(provider: str, *, explicit_env: str) -> tuple[str | None, str]
                 return key, name
         return None, "XAI_API_KEY"
 
+    if provider == "anthropic":
+        key = _usable_secret("ANTHROPIC_API_KEY")
+        return key, "ANTHROPIC_API_KEY"
+
     for name in ("CURSOR_API_KEY", "OPENAI_API_KEY"):
         key = _usable_secret(name)
         if key:
             return key, name
-    return None, "CURSOR_API_KEY"
+    return None, "OPENAI_API_KEY"
+
+
+def _implicit_provider() -> str:
+    """When yaml/env omit provider: OpenAI if a Cursor/OpenAI key exists, else Anthropic."""
+    if _usable_secret("CURSOR_API_KEY") or _usable_secret("OPENAI_API_KEY"):
+        return "openai"
+    if _usable_secret("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    return "openai"
 
 
 def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
@@ -183,7 +228,15 @@ def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
 
     env_provider = (os.environ.get("DOCGEN_AI_PROVIDER") or "").strip()
     yaml_provider = str(block.get("provider") or "").strip()
-    provider = normalize_provider(env_provider or yaml_provider or "openai")
+    if env_provider:
+        provider = normalize_provider(env_provider)
+    elif yaml_provider:
+        named = normalize_provider(yaml_provider)
+        # ``docgen init`` always writes ``ai.provider: openai``. Treat that as a
+        # default so Claude Code users with only ANTHROPIC_API_KEY still get chat.
+        provider = _implicit_provider() if named == "openai" else named
+    else:
+        provider = _implicit_provider()
 
     env_base = (os.environ.get("DOCGEN_AI_BASE_URL") or "").strip()
     yaml_base = str(block.get("base_url") or "").strip()
@@ -193,6 +246,8 @@ def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
         base_url = yaml_base
     elif provider == "grok":
         base_url = GROK_BASE_URL
+    elif provider == "anthropic":
+        base_url = "https://api.anthropic.com"
     else:
         base_url = None
 
@@ -210,14 +265,27 @@ def resolve_ai_settings(cfg: "Config | None" = None) -> AISettings:
     )
 
 
+def require_api_key(settings: AISettings) -> str:
+    """Return the resolved secret, or raise before the SDK can pick a ``crsr_`` env fallback."""
+    if settings.api_key:
+        return settings.api_key
+    raise RuntimeError(
+        f"No usable API key for provider {settings.provider!r} "
+        f"(looked at {settings.api_key_env}). {settings.auth_help()}"
+    )
+
+
 def openai_client(cfg: "Config | None" = None) -> Any:
     """Return an ``openai.OpenAI`` client, optionally pointed at xAI."""
     import openai
 
     settings = resolve_ai_settings(cfg)
-    kwargs: dict[str, str] = {}
-    if settings.api_key:
-        kwargs["api_key"] = settings.api_key
+    if settings.is_anthropic:
+        raise RuntimeError(
+            "The OpenAI SDK is not used for Anthropic. Call chat_completion() "
+            f"for Claude chat. {settings.auth_help()}"
+        )
+    kwargs: dict[str, str] = {"api_key": require_api_key(settings)}
     if settings.base_url:
         kwargs["base_url"] = settings.base_url
     return openai.OpenAI(**kwargs)
@@ -226,15 +294,24 @@ def openai_client(cfg: "Config | None" = None) -> Any:
 def resolve_chat_model(model: str, settings: AISettings | None = None, *, cfg: "Config | None" = None) -> str:
     chosen = (model or "").strip()
     st = settings or resolve_ai_settings(cfg)
-    if not st.is_grok:
+    if st.is_grok:
+        if not chosen:
+            return DEFAULT_GROK_CHAT_MODEL
+        aliased = _GROK_CHAT_ALIASES.get(chosen)
+        if aliased:
+            return aliased
+        if chosen.lower().startswith("gpt-"):
+            return DEFAULT_GROK_CHAT_MODEL
         return chosen
-    if not chosen:
-        return DEFAULT_GROK_CHAT_MODEL
-    aliased = _GROK_CHAT_ALIASES.get(chosen)
-    if aliased:
-        return aliased
-    if chosen.lower().startswith("gpt-"):
-        return DEFAULT_GROK_CHAT_MODEL
+    if st.is_anthropic:
+        if not chosen:
+            return DEFAULT_ANTHROPIC_CHAT_MODEL
+        aliased = _ANTHROPIC_CHAT_ALIASES.get(chosen)
+        if aliased:
+            return aliased
+        if chosen.lower().startswith("gpt-"):
+            return DEFAULT_ANTHROPIC_CHAT_MODEL
+        return chosen
     return chosen
 
 
@@ -271,12 +348,21 @@ def chat_completion(
     temperature: float,
     cfg: "Config | None" = None,
 ) -> str:
-    """Chat completions via the OpenAI SDK (OpenAI or xAI Grok)."""
+    """Chat completions via OpenAI, xAI Grok, or Anthropic Claude."""
+    settings = resolve_ai_settings(cfg)
+    resolved = resolve_chat_model(model, settings)
+    if settings.is_anthropic:
+        return _anthropic_chat(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=resolved,
+            temperature=temperature,
+            settings=settings,
+        )
+
     import openai
 
-    settings = resolve_ai_settings(cfg)
     client = openai_client(cfg)
-    resolved = resolve_chat_model(model, settings)
     try:
         response = client.chat.completions.create(
             model=resolved,
@@ -313,6 +399,12 @@ def synthesize_speech(
 ) -> None:
     """Write MP3 bytes for ``text`` using OpenAI TTS or xAI ``/v1/tts``."""
     settings = resolve_ai_settings(cfg)
+    if settings.is_anthropic:
+        raise RuntimeError(
+            "Anthropic has no TTS API. Use OPENAI_API_KEY / CURSOR_API_KEY "
+            "(ai.provider: openai) or XAI_API_KEY (ai.provider: grok) for "
+            f"`docgen tts`. {settings.auth_help()}"
+        )
     if settings.is_grok:
         _grok_tts(
             text=text,
@@ -342,6 +434,11 @@ def synthesize_speech(
 def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> dict[str, Any]:
     """Return Whisper-shaped ``{text, segments, words}`` from OpenAI or xAI STT."""
     settings = resolve_ai_settings(cfg)
+    if settings.is_anthropic:
+        raise RuntimeError(
+            "Anthropic has no speech-to-text API. Keep timestamps.engine: local "
+            f"(offline) or use OpenAI/Grok for whisper. {settings.auth_help()}"
+        )
     if settings.is_grok:
         return _grok_stt(Path(audio_path), settings)
 
@@ -374,7 +471,78 @@ def fetch_url_bytes(url: str, *, timeout: int = 120) -> bytes:
 
 
 def _vendor(settings: AISettings) -> str:
-    return "xAI" if settings.is_grok else "OpenAI"
+    if settings.is_grok:
+        return "xAI"
+    if settings.is_anthropic:
+        return "Anthropic"
+    return "OpenAI"
+
+
+def detect_host() -> str:
+    if (os.environ.get("CURSOR_AGENT") or "").strip() == "1":
+        return "cursor-cloud"
+    if (os.environ.get("CLAUDECODE") or os.environ.get("CLAUDE_CODE") or "").strip():
+        return "claude-code"
+    return "generic"
+
+
+def format_ai_status_line(settings: AISettings | None = None, *, cfg: "Config | None" = None) -> str:
+    st = settings or resolve_ai_settings(cfg)
+    present = "present" if st.api_key else "missing"
+    host = detect_host()
+    return (
+        f"[docgen] AI provider={st.provider} {st.api_key_env}={present} "
+        f"chat=yes tts={'yes' if st.supports_tts else 'no'} "
+        f"images={'yes' if st.supports_images else 'no'} host={host}"
+    )
+
+
+def echo_ai_status(cfg: "Config | None" = None) -> None:
+    """Print resolved provider/key (no secret) to stderr."""
+    import click
+
+    click.echo(format_ai_status_line(cfg=cfg), err=True)
+
+
+def _anthropic_chat(
+    *,
+    system_prompt: str,
+    user_message: str,
+    model: str,
+    temperature: float,
+    settings: AISettings,
+) -> str:
+    if not settings.api_key:
+        raise RuntimeError(f"Anthropic chat needs ANTHROPIC_API_KEY. {settings.auth_help()}")
+    payload = {
+        "model": model,
+        "max_tokens": 8192,
+        "temperature": float(temperature),
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_message}],
+    }
+    raw = _http_json(
+        ANTHROPIC_MESSAGES_URL,
+        payload,
+        settings=settings,
+        accept="application/json",
+        extra_headers={
+            "x-api-key": settings.api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+        },
+        error_label="Anthropic",
+        skip_bearer=True,
+    )
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Anthropic chat returned non-JSON: {raw[:200]!r}") from exc
+    blocks = data.get("content") or []
+    texts = [b.get("text") or "" for b in blocks if isinstance(b, dict)]
+    text = "".join(texts).strip()
+    if not text:
+        raise RuntimeError("Anthropic chat returned no text content.")
+    return text
 
 
 def _grok_tts(
@@ -398,7 +566,7 @@ def _grok_tts(
         "language": language or DEFAULT_GROK_TTS_LANGUAGE,
     }
     body = _http_json(
-        f"{settings.base_url.rstrip('/')}/tts",
+        f"{(settings.base_url or GROK_BASE_URL).rstrip('/')}/tts",
         payload,
         settings=settings,
         accept="audio/mpeg",
@@ -411,7 +579,7 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     if not settings.api_key:
         raise RuntimeError(f"xAI STT needs an API key. {settings.auth_help()}")
     data = _http_multipart(
-        f"{settings.base_url.rstrip('/')}/stt",
+        f"{(settings.base_url or GROK_BASE_URL).rstrip('/')}/stt",
         fields={"language": settings.tts_language or DEFAULT_GROK_TTS_LANGUAGE},
         filename=audio_path.name,
         file_bytes=audio_path.read_bytes(),
@@ -462,14 +630,20 @@ def _http_json(
     *,
     settings: AISettings,
     accept: str = "application/json",
+    extra_headers: dict[str, str] | None = None,
+    skip_bearer: bool = False,
+    error_label: str = "xAI",
 ) -> bytes:
     data = json.dumps(payload).encode("utf-8")
     headers = {
-        "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
         "Accept": accept,
     }
-    return _http_with_retries(url, data=data, headers=headers)
+    if not skip_bearer:
+        headers["Authorization"] = f"Bearer {settings.api_key}"
+    if extra_headers:
+        headers.update(extra_headers)
+    return _http_with_retries(url, data=data, headers=headers, error_label=error_label)
 
 
 def _http_multipart(
@@ -500,10 +674,12 @@ def _http_multipart(
         "Content-Type": f"multipart/form-data; boundary={boundary}",
         "Accept": "application/json",
     }
-    return _http_with_retries(url, data=body, headers=headers)
+    return _http_with_retries(url, data=body, headers=headers, error_label="xAI")
 
 
-def _http_with_retries(url: str, *, data: bytes, headers: dict[str, str]) -> bytes:
+def _http_with_retries(
+    url: str, *, data: bytes, headers: dict[str, str], error_label: str = "xAI"
+) -> bytes:
     last_exc: BaseException | None = None
     for attempt in range(_MAX_HTTP_ATTEMPTS):
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -519,11 +695,11 @@ def _http_with_retries(url: str, *, data: bytes, headers: dict[str, str]) -> byt
                 continue
             detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
             raise RuntimeError(
-                f"xAI HTTP {exc.code} for {url}: {detail or exc.reason}"
+                f"{error_label} HTTP {exc.code} for {url}: {detail or exc.reason}"
             ) from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(f"xAI connection error for {url}: {exc}") from exc
-    raise RuntimeError(f"xAI request failed after retries: {last_exc}")
+            raise RuntimeError(f"{error_label} connection error for {url}: {exc}") from exc
+    raise RuntimeError(f"{error_label} request failed after retries: {last_exc}")
 
 
 def _retry_delay_sec(retry_after: str | None, attempt: int) -> float:
