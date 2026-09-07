@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[av-sync-scene-spec.md](av-sync-scene-spec.md)** —
-Unreadable `*.scene.yaml` must fail `av_sync`, not fall back to transcript nouns.
+**Active:** **[tts-empty-audio.md](tts-empty-audio.md)** —
+TTS must not succeed with an empty mp3; `tts.model` / `voice` / `instructions`
+must be YAML strings.
 
 **Shipped:**
+- **[av-sync-scene-spec.md](av-sync-scene-spec.md)** —
+  Unreadable `*.scene.yaml` must fail `av_sync`, not fall back to transcript
+  nouns (#98).
 - **[layout-check-errors.md](layout-check-errors.md)** —
   Manim layout check crashes must fail, not skip as success (#97).
 - **[manim-unsafe-unicode.md](manim-unsafe-unicode.md)** —

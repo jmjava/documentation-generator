@@ -378,3 +378,27 @@ def test_from_yaml_string_manim_unsafe_unicode_raises(tmp_path: Path) -> None:
     p.write_text("manim:\n  unsafe_unicode: \"\\u2192\"\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="manim.unsafe_unicode must be a YAML list"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_list_tts_instructions_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "tts:\n  instructions:\n    - Speak calmly\n    - Pronounce YAML as camel\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="tts.instructions must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_tts_voice_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("tts:\n  voice:\n    - coral\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="tts.voice must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_tts_model_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("tts:\n  model:\n    - gpt-4o-mini-tts\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="tts.model must be a YAML string"):
+        Config.from_yaml(p)

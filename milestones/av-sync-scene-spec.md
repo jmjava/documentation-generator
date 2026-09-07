@@ -1,7 +1,7 @@
 # Milestone: av_sync must not skip unreadable scene specs
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #98  
 **Depends on:** `milestones/layout-check-errors.md` (PR #97),
 `milestones/validate-fail-closed.md`
 
