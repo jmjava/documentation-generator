@@ -125,8 +125,10 @@ def main(
     Point at a consumer project with ``--repo PATH_OR_URL`` (or ``DOCGEN_REPO``);
     do not vendor this library into that repo's ``src/``. Environment: keys
     already set in the shell are not replaced by ``env_file`` (see
-    ``DOCGEN_ENV_OVERRIDES``). LLM / TTS / image calls use OpenAI by default;
-    set ``ai.provider: grok`` or ``DOCGEN_AI_PROVIDER=grok`` plus ``XAI_API_KEY``
+    ``DOCGEN_ENV_OVERRIDES``). LLM / TTS / image calls use OpenAI by default
+    (``CURSOR_API_KEY`` first, then ``OPENAI_API_KEY``). Image model is
+    ``image_generation.model`` / ``image-generate --model``. Set
+    ``ai.provider: grok`` or ``DOCGEN_AI_PROVIDER=grok`` plus ``XAI_API_KEY``
     to use xAI.
     """
     ctx.ensure_object(dict)
@@ -562,7 +564,8 @@ def narration_generate(
     """Generate or revise narration ``.md`` from repo sources + owner hints via chat completions.
 
     Configure ``narration_from_source`` in docgen.yaml (context paths/globs, hints, model).
-    Requires ``OPENAI_API_KEY``, or ``XAI_API_KEY`` with ``ai.provider: grok``.
+    Requires ``CURSOR_API_KEY`` (preferred) or ``OPENAI_API_KEY``, or
+    ``XAI_API_KEY`` with ``ai.provider: grok``.
 
     Use ``--segment <id>`` to drive a single segment, or ``--all`` to iterate
     every id in ``segments.all`` (used by full-reset orchestration).
@@ -974,7 +977,11 @@ def scene_spec_generate_cmd(
 @click.option(
     "--model",
     default=None,
-    help="OpenAI image model override (default: image_generation.model in docgen.yaml, gpt-image-1).",
+    help=(
+        "Image model override (default: image_generation.model in docgen.yaml, "
+        "gpt-image-1). With the Cursor/OpenAI provider this is passed through "
+        "to the Images API; Grok remaps gpt-image-* / dall-e-* to Imagine."
+    ),
 )
 @click.option(
     "--size",

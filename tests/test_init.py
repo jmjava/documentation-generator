@@ -106,6 +106,7 @@ def test_generate_files_minimal(tmp_path: Path) -> None:
     assert cfg["segments"]["all"] == ["01", "02"]
     assert cfg["segment_names"]["01"] == "01-intro"
     assert cfg["ai"]["provider"] == "openai"
+    assert cfg["image_generation"]["model"] == "gpt-image-1"
     assert "manim" not in cfg
     assert "vhs" not in cfg
     assert "test-project" in cfg["tts"]["instructions"]

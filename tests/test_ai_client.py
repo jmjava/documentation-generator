@@ -34,11 +34,14 @@ def _cfg(tmp_path: Path, raw: dict) -> Config:
 def test_default_provider_is_openai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
     monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     cfg = _cfg(tmp_path, {})
     st = resolve_ai_settings(cfg)
     assert st.provider == "openai"
     assert st.base_url is None
-    assert st.api_key_env == "OPENAI_API_KEY"
+    assert st.api_key_env == "CURSOR_API_KEY"
+    assert st.api_key is None
 
 
 def test_yaml_provider_grok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,6 +98,7 @@ def test_openai_client_grok_passes_base_url(
 def test_openai_client_default_no_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DOCGEN_AI_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     with patch("openai.OpenAI") as m:
         m.return_value = MagicMock()
@@ -190,3 +194,47 @@ def test_unknown_provider_raises() -> None:
         from docgen.ai_client import normalize_provider
 
         normalize_provider("ollama")
+
+
+def test_cursor_key_wins_over_openai_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.provider == "openai"
+    assert st.api_key == "sk-proj-cursor"
+    assert st.api_key_env == "CURSOR_API_KEY"
+    assert resolve_image_model("gpt-image-1", st) == "gpt-image-1"
+    assert resolve_image_model("dall-e-3", st) == "dall-e-3"
+
+
+def test_cursor_key_used_when_openai_is_crsr_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    monkeypatch.setenv("OPENAI_API_KEY", "crsr_cloud_proxy")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.api_key == "sk-proj-cursor"
+    assert st.api_key_env == "CURSOR_API_KEY"
+
+
+def test_openai_key_used_when_cursor_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    st = resolve_ai_settings(_cfg(tmp_path, {}))
+    assert st.api_key == "sk-openai"
+    assert st.api_key_env == "OPENAI_API_KEY"
+
+
+def test_explicit_api_key_env_still_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {"ai": {"api_key_env": "OPENAI_API_KEY"}})
+    st = resolve_ai_settings(cfg)
+    assert st.api_key == "sk-openai"
+    assert st.api_key_env == "OPENAI_API_KEY"

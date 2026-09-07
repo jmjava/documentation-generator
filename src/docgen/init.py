@@ -335,6 +335,10 @@ def _write_config(plan: InitPlan) -> str:
         "ai": {
             "provider": "openai",  # openai | grok (xAI; set XAI_API_KEY)
         },
+        "image_generation": {
+            "model": "gpt-image-1",  # Cursor/OpenAI Images; override with --model
+            "size": "1536x1024",
+        },
         "compose": {
             "ffmpeg_timeout_sec": 300,
         },
@@ -510,7 +514,11 @@ def _write_bundle_readme(plan: InitPlan) -> str:
 
         ## API keys
 
-        Default provider is OpenAI (``OPENAI_API_KEY``). To use Grok / xAI instead:
+        Default provider is OpenAI Images / Chat. Auth prefers
+        ``CURSOR_API_KEY``, then ``OPENAI_API_KEY``. Pick the image model
+        with ``image_generation.model`` (same names as OpenAI:
+        ``gpt-image-1``, ``dall-e-3``, …) or ``docgen image-generate --model``.
+        To use Grok / xAI instead:
 
         ```bash
         export DOCGEN_AI_PROVIDER=grok
