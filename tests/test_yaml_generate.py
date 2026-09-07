@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 from docgen.yaml_generate import (
     collect_hint_project_blocks,
     collect_hint_segment_declarations,
@@ -254,6 +254,51 @@ def test_discover_visual_map_skipped_when_disabled(tmp_path: Path) -> None:
     cfg = Config.from_yaml(tmp_path / "docgen.yaml")
     assert discover_visual_map(raw, cfg) == []
     assert raw["visual_map"]["01"]["scene"] == "KeepScene"
+
+
+def test_discover_visual_map_int_auto_visual_map_raises(tmp_path: Path) -> None:
+    """``0 is False`` is false — used to keep discovery on and rewrite visual_map."""
+    raw = {
+        "repo_root": ".",
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"all": ["01"], "default": ["01"]},
+        "discovery": {"auto_visual_map": True},
+        "visual_map": {"01": {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"}},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    cfg.raw["discovery"]["auto_visual_map"] = 0
+    with pytest.raises(ConfigError, match="discovery.auto_visual_map must be a YAML boolean"):
+        discover_visual_map(cfg.raw, cfg)
+    assert cfg.raw["visual_map"]["01"]["scene"] == "KeepScene"
+
+
+def test_merge_hint_declared_segments_string_false_raises(tmp_path: Path) -> None:
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"05\"\n    stem: 05-x\n---\n",
+        encoding="utf-8",
+    )
+    raw = {
+        "repo_root": ".",
+        "dirs": {"hints": "hints"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "discovery": {"merge_hint_segments": True},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    cfg.raw["discovery"]["merge_hint_segments"] = "false"
+    with pytest.raises(
+        ConfigError, match="discovery.merge_hint_segments must be a YAML boolean"
+    ):
+        merge_hint_declared_segments(cfg.raw, cfg)
+    assert cfg.raw["segments"]["all"] == ["01"]
 
 
 def test_discover_visual_map_preserves_still_and_fills_manim_slots(tmp_path: Path) -> None:

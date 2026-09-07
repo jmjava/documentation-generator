@@ -780,3 +780,41 @@ def test_from_yaml_empty_wizard_default_guidance_allowed(tmp_path: Path) -> None
     p.write_text('wizard:\n  default_guidance: ""\n', encoding="utf-8")
     c = Config.from_yaml(p)
     assert c.wizard_config["default_guidance"] == ""
+
+
+def test_from_yaml_int_auto_visual_map_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("discovery:\n  auto_visual_map: 0\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="discovery.auto_visual_map must be a YAML boolean"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_auto_visual_map_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text('discovery:\n  auto_visual_map: "false"\n', encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="discovery.auto_visual_map must be a YAML boolean"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_int_merge_hint_segments_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("discovery:\n  merge_hint_segments: 0\n", encoding="utf-8")
+    with pytest.raises(
+        ConfigError, match="discovery.merge_hint_segments must be a YAML boolean"
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_discovery_bools_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "discovery:\n  auto_visual_map: false\n  merge_hint_segments: true\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    assert c.raw["discovery"]["auto_visual_map"] is False
+    assert c.raw["discovery"]["merge_hint_segments"] is True

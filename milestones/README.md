@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-default-guidance.md](wizard-default-guidance.md)** —
-`wizard.default_guidance` must be a YAML string at config load.
+**Active:** **[discovery-bool-flags.md](discovery-bool-flags.md)** —
+`discovery.auto_visual_map` / `merge_hint_segments` must be YAML
+booleans (`0` / `"false"` used to fail open).
 
 **Shipped:**
+- **[wizard-default-guidance.md](wizard-default-guidance.md)** —
+  `wizard.default_guidance` must be a YAML string at config load (#113).
 - **[visual-map-sources.md](visual-map-sources.md)** —
   `visual_map` mixed `sources` must be a YAML list of strings (#112).
 - **[pages-config-strings.md](pages-config-strings.md)** —
