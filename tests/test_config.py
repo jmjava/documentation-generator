@@ -465,3 +465,24 @@ def test_from_yaml_mapping_av_sync_anchor_keywords_loads(tmp_path: Path) -> None
     cfg = Config.from_yaml(p)
     rows = cfg.av_sync_config["anchor_keywords"]["01"]
     assert rows[0]["keyword"] == "Flask"
+
+
+def test_from_yaml_list_image_generation_model_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("image_generation:\n  model:\n    - gpt-image-1\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="image_generation.model must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_image_generation_size_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("image_generation:\n  size:\n    - 1536x1024\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="image_generation.size must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_image_generation_quality_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("image_generation:\n  quality:\n    - high\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="image_generation.quality must be a YAML string"):
+        Config.from_yaml(p)

@@ -282,6 +282,13 @@ class Config:
             )
         if wiz.get("llm_model") is not None:
             require_yaml_string(wiz["llm_model"], label="wizard.llm_model", source=src)
+        ig = self._block("image_generation")
+        if ig.get("model") is not None:
+            require_yaml_string(ig["model"], label="image_generation.model", source=src)
+        if ig.get("size") is not None:
+            require_yaml_string(ig["size"], label="image_generation.size", source=src)
+        if ig.get("quality") is not None:
+            require_yaml_string(ig["quality"], label="image_generation.quality", source=src)
         ocr = self._sub_block(validation, "ocr", label="validation.ocr")
         if ocr.get("error_patterns") is not None:
             string_list_block(

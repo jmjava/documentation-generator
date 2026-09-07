@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[image-empty-bytes.md](image-empty-bytes.md)** —
-`image-generate` must not write empty PNG bytes as success.
+**Active:** **[image-generation-strings.md](image-generation-strings.md)** —
+`image_generation.model` / `size` / `quality` must be YAML strings at
+config load.
 
 **Shipped:**
+- **[image-empty-bytes.md](image-empty-bytes.md)** —
+  `image-generate` must not write empty PNG bytes as success (#103).
 - **[hint-front-matter-yaml.md](hint-front-matter-yaml.md)** —
   Invalid `hints/*.md` YAML front matter must fail `yaml-generate`, not skip
   hint `visual_map` wiring (#102).
