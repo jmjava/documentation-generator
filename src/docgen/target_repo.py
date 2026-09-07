@@ -226,11 +226,16 @@ def _git_auth_env(url: str) -> dict[str, str]:
 
 
 def _try_update_cached_clone(dest: Path, url: str) -> None:
-    """Best-effort fetch + hard reset so a reused cache is not stuck on an old SHA."""
+    """Best-effort fetch of remote HEAD + hard reset so a reused cache tracks default branch.
+
+    ``git fetch origin`` (no ref) can leave ``FETCH_HEAD`` on an arbitrary last
+    ref. Always fetch ``origin HEAD`` so the working tree matches the remote
+    default branch.
+    """
     env = _git_auth_env(url)
     try:
         fetched = subprocess.run(
-            ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin"],
+            ["git", "-C", str(dest), "fetch", "--depth", "1", "--quiet", "origin", "HEAD"],
             check=False,
             capture_output=True,
             text=True,

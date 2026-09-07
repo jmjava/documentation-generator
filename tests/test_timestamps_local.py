@@ -95,3 +95,11 @@ class TestExtractLocal:
         assert "Bold" in words
         assert "#" not in " ".join(words)
         assert "**Bold**" not in words
+
+
+    def test_no_mp3s_leaves_existing_timing_json(self, cfg) -> None:
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text('{"keep": true}\n', encoding="utf-8")
+        TimestampExtractor(cfg).extract_all()
+        assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}

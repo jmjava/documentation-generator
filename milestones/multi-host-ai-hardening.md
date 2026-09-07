@@ -17,10 +17,10 @@
 
 ## Open (this round)
 
-- [ ] Cached clone `git fetch` must update **remote HEAD**, then `reset --hard FETCH_HEAD`. Bare `git fetch origin` leaves `FETCH_HEAD` on an arbitrary last ref, so the working tree can jump to the wrong branch.
-- [ ] `timestamps extract_all` must not write `timing.json` as `{}` when `audio/` exists but has no `*.mp3` (`generate-all --skip-tts` / first-run wipe).
-- [ ] urllib **connection** errors (`URLError`) retry with the same backoff as 5xx.
-- [ ] OpenAI/Grok **chat** uses `call_with_rate_limit_retries` (TTS and images already do).
+- [x] Cached clone `git fetch` must update **remote HEAD**, then `reset --hard FETCH_HEAD`. Bare `git fetch origin` leaves `FETCH_HEAD` on an arbitrary last ref, so the working tree can jump to the wrong branch.
+- [x] `timestamps extract_all` must not write `timing.json` as `{}` when `audio/` exists but has no `*.mp3` (`generate-all --skip-tts` / first-run wipe).
+- [x] urllib **connection** errors (`URLError`) retry with the same backoff as 5xx.
+- [x] OpenAI/Grok **chat** uses `call_with_rate_limit_retries` (TTS and images already do).
 
 ## Out of scope
 

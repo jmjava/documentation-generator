@@ -338,9 +338,12 @@ def chat_completion(
 
     import openai
 
+    from docgen.openai_retry import call_with_rate_limit_retries
+
     client = openai_client(cfg)
-    try:
-        response = client.chat.completions.create(
+
+    def _create() -> Any:
+        return client.chat.completions.create(
             model=resolved,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -348,6 +351,9 @@ def chat_completion(
             ],
             temperature=float(temperature),
         )
+
+    try:
+        response = call_with_rate_limit_retries(_create)
     except openai.AuthenticationError as exc:
         raise AIError(
             f"{_vendor(settings)} rejected {settings.api_key_env} (authentication failed): {exc}. "
@@ -356,6 +362,10 @@ def chat_completion(
     except openai.PermissionDeniedError as exc:
         raise AIError(
             f"{_vendor(settings)} permission denied for model {resolved!r}: {exc}."
+        ) from exc
+    except openai.RateLimitError as exc:
+        raise AIError(
+            f"{_vendor(settings)} rate-limited for model {resolved!r}: {exc}."
         ) from exc
     except openai.APIConnectionError as exc:
         raise AIError(
@@ -689,6 +699,10 @@ def _http_with_retries(
                 f"{error_label} HTTP {exc.code} for {url}: {detail or exc.reason}"
             ) from exc
         except urllib.error.URLError as exc:
+            last_exc = exc
+            if attempt < _MAX_HTTP_ATTEMPTS - 1:
+                time.sleep(_retry_delay_sec(None, attempt))
+                continue
             raise AIError(f"{error_label} connection error for {url}: {exc}") from exc
     raise AIError(f"{error_label} request failed after retries: {last_exc}")
 

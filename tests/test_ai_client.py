@@ -421,6 +421,80 @@ def test_http_retries_transient_503() -> None:
     assert calls["n"] == 2
 
 
+def test_http_retries_urlerror() -> None:
+    import urllib.error
+
+    from docgen.ai_client import _http_with_retries
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b"ok"
+
+    def _urlopen(req: object, timeout: int = 120) -> _Resp:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise urllib.error.URLError("temporary")
+        return _Resp()
+
+    with patch("docgen.ai_client.urllib.request.urlopen", side_effect=_urlopen):
+        with patch("docgen.ai_client.time.sleep"):
+            body = _http_with_retries(
+                "https://example.test/x", data=b"{}", headers={}, error_label="API"
+            )
+    assert body == b"ok"
+    assert calls["n"] == 2
+
+
+def test_chat_retries_rate_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    import openai
+
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    calls = {"n": 0}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+    def _create(**_kw):  # noqa: ANN003
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise openai.RateLimitError(
+                message="429",
+                response=MagicMock(headers={}),
+                body=None,
+            )
+        return _Resp()
+
+    fake = MagicMock()
+    fake.chat.completions.create.side_effect = _create
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with patch("docgen.openai_retry.time.sleep"):
+            out = chat_completion(
+                system_prompt="sys",
+                user_message="user",
+                model="gpt-4o-mini",
+                temperature=0.1,
+                cfg=_cfg(tmp_path, {}),
+            )
+    assert out == "ok"
+    assert calls["n"] == 2
+
+
 def test_empty_openai_model_stays_empty_for_openai_provider(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
 ) -> None:

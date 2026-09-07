@@ -255,6 +255,7 @@ def test_cached_clone_resets_working_tree_to_fetch_head(tmp_path: Path) -> None:
         out = resolve_repo("https://github.com/acme/app.git", cache_dir=tmp_path / "cache")
     assert out == dest.resolve()
     assert any("fetch" in c for c in cmds)
+    assert any(len(c) > 4 and c[3] == "fetch" and c[-1] == "HEAD" for c in cmds)
     assert any("FETCH_HEAD" in c for c in cmds)
 
 
