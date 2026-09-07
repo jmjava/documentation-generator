@@ -1,7 +1,7 @@
 # Milestone: leftover AI / timestamps / TTS language keys must be strings
 
 **Status:** Active  
-**PR:** pending  
+**PR:** [#105](https://github.com/jmjava/documentation-generator/pull/105)  
 **Depends on:** `milestones/image-generation-strings.md` (PR #104),
 `milestones/tts-empty-audio.md` (PR #99),
 `milestones/multi-host-ai-hardening.md`
@@ -30,9 +30,9 @@ Fail closed at `Config.from_yaml`. Missing keys still use defaults
 - [x] Present `timestamps.engine` must be a non-empty YAML string.
 - [x] Present `tts.language` must be a non-empty YAML string.
 - [x] Tests for list values of those keys.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 
