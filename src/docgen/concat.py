@@ -39,7 +39,15 @@ class ConcatBuilder:
                     f"[concat] {out_name}: segment list must be a YAML list, "
                     f"not {type(seg_ids).__name__}"
                 )
-            self._build_one(out_name, [str(s) for s in seg_ids])
+            ids: list[str] = []
+            for i, item in enumerate(seg_ids):
+                if not isinstance(item, str) or not item.strip():
+                    raise ConcatError(
+                        f"[concat] {out_name}[{i}] must be a quoted string segment id, "
+                        f"not {type(item).__name__} ({item!r})"
+                    )
+                ids.append(item)
+            self._build_one(out_name, ids)
 
     def _build_one(self, out_name: str, seg_ids: list[str]) -> None:
         recordings_dir = self.config.recordings_dir

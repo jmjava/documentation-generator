@@ -241,3 +241,38 @@ def test_from_yaml_string_visual_map_row_raises(tmp_path: Path) -> None:
     p.write_text('visual_map:\n  "01": FirstScene\n', encoding="utf-8")
     with pytest.raises(ConfigError, match="visual_map.01 must be a YAML mapping"):
         Config.from_yaml(p)
+
+
+def test_from_yaml_unquoted_segments_all_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segments:\n  all: [01]\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="segments.all\\[0\\] must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_unquoted_visual_map_key_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("visual_map:\n  01:\n    type: manim\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="visual_map key must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_unquoted_concat_item_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("concat:\n  full: [01]\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="concat.full\\[0\\] must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_unquoted_segment_names_key_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("segment_names:\n  01: 01-intro\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="segment_names key must be a YAML string"):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_unquoted_pages_segments_key_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text("pages:\n  segments:\n    01:\n      title: Overview\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="pages.segments key must be a YAML string"):
+        Config.from_yaml(p)

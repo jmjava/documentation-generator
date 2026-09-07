@@ -58,3 +58,16 @@ def test_concat_builder_rejects_non_list_target() -> None:
     )
     with pytest.raises(ConcatError, match="must be a YAML list"):
         ConcatBuilder(cfg).build()  # type: ignore[arg-type]
+
+
+def test_concat_builder_rejects_integer_segment_id() -> None:
+    from pathlib import Path as P
+    from types import SimpleNamespace
+
+    cfg = SimpleNamespace(
+        concat_map={"full": [1]},
+        recordings_dir=P("/tmp"),
+        find_segment_asset=lambda *a, **k: None,
+    )
+    with pytest.raises(ConcatError, match="quoted string segment id"):
+        ConcatBuilder(cfg).build()  # type: ignore[arg-type]

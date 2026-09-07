@@ -1,7 +1,7 @@
 # Milestone: `visual_map` row types and pages segment entries
 
-**Status:** Active  
-**PR:** pending  
+**Status:** Shipped  
+**PR:** #86  
 **Depends on:** `milestones/config-mapping-keys.md` (PR #83)
 
 ## Problem
@@ -33,9 +33,9 @@ Fail closed at config load, yaml-generate discovery, compose, and pages.
       `test_compose_unknown_visual_type_raises`,
       `test_cli_compose_unknown_visual_type_is_click_error`,
       `test_index_html_rejects_non_mapping_pages_segments`.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/`
+- [x] `docgen benchmark` (no clock change)
 
 ## Out of scope
 

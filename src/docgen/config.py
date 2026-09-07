@@ -78,6 +78,18 @@ def mapping_sub_block(
     return val
 
 
+def require_yaml_string(value: Any, *, label: str, source: str) -> str:
+    """Require a YAML string so unquoted ``01`` is not silently coerced to ``\"1\"``."""
+    if isinstance(value, str):
+        if not value.strip():
+            raise ConfigError(f"{source}: {label} must be a non-empty string")
+        return value
+    raise ConfigError(
+        f"{source}: {label} must be a YAML string, not {type(value).__name__} "
+        f"({value!r}). Unquoted 01 is integer 1; write \"01\"."
+    )
+
+
 def string_list_block(
     raw: dict[str, Any],
     key: str,
@@ -95,7 +107,10 @@ def string_list_block(
         raise ConfigError(
             f"{source}: {name} must be a YAML list, not {type(val).__name__}"
         )
-    return [str(x) for x in val]
+    return [
+        require_yaml_string(x, label=f"{name}[{i}]", source=source)
+        for i, x in enumerate(val)
+    ]
 
 
 @dataclass
@@ -155,21 +170,31 @@ class Config:
         _ = self.segments_all
         _ = self.manim_scenes
         concat = self._block("concat")
+        src = self._source_label()
         for name, segs in concat.items():
             if segs is None:
                 continue
             if not isinstance(segs, list):
                 raise ConfigError(
-                    f"{self._source_label()}: concat.{name} must be a YAML list, "
+                    f"{src}: concat.{name} must be a YAML list, "
                     f"not {type(segs).__name__}"
                 )
+            for i, item in enumerate(segs):
+                require_yaml_string(item, label=f"concat.{name}[{i}]", source=src)
+        for key in self._block("segment_names"):
+            require_yaml_string(key, label="segment_names key", source=src)
+        pages_segs = self._block("pages").get("segments")
+        if isinstance(pages_segs, dict):
+            for key in pages_segs:
+                require_yaml_string(key, label="pages.segments key", source=src)
         vm = self._block("visual_map")
         for sid, spec in vm.items():
+            sid_s = require_yaml_string(sid, label="visual_map key", source=src)
             if spec is None:
                 continue
             if not isinstance(spec, dict):
                 raise ConfigError(
-                    f"{self._source_label()}: visual_map.{sid} must be a YAML mapping, "
+                    f"{src}: visual_map.{sid_s} must be a YAML mapping, "
                     f"not {type(spec).__name__}"
                 )
 
