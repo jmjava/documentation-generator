@@ -106,3 +106,22 @@ def test_bundle_scan_generates_only_missing(cfg: Config) -> None:
 def test_no_specs_dir_is_noop(cfg: Config) -> None:
     assert spec_files_for_bundle(cfg) == []
     assert generate_missing_images_for_bundle(cfg, image_fn=lambda p: _PNG_BYTES) == []
+
+
+def test_cli_image_generate_all_fails_when_manim_has_no_specs(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {"animations": "animations"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {"01": {"type": "manim", "scene": "DemoScene"}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    (tmp_path / "animations").mkdir()
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(p), "image-generate", "--all"])
+    assert result.exit_code != 0
+    assert "scene-spec-generate" in result.output or "no *.scene.yaml" in result.output

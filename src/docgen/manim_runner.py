@@ -39,8 +39,22 @@ class ManimRunner:
         elif scenes is not None:
             to_render = scenes
         else:
-            to_render = self.config.manim_scenes
+            to_render = self.config.manim_scenes or self.config.pipeline_manim_scene_names()
         if not to_render:
+            manim_rows = [
+                sid
+                for sid in self.config.segments_all
+                if isinstance(self.config.visual_map.get(sid), dict)
+                and str(self.config.visual_map[sid].get("type", "")).strip().lower()
+                == "manim"
+            ]
+            if manim_rows:
+                raise RuntimeError(
+                    "[manim] visual_map has manim segments "
+                    + ", ".join(manim_rows)
+                    + " but no scene class names — run `docgen yaml-generate` "
+                    "or set visual_map[].scene"
+                )
             print("[manim] No scenes configured")
             return
 

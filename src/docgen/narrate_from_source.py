@@ -148,10 +148,20 @@ def collect_source_snippets(
     limit = max_context_bytes if max_context_bytes is not None else settings.max_context_bytes
     repo_root = cfg.repo_root.resolve()
     paths: list[Path] = []
+    missing: list[str] = []
     for rel in settings.context_paths + list(extra_paths):
-        ap = _resolve_repo_path(repo_root, rel)
+        rel_s = str(rel).strip()
+        if not rel_s:
+            continue
+        ap = _resolve_repo_path(repo_root, rel_s)
         if ap:
             paths.append(ap)
+        else:
+            missing.append(rel_s)
+    if missing:
+        raise ValueError(
+            "declared context path(s) not found under repo_root: " + ", ".join(missing)
+        )
     paths.extend(_collect_paths_from_globs(repo_root, settings.context_globs))
     # de-dupe preserve order
     seen: set[Path] = set()
@@ -169,8 +179,8 @@ def collect_source_snippets(
     for ap in ordered:
         try:
             text = ap.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+        except OSError as exc:
+            raise ValueError(f"cannot read context file {ap}: {exc}") from exc
         rel_label = str(ap.relative_to(repo_root))
         if len(text) > per_file_cap:
             text = text[:per_file_cap] + "\n\n… [truncated for context budget]\n"

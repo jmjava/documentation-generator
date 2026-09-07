@@ -289,3 +289,45 @@ class TestAvSyncCheckWiring:
         assert "flask" in keys or "orchestrator" in keys
         assert "unrelatedlongword" not in keys
         assert "anotherlongtoken" not in keys
+
+
+def test_narration_lint_fails_when_file_missing(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+    check = Validator(cfg)._check_narration_lint("01")
+    assert not check.passed
+    assert any("No narration file" in d for d in check.details)
+
+
+def test_story_end_fails_when_paced_spec_has_no_timing_words(cfg) -> None:
+    _write_scene_spec(cfg, labels=["Alpha"])
+    check = Validator(cfg)._check_story_end("01")
+    assert not check.passed, check.details
+    assert any("timestamps" in d.lower() or "paced" in d.lower() for d in check.details)
+
+
+def test_story_end_allows_pace_none_without_words(cfg) -> None:
+    specs = cfg.animations_dir / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
+    raw = {
+        "segment_id": "01",
+        "class_name": "XScene",
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Decor",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "pace": "none",
+                    }
+                ],
+            }
+        ],
+    }
+    (specs / "01-x.scene.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    check = Validator(cfg)._check_story_end("01")
+    assert check.passed, check.details
