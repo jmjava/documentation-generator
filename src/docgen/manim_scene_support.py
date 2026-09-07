@@ -502,15 +502,18 @@ def manim_scene_generation_segment_block(cfg: "Config", seg_id: str) -> dict[str
 
 
 def _parse_int_sequence(x: Any) -> list[int] | None:
+    """Parse a list of YAML numbers. ``None`` means missing or not a valid list.
+
+    ``bool`` is a subclass of ``int``: ``[true]`` must not become ``[1]``.
+    """
     if x is None:
         return None
     if isinstance(x, (list, tuple)):
         out: list[int] = []
         for v in x:
-            try:
-                out.append(int(v))
-            except (TypeError, ValueError):
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
                 return None
+            out.append(int(v))
         return out
     return None
 
@@ -533,24 +536,43 @@ def resolve_pace_segment_indices(
     seg_block: dict[str, Any],
     root: dict[str, Any],
 ) -> tuple[list[int], str]:
-    """Return (one Whisper segment index per visual beat, provenance string)."""
+    """Return (one Whisper segment index per visual beat, provenance string).
+
+    Missing ``visual_beats`` / ``default_visual_beats`` still auto-estimates.
+    A present invalid value (bool, list, string) raises ``ValueError`` instead
+    of falling back to the auto schedule. ``visual_beats: true`` used to become
+    one beat via ``int(True) == 1``.
+    """
     if num_segments <= 0:
         return [], "no Whisper segments"
-    explicit = _parse_int_sequence(seg_block.get("pace_segment_indices"))
-    if explicit:
+    raw_pace = seg_block.get("pace_segment_indices")
+    if raw_pace is not None:
+        explicit = _parse_int_sequence(raw_pace)
+        if not explicit:
+            raise ValueError(
+                "manim_scene_generation.segments.<id>.pace_segment_indices must be a "
+                f"non-empty YAML list of numbers, not {raw_pace!r}"
+            )
         clamped = [max(0, min(num_segments - 1, int(i))) for i in explicit]
         return clamped, "manim_scene_generation.segments.<id>.pace_segment_indices"
 
     raw_beats = seg_block.get("visual_beats", root.get("default_visual_beats"))
     if raw_beats is not None:
-        try:
-            nb = max(1, int(raw_beats))
-        except (TypeError, ValueError):
-            nb = min(12, max(4, max(1, (num_segments + 1) // 2)))
+        if isinstance(raw_beats, bool) or not isinstance(raw_beats, (int, float)):
+            raise ValueError(
+                "visual_beats / default_visual_beats must be a YAML number, not "
+                f"{type(raw_beats).__name__} ({raw_beats!r})"
+            )
+        nb = max(1, int(raw_beats))
+        if "visual_beats" in seg_block and seg_block.get("visual_beats") is not None:
+            pace_src = "manim_scene_generation.segments.<id>.visual_beats"
+        else:
+            pace_src = "manim_scene_generation.default_visual_beats"
     else:
         nb = min(12, max(4, max(1, (num_segments + 1) // 2)))
+        pace_src = "auto (set visual_beats or pace_segment_indices to override)"
     nb = min(nb, 48)
-    return even_spread_segment_indices(nb, num_segments), "auto (set visual_beats or pace_segment_indices to override)"
+    return even_spread_segment_indices(nb, num_segments), pace_src
 
 
 def prepare_whisper_segments_for_prompt(
@@ -727,11 +749,14 @@ def build_timing_enrichment_for_prompt(
     else:
         parts.append(f"# Full segment list ({n_seg_total} segments).")
 
-    pace_indices, pace_src = resolve_pace_segment_indices(
-        num_segments=n_seg_total,
-        seg_block=seg_block,
-        root=root,
-    )
+    try:
+        pace_indices, pace_src = resolve_pace_segment_indices(
+            num_segments=n_seg_total,
+            seg_block=seg_block,
+            root=root,
+        )
+    except ValueError as exc:
+        raise SceneGenerationError(str(exc)) from exc
     parts.append("")
     parts.append("--- Optional hints: beat → segment index (from docgen.yaml) ---")
     parts.append(f"# Source: {pace_src}")

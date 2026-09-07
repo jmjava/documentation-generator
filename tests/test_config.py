@@ -950,6 +950,88 @@ def test_from_yaml_generation_numeric_tunables_allowed(tmp_path: Path) -> None:
     assert c.raw["manim_scene_generation"]["max_whisper_words_in_prompt"] == 12
 
 
+def test_from_yaml_bool_default_visual_beats_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  default_visual_beats: true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.default_visual_beats must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_segment_visual_beats_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  segments:\n    \"08\":\n      visual_beats: true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.segments.08.visual_beats must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_list_segment_visual_beats_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  segments:\n    \"08\":\n      visual_beats:\n        - 10\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.segments.08.visual_beats must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_bool_in_pace_segment_indices_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  segments:\n    \"08\":\n"
+        "      pace_segment_indices:\n        - true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match=r"manim_scene_generation.segments.08.pace_segment_indices\[0\] must be a YAML number",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_string_pace_segment_indices_raises(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  segments:\n    \"08\":\n"
+        "      pace_segment_indices: \"0,2,5\"\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="manim_scene_generation.segments.08.pace_segment_indices must be a YAML list",
+    ):
+        Config.from_yaml(p)
+
+
+def test_from_yaml_visual_beats_numeric_allowed(tmp_path: Path) -> None:
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        "manim_scene_generation:\n  default_visual_beats: 8\n"
+        "  segments:\n    \"08\":\n      visual_beats: 3\n"
+        "      pace_segment_indices: [0, 2, 5]\n",
+        encoding="utf-8",
+    )
+    c = Config.from_yaml(p)
+    msg = c.raw["manim_scene_generation"]
+    assert msg["default_visual_beats"] == 8
+    assert msg["segments"]["08"]["visual_beats"] == 3
+    assert msg["segments"]["08"]["pace_segment_indices"] == [0, 2, 5]
+
+
 def test_from_yaml_bool_av_sync_tolerance_raises(tmp_path: Path) -> None:
     p = tmp_path / "docgen.yaml"
     p.write_text("validation:\n  av_sync:\n    tolerance_sec: true\n", encoding="utf-8")

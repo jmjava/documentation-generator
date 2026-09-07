@@ -1,6 +1,6 @@
 # Milestone: validation enable flags must be YAML booleans
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#119](https://github.com/jmjava/documentation-generator/pull/119)  
 **Depends on:** `milestones/validation-numeric-tunables.md` (PR #118),
 `milestones/discovery-bool-flags.md` (PR #114)

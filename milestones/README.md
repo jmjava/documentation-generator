@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[validation-enable-bools.md](validation-enable-bools.md)** —
-validation / manim enable flags must be YAML booleans (`"false"` used
-to leave checks on).
+**Active:** **[visual-beats-numeric.md](visual-beats-numeric.md)** —
+`visual_beats` / `default_visual_beats` must be YAML numbers (bool
+`true` used to become one beat; invalid types auto-estimated).
 
 **Shipped:**
+- **[validation-enable-bools.md](validation-enable-bools.md)** —
+  validation / manim enable flags must be YAML booleans (#119).
 - **[validation-numeric-tunables.md](validation-numeric-tunables.md)** —
   nested validation OCR / layout / av_sync / timing / story_end
   numerics must be YAML numbers (#118).
