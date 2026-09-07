@@ -1,7 +1,7 @@
 # Milestone: compose must not accept a timed-out ffmpeg mux
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#121](https://github.com/jmjava/documentation-generator/pull/121)  
 **Depends on:** `milestones/pipeline-fail-closed.md`,
 `milestones/visual-beats-numeric.md` (PR #120)
 
@@ -22,12 +22,12 @@ recording.
 
 ## Done when
 
-- [ ] Timeout with a partial output raises ``ComposeError``.
-- [ ] Incomplete output is removed.
-- [ ] Tests cover timeout with and without an existing output file.
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Timeout with a partial output raises ``ComposeError``.
+- [x] Incomplete output is removed.
+- [x] Tests cover timeout with and without an existing output file.
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (703 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
