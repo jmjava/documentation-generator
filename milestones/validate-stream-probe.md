@@ -1,6 +1,6 @@
 # Milestone: validate stream/drift probes must honor ffprobe returncode
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#145](https://github.com/jmjava/documentation-generator/pull/145)  
 **Depends on:** `milestones/whisper-prompt-caps.md` (PR #144),
 `milestones/pages-ffprobe-returncode.md` (PR #143),
