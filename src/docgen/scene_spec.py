@@ -1839,6 +1839,15 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
             raise SceneSpecError(
                 f"{path_label}: layout.dwell_run_time must be a number in (0, 3] if set"
             )
+    for gap_key in ("first_row_title_buff", "row_gap", "column_gap"):
+        if gap_key not in layout or layout.get(gap_key) is None:
+            continue
+        gap_val = layout[gap_key]
+        if not _is_yaml_number(gap_val):
+            raise SceneSpecError(
+                f"{path_label}: layout.{gap_key} must be a YAML number, not "
+                f"{type(gap_val).__name__} ({gap_val!r})"
+            )
 
     if has_rows:
         rows = data["rows"]
