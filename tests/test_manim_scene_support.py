@@ -891,7 +891,8 @@ def test_refresh_bootstrap_helpers_upgrades_swallowing_wait_until_word(tmp_path:
     assert changed == ["_TimedScene"]
     text = p.read_text(encoding="utf-8")
     assert "must be a JSON number" in text
-    assert "except (TypeError, ValueError)" not in text
+    assert 'get("start", 0.0)' not in text
+    assert "def _timing_start" in text
 
 
 def _exec_timed_scene() -> dict:

@@ -1,6 +1,7 @@
 # Milestone: wait_until_word must type Whisper `start`
 
 **Status:** Active  
+**PR:** [#139](https://github.com/jmjava/documentation-generator/pull/139)  
 **Depends on:** `milestones/yaml-visual-map-keys.md` (PR #138),
 `milestones/bootstrap-timing-helpers.md` (PR #130),
 `milestones/timing-start-end.md` (PR #134)
@@ -33,13 +34,13 @@ raises `TypeError`. `refresh_bootstrap_helpers` rewrites a swallowing
 
 ## Done when
 
-- [ ] `wait_until_word` raises on missing / null / non-numeric / bool `start`
-- [ ] Invalid word index still no-ops
-- [ ] `pace_to_beat` uses the same start typing
-- [ ] Stale `_TimedScene` with `not_past` but swallowing `wait_until_word` refreshes
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (clock/helper change; meets baseline, no bump)
+- [x] `wait_until_word` raises on missing / null / non-numeric / bool `start`
+- [x] Invalid word index still no-ops
+- [x] `pace_to_beat` uses the same start typing
+- [x] Stale `_TimedScene` with `not_past` but swallowing `wait_until_word` refreshes
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (786 passed, 1 skipped)
+- [x] `docgen benchmark` (clock/helper change; meets baseline, no bump)
 
 ## Out of scope
 
