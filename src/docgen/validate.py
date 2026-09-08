@@ -658,16 +658,44 @@ class Validator:
 
     # ── ffprobe-based checks ──────────────────────────────────────────
 
-    def _check_streams(self, path: Path) -> CheckResult:
+    @staticmethod
+    def _ffprobe_json(path: Path, *show_flags: str) -> dict[str, Any]:
+        """Run ffprobe JSON. Ignore stdout when the process exits non-zero."""
         try:
             out = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
+                ["ffprobe", "-v", "quiet", "-print_format", "json", *show_flags, str(path)],
                 capture_output=True, text=True, timeout=30,
             )
-            data = json.loads(out.stdout)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"ffprobe timed out on {path.name}") from exc
+        except FileNotFoundError as exc:
+            raise RuntimeError("ffprobe not found in PATH") from exc
+        if out.returncode != 0:
+            extra = (out.stderr or "").strip()
+            msg = f"ffprobe failed (exit {out.returncode})"
+            if extra:
+                msg = f"{msg}: {extra[:200]}"
+            raise RuntimeError(msg)
+        try:
+            payload = json.loads(out.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"ffprobe JSON is not valid: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"ffprobe JSON root must be an object, not {type(payload).__name__}"
+            )
+        return payload
+
+    def _check_streams(self, path: Path) -> CheckResult:
+        try:
+            data = self._ffprobe_json(path, "-show_streams")
             streams = data.get("streams", [])
-            has_video = any(s.get("codec_type") == "video" for s in streams)
-            has_audio = any(s.get("codec_type") == "audio" for s in streams)
+            if not isinstance(streams, list):
+                return CheckResult(
+                    "stream_presence", False, ["ffprobe streams must be a JSON array"]
+                )
+            has_video = any(s.get("codec_type") == "video" for s in streams if isinstance(s, dict))
+            has_audio = any(s.get("codec_type") == "audio" for s in streams if isinstance(s, dict))
             issues: list[str] = []
             if not has_video:
                 issues.append("Missing video stream")
@@ -679,22 +707,27 @@ class Validator:
 
     def _check_drift(self, path: Path, max_drift: float) -> CheckResult:
         try:
-            out = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(path)],
-                capture_output=True, text=True, timeout=30,
-            )
-            data = json.loads(out.stdout)
+            data = self._ffprobe_json(path, "-show_format", "-show_streams")
             durations: dict[str, float] = {}
-            for s in data.get("streams", []):
+            streams = data.get("streams", [])
+            if not isinstance(streams, list):
+                streams = []
+            for s in streams:
+                if not isinstance(s, dict):
+                    continue
                 ct = s.get("codec_type", "")
-                dur = float(s.get("duration", 0))
+                try:
+                    dur = float(s.get("duration", 0))
+                except (TypeError, ValueError):
+                    continue
                 if ct in ("video", "audio") and dur > 0:
                     durations[ct] = dur
 
             has_video_stream = any(
-                s.get("codec_type") == "video" for s in data.get("streams", [])
+                isinstance(s, dict) and s.get("codec_type") == "video" for s in streams
             )
-            fmt_dur_raw = data.get("format", {}).get("duration")
+            fmt = data.get("format")
+            fmt_dur_raw = fmt.get("duration") if isinstance(fmt, dict) else None
             if has_video_stream and "video" not in durations and fmt_dur_raw is not None:
                 try:
                     fd = float(fmt_dur_raw)

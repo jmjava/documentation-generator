@@ -8,6 +8,7 @@ ffmpeg/ffprobe into ``tests/.bin-cache/`` when needed.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -615,6 +616,67 @@ class TestSubjectBeatCoverageValidate:
         report = Validator(config).validate_segment("01")
         check = next(c for c in report["checks"] if c["name"] == "subject_beat_coverage")
         assert check["passed"], check["details"]
+
+
+# ── ffprobe JSON probes honor returncode ──────────────────────────────
+
+class _FakeProbe:
+    def __init__(self, returncode: int, stdout: str, stderr: str = "Invalid data") -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class TestFfprobeJsonReturncode:
+    def test_streams_fail_when_ffprobe_exits_nonzero(self, config, tmp_path, monkeypatch):
+        leftover = json.dumps({
+            "streams": [{"codec_type": "video"}, {"codec_type": "audio"}],
+        })
+        monkeypatch.setattr(
+            subprocess, "run", lambda *_a, **_k: _FakeProbe(1, leftover)
+        )
+        result = Validator(config)._check_streams(tmp_path / "corrupt.mp4")
+        assert result.passed is False
+        assert "ffprobe failed" in result.details[0]
+
+    def test_drift_fail_when_ffprobe_exits_nonzero(self, config, tmp_path, monkeypatch):
+        leftover = json.dumps({
+            "format": {"duration": "10.0"},
+            "streams": [
+                {"codec_type": "video", "duration": "10.0"},
+                {"codec_type": "audio", "duration": "10.0"},
+            ],
+        })
+        monkeypatch.setattr(
+            subprocess, "run", lambda *_a, **_k: _FakeProbe(1, leftover)
+        )
+        result = Validator(config)._check_drift(tmp_path / "corrupt.mp4", max_drift=2.75)
+        assert result.passed is False
+        assert "ffprobe failed" in result.details[0]
+
+    def test_streams_pass_when_ffprobe_succeeds(self, config, tmp_path, monkeypatch):
+        ok = json.dumps({
+            "streams": [{"codec_type": "video"}, {"codec_type": "audio"}],
+        })
+        monkeypatch.setattr(
+            subprocess, "run", lambda *_a, **_k: _FakeProbe(0, ok, stderr="")
+        )
+        result = Validator(config)._check_streams(tmp_path / "ok.mp4")
+        assert result.passed is True
+
+    def test_drift_pass_when_ffprobe_succeeds(self, config, tmp_path, monkeypatch):
+        ok = json.dumps({
+            "format": {"duration": "10.0"},
+            "streams": [
+                {"codec_type": "video", "duration": "10.0"},
+                {"codec_type": "audio", "duration": "10.05"},
+            ],
+        })
+        monkeypatch.setattr(
+            subprocess, "run", lambda *_a, **_k: _FakeProbe(0, ok, stderr="")
+        )
+        result = Validator(config)._check_drift(tmp_path / "ok.mp4", max_drift=2.75)
+        assert result.passed is True
 
 
 # ── Helper to create silent audio ─────────────────────────────────────

@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[whisper-prompt-caps.md](whisper-prompt-caps.md)** —
-timing-enrichment whisper count caps must not coerce bools to 1.
+**Active:** **[validate-stream-probe.md](validate-stream-probe.md)** —
+validate stream/drift checks must not trust ffprobe stdout when the
+probe exits non-zero.
 
 **Shipped:**
+- **[whisper-prompt-caps.md](whisper-prompt-caps.md)** —
+  timing-enrichment whisper count caps must not coerce bools to 1
+  (#144).
 - **[pages-ffprobe-returncode.md](pages-ffprobe-returncode.md)** —
   pages duration badges must not trust ffprobe stdout when the probe
   exits non-zero (#143).
