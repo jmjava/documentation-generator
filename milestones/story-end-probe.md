@@ -1,7 +1,7 @@
 # Milestone: story_end must fail when the mp3 duration cannot be probed
 
 **Status:** Active  
-**PR:** (pending)  
+**PR:** [#137](https://github.com/jmjava/documentation-generator/pull/137)  
 **Depends on:** `milestones/timing-sync-probe.md` (PR #136)
 
 ## Problem
@@ -23,11 +23,11 @@ it. Probe ``None`` / non-positive duration is a **failed** check.
 
 ## Done when
 
-- [ ] Probe ``None`` fails ``story_end`` (does not fall back to transcript)
-- [ ] Missing audio still uses transcript end / skip
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Probe ``None`` fails ``story_end`` (does not fall back to transcript)
+- [x] Missing audio still uses transcript end / skip
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (772 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
