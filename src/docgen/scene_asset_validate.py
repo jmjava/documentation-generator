@@ -215,7 +215,8 @@ def helper_api_violations(scenes_text: str) -> list[str]:
         if name in defined and helper_needs_refresh(tree, name):
             issues.append(
                 f"helpers: {name} is stale (missing shape / edge-to-edge / not_past / "
-                "typed timing.json loaders) — run `docgen scene-compile` to refresh helper bodies"
+                "typed timing.json loaders / typed wait_until_word start) — "
+                "run `docgen scene-compile` to refresh helper bodies"
             )
     return issues
 

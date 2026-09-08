@@ -1,6 +1,6 @@
 # Milestone: yaml-generate must keep string `visual_map` keys
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#138](https://github.com/jmjava/documentation-generator/pull/138)  
 **Depends on:** `milestones/story-end-probe.md` (PR #137),
 `milestones/yaml-generate-mappings.md` (PR #91),

@@ -240,6 +240,22 @@ def _load_timing_words(segment_key):
     assert any("_load_timing_words is stale" in i for i in issues)
 
 
+def test_helper_api_flags_swallowing_wait_until_word() -> None:
+    stale = '''
+MANIM_FONT = "Liberation Sans"
+class _TimedScene:
+    def timed_play(self, *a, run_time=1.0, not_past=None):
+        pass
+    def wait_until_word(self, words, index):
+        try:
+            t = float(words[index].get("start", 0.0))
+        except (TypeError, ValueError):
+            return
+'''
+    issues = helper_api_violations(stale)
+    assert any("_TimedScene is stale" in i for i in issues)
+
+
 def test_helper_api_clean_for_current_bootstrap() -> None:
     assert helper_api_violations(BOOTSTRAP_HEADER) == []
 
