@@ -1,7 +1,7 @@
 # Milestone: Grok STT words must be a JSON array of objects
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#149](https://github.com/jmjava/documentation-generator/pull/149)  
 **Depends on:** `milestones/scene-spec-layout-gaps.md` (PR #148),
 `milestones/grok-stt-start-end.md` (PR #146),
 `milestones/timing-inner-lists.md` (PR #127)
@@ -33,15 +33,17 @@ objects. Missing / null `words` still means no word stream. Empty
 
 ## Done when
 
-- [ ] Non-list `words` / `segments` raise `AIError`
-- [ ] Non-object `words[]` / `segments[]` raise `AIError`
-- [ ] Missing `words` still maps an empty list
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Non-list `words` / `segments` raise `AIError`
+- [x] Non-object `words[]` / `segments[]` raise `AIError`
+- [x] Missing `words` still maps an empty list
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (825 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
 - OpenAI whisper-1 SDK path
 - Requiring `end >= start`
-- Issue #56
+- Empty-token Grok word rows (`word: ""`) are still skipped; remaining
+  token indices stay dense
+- Issue #56 (label → `wait_word` semantic matching)
