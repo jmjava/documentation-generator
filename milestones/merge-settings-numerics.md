@@ -1,6 +1,7 @@
 # Milestone: merge settings must not coerce bool tunables
 
 **Status:** Active  
+**PR:** [#142](https://github.com/jmjava/documentation-generator/pull/142)  
 **Depends on:** `milestones/wizard-narration-mode.md` (PR #141),
 `milestones/merge-settings-str-lists.md` (PR #140),
 `milestones/generation-numeric-tunables.md` (PR #117)
@@ -33,12 +34,12 @@ system_prompt / class_name. Missing/null still uses defaults.
 
 ## Done when
 
-- [ ] Bool `temperature` / `max_context_bytes` raise
-- [ ] Bool `model` / `class_name` raise
-- [ ] Zero temperature still not replaced by the default
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Bool `temperature` / `max_context_bytes` raise
+- [x] Bool `model` / `class_name` raise
+- [x] Zero temperature still not replaced by the default
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (794 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
