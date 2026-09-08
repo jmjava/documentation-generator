@@ -217,18 +217,7 @@ class PagesGenerator:
         rec = self._find_recording(seg_id)
         if not rec:
             return "varies"
-        try:
-            out = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(rec)],
-                capture_output=True, text=True, timeout=10,
-            )
-            dur = float(json.loads(out.stdout).get("format", {}).get("duration", 0))
-            if dur > 0:
-                m, s = divmod(int(dur), 60)
-                return f"~{m}m {s}s"
-        except Exception:
-            pass
-        return "varies"
+        return _ffprobe_duration_label(rec, fallback="varies")
 
     def _find_recording(self, seg_id: str) -> Path | None:
         """Resolve the committed recording for ``seg_id``.
@@ -247,18 +236,42 @@ class PagesGenerator:
         rec = self.config.recordings_dir / fname
         if not rec.exists():
             return "concat"
-        try:
-            out = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(rec)],
-                capture_output=True, text=True, timeout=10,
-            )
-            dur = float(json.loads(out.stdout).get("format", {}).get("duration", 0))
-            if dur > 0:
-                m, s = divmod(int(dur), 60)
-                return f"~{m}m {s}s"
-        except Exception:
-            pass
-        return "concat"
+        return _ffprobe_duration_label(rec, fallback="concat")
+
+
+def _ffprobe_duration_label(path: Path, *, fallback: str) -> str:
+    """Format an mp4 duration for a pages badge, or *fallback* if the probe fails.
+
+    Ignore stdout when ffprobe exits non-zero — leftover JSON must not look
+    like a real duration (same contract as compose / TTS probes).
+    """
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(path)],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return fallback
+    if out.returncode != 0:
+        return fallback
+    try:
+        payload = json.loads(out.stdout)
+    except json.JSONDecodeError:
+        return fallback
+    if not isinstance(payload, dict):
+        return fallback
+    fmt = payload.get("format")
+    if not isinstance(fmt, dict):
+        return fallback
+    try:
+        dur = float(fmt.get("duration", 0))
+    except (TypeError, ValueError):
+        return fallback
+    if dur > 0:
+        m, s = divmod(int(dur), 60)
+        return f"~{m}m {s}s"
+    return fallback
+
 
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

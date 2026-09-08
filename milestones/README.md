@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[merge-settings-numerics.md](merge-settings-numerics.md)** —
-narration / scene-generation merge must not coerce bool temperature
-or model values.
+**Active:** **[pages-ffprobe-returncode.md](pages-ffprobe-returncode.md)** —
+pages duration badges must not trust ffprobe stdout when the probe
+exits non-zero.
 
 **Shipped:**
+- **[merge-settings-numerics.md](merge-settings-numerics.md)** —
+  narration / scene-generation merge must not coerce bool temperature
+  or model values (#142).
 - **[wizard-narration-mode.md](wizard-narration-mode.md)** —
   unknown wizard / LLM narration `mode` must not silently generate
   (#141).

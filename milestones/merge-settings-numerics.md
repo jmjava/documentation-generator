@@ -1,6 +1,6 @@
 # Milestone: merge settings must not coerce bool tunables
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#142](https://github.com/jmjava/documentation-generator/pull/142)  
 **Depends on:** `milestones/wizard-narration-mode.md` (PR #141),
 `milestones/merge-settings-str-lists.md` (PR #140),
