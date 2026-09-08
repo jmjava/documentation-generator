@@ -362,6 +362,113 @@ def test_validate_rejects_wait_at_key() -> None:
         )
 
 
+def _spec_with(*, title: dict | None = None, row: dict | None = None, layout: dict | None = None) -> dict:
+    spec: dict = {
+        "segment_id": "1",
+        "class_name": "X",
+        "title": title or {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            row
+            or {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 2.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                    }
+                ],
+            }
+        ],
+    }
+    if layout is not None:
+        spec["layout"] = layout
+    return spec
+
+
+def test_validate_rejects_bool_wait_word() -> None:
+    spec = _spec_with(row={
+        "run_time": 1.0,
+        "wait_word": True,
+        "boxes": [
+            {
+                "label": "A",
+                "color": "C_GREEN",
+                "width": 2.0,
+                "height": 1.0,
+                "font_size": 18,
+            }
+        ],
+    })
+    with pytest.raises(SceneSpecError, match="wait_word must be a non-negative int"):
+        validate_scene_spec(spec)
+
+
+def test_validate_accepts_wait_word_zero() -> None:
+    spec = _spec_with(row={
+        "run_time": 1.0,
+        "wait_word": 0,
+        "boxes": [
+            {
+                "label": "A",
+                "color": "C_GREEN",
+                "width": 2.0,
+                "height": 1.0,
+                "font_size": 18,
+            }
+        ],
+    })
+    validate_scene_spec(spec)
+
+
+def test_validate_rejects_bool_run_time() -> None:
+    spec = _spec_with(row={
+        "run_time": True,
+        "boxes": [
+            {
+                "label": "A",
+                "color": "C_GREEN",
+                "width": 2.0,
+                "height": 1.0,
+                "font_size": 18,
+            }
+        ],
+    })
+    with pytest.raises(SceneSpecError, match="run_time must be a positive number"):
+        validate_scene_spec(spec)
+
+
+def test_validate_rejects_bool_box_width() -> None:
+    spec = _spec_with(row={
+        "run_time": 1.0,
+        "boxes": [
+            {
+                "label": "A",
+                "color": "C_GREEN",
+                "width": True,
+                "height": 1.0,
+                "font_size": 18,
+            }
+        ],
+    })
+    with pytest.raises(SceneSpecError, match="width must be a positive number"):
+        validate_scene_spec(spec)
+
+
+def test_validate_rejects_bool_title_font_size() -> None:
+    spec = _spec_with(title={"text": "T", "font_size": True, "color": "C_WHITE"})
+    with pytest.raises(SceneSpecError, match="title.font_size must be a positive number"):
+        validate_scene_spec(spec)
+
+
+def test_validate_rejects_bool_page_transition_run_time() -> None:
+    spec = _spec_with(layout={"page_transition_run_time": True})
+    with pytest.raises(SceneSpecError, match="page_transition_run_time"):
+        validate_scene_spec(spec)
+
+
 def test_validate_rejects_wait_word_and_wait_segment_together() -> None:
     with pytest.raises(SceneSpecError, match="at most one"):
         validate_scene_spec(
