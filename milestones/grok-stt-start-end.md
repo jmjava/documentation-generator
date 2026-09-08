@@ -1,7 +1,7 @@
 # Milestone: Grok STT start/end must be JSON numbers
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#146](https://github.com/jmjava/documentation-generator/pull/146)  
 **Depends on:** `milestones/validate-stream-probe.md` (PR #145),
 `milestones/timing-start-end.md` (PR #134),
 `milestones/tts-empty-audio.md`
@@ -31,12 +31,12 @@ word end. Explicit `start: 0` / `duration: 0` stay 0.
 
 ## Done when
 
-- [ ] Bool / missing / string word `start` raises `AIError`
-- [ ] `start: 0.0` still maps to `0.0`
-- [ ] Present `duration: true` raises `AIError`
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Bool / missing / string word `start` raises `AIError`
+- [x] `start: 0.0` still maps to `0.0`
+- [x] Present `duration: true` raises `AIError`
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (812 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
