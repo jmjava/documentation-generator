@@ -1,6 +1,6 @@
 # Milestone: wizard / LLM narration mode must not silently generate
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#141](https://github.com/jmjava/documentation-generator/pull/141)  
 **Depends on:** `milestones/merge-settings-str-lists.md` (PR #140),
 `milestones/wizard-json-object.md` (PR #129)

@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wizard-narration-mode.md](wizard-narration-mode.md)** —
-unknown wizard / LLM narration `mode` must not silently generate.
+**Active:** **[merge-settings-numerics.md](merge-settings-numerics.md)** —
+narration / scene-generation merge must not coerce bool temperature
+or model values.
 
 **Shipped:**
+- **[wizard-narration-mode.md](wizard-narration-mode.md)** —
+  unknown wizard / LLM narration `mode` must not silently generate
+  (#141).
 - **[merge-settings-str-lists.md](merge-settings-str-lists.md)** —
   narration / scene-generation merge must not `str()` hint and path lists
   (#140).

@@ -271,6 +271,18 @@ def test_settings_rejects_int_hint_and_string_paths(tmp_path: Path) -> None:
         merged_scene_generation_settings(cfg, "08")
 
 
+def test_settings_rejects_bool_temperature(tmp_path: Path) -> None:
+    cfg = _write_cfg(tmp_path, {"manim_scene_generation": {"temperature": 0.4}})
+    cfg.raw["manim_scene_generation"]["temperature"] = True
+    with pytest.raises(ConfigError, match="temperature must be a YAML number"):
+        merged_scene_generation_settings(cfg, "08")
+    cfg.raw["manim_scene_generation"]["temperature"] = 0.4
+    cfg.raw["manim_scene_generation"]["class_name"] = 1
+    cfg.raw["manim_scene_generation"]["segments"] = {"08": {"class_name": True}}
+    with pytest.raises(ConfigError, match="class_name must be a YAML string"):
+        merged_scene_generation_settings(cfg, "08")
+
+
 def test_settings_zero_temperature_is_not_replaced_by_default(tmp_path: Path) -> None:
     cfg = _write_cfg(
         tmp_path,

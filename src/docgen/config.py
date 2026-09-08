@@ -116,6 +116,24 @@ def require_yaml_number(value: Any, *, label: str, source: str) -> float:
     return float(value)
 
 
+def optional_yaml_number(
+    block: dict[str, Any],
+    key: str,
+    *,
+    default: float,
+    label: str,
+    source: str = "docgen.yaml",
+) -> float:
+    """Return *default* when *key* is missing/null; otherwise require a YAML number.
+
+    Do not ``float(true)`` → ``1.0`` or ``int(true)`` → ``1``.
+    """
+    val = block.get(key)
+    if val is None:
+        return float(default)
+    return require_yaml_number(val, label=label, source=source)
+
+
 def require_yaml_number_list(value: Any, *, label: str, source: str) -> list[float]:
     """Require a YAML list of numbers so bools/strings do not reach ``int()``."""
     if not isinstance(value, list):

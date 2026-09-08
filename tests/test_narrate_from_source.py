@@ -74,6 +74,27 @@ def test_merged_settings_rejects_string_hints(tmp_path: Path) -> None:
         merged_narration_from_source_settings(cfg, "01")
 
 
+def test_merged_settings_rejects_bool_temperature(tmp_path: Path) -> None:
+    """``float(True)`` used to become temperature 1.0."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"narration_from_source": {"temperature": 0.65}}),
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    cfg.raw["narration_from_source"]["temperature"] = True
+    with pytest.raises(ConfigError, match="temperature must be a YAML number"):
+        merged_narration_from_source_settings(cfg, "01")
+    cfg.raw["narration_from_source"]["temperature"] = 0.65
+    cfg.raw["narration_from_source"]["max_context_bytes"] = False
+    with pytest.raises(ConfigError, match="max_context_bytes must be a YAML number"):
+        merged_narration_from_source_settings(cfg, "01")
+    cfg.raw["narration_from_source"]["max_context_bytes"] = 120_000
+    cfg.raw["narration_from_source"]["model"] = True
+    with pytest.raises(ConfigError, match="model must be a YAML string"):
+        merged_narration_from_source_settings(cfg, "01")
+
+
 def test_collect_source_snippets_respects_extra_paths(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / "docgen.yaml").write_text(

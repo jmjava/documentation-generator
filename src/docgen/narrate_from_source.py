@@ -55,7 +55,13 @@ def merged_narration_from_source_settings(cfg: "Config", seg_id: str) -> Narrati
 
     ``hints`` are always **authored in YAML by the project owner** (never returned from OpenAI).
     """
-    from docgen.config import context_path_globs, string_list_block
+    from docgen.config import (
+        context_path_globs,
+        optional_yaml_number,
+        require_optional_yaml_string,
+        require_yaml_string,
+        string_list_block,
+    )
 
     root = cfg.raw.get("narration_from_source")
     if not isinstance(root, dict):
@@ -79,12 +85,41 @@ def merged_narration_from_source_settings(cfg: "Config", seg_id: str) -> Narrati
         seg, "hints", label=f"narration_from_source.segments.{seg_id}.hints"
     )
 
-    model = str(root.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    temperature = float(root.get("temperature", DEFAULT_TEMPERATURE))
-    max_bytes = int(root.get("max_context_bytes", DEFAULT_MAX_CONTEXT_BYTES))
+    raw_model = root.get("model")
+    model = (
+        DEFAULT_MODEL
+        if raw_model is None
+        else require_yaml_string(
+            raw_model, label="narration_from_source.model", source="docgen.yaml"
+        )
+    )
+    temperature = optional_yaml_number(
+        root,
+        "temperature",
+        default=DEFAULT_TEMPERATURE,
+        label="narration_from_source.temperature",
+    )
+    max_bytes = int(
+        optional_yaml_number(
+            root,
+            "max_context_bytes",
+            default=DEFAULT_MAX_CONTEXT_BYTES,
+            label="narration_from_source.max_context_bytes",
+        )
+    )
 
-    sys_override = str(root.get("system_prompt", "")).strip()
-    seg_sys = str(seg.get("system_prompt", "")).strip()
+    raw_sys = root.get("system_prompt")
+    require_optional_yaml_string(
+        raw_sys, label="narration_from_source.system_prompt", source="docgen.yaml"
+    )
+    seg_sys_raw = seg.get("system_prompt")
+    require_optional_yaml_string(
+        seg_sys_raw,
+        label=f"narration_from_source.segments.{seg_id}.system_prompt",
+        source="docgen.yaml",
+    )
+    sys_override = raw_sys.strip() if isinstance(raw_sys, str) else ""
+    seg_sys = seg_sys_raw.strip() if isinstance(seg_sys_raw, str) else ""
     if seg_sys:
         system_prompt = seg_sys
     elif sys_override:
