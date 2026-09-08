@@ -741,6 +741,18 @@ def format_pacing_schedule_markdown(segments: list[dict], pace_indices: list[int
     return "\n".join(lines)
 
 
+def _nonneg_yaml_int(raw: Any, *, default: int, label: str) -> int:
+    """Missing/null → *default*; a present value must be a YAML number (not bool)."""
+    if raw is None:
+        return default
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise SceneGenerationError(
+            f"manim_scene_generation.{label} must be a YAML number, "
+            f"not {type(raw).__name__} ({raw!r})"
+        )
+    return max(0, int(raw))
+
+
 def _load_timing_words_from_cfg(cfg: "Config", seg_name: str) -> list[dict]:
     """Return the ``words`` list from ``animations/timing.json`` for ``seg_name``."""
     from docgen.timestamps import TimestampError, load_bundle_timing
@@ -790,19 +802,21 @@ def build_timing_enrichment_for_prompt(
     """Whisper timing for the scene-spec LLM: word stream first (`wait_word`), else segments (`wait_segment`)."""
     root = manim_scene_generation_root(cfg)
     seg_block = manim_scene_generation_segment_block(cfg, seg_id)
-    max_seg = int(root.get("max_whisper_segments_in_prompt", 0) or 0)
-    max_words = int(root.get("max_whisper_words_in_prompt", 0) or 0)
-    raw_chars = root.get("max_whisper_segment_text_chars", 200)
-    if raw_chars is None:
-        max_chars = 200
-    else:
-        # ``0 or 200`` used to ignore an explicit 0 (no truncation).
-        if isinstance(raw_chars, bool) or not isinstance(raw_chars, (int, float)):
-            raise SceneGenerationError(
-                "manim_scene_generation.max_whisper_segment_text_chars must be a "
-                f"YAML number, not {type(raw_chars).__name__} ({raw_chars!r})"
-            )
-        max_chars = max(0, int(raw_chars))
+    max_seg = _nonneg_yaml_int(
+        root.get("max_whisper_segments_in_prompt"),
+        default=0,
+        label="max_whisper_segments_in_prompt",
+    )
+    max_words = _nonneg_yaml_int(
+        root.get("max_whisper_words_in_prompt"),
+        default=0,
+        label="max_whisper_words_in_prompt",
+    )
+    max_chars = _nonneg_yaml_int(
+        root.get("max_whisper_segment_text_chars"),
+        default=200,
+        label="max_whisper_segment_text_chars",
+    )
 
     whisper_words = _load_timing_words_from_cfg(cfg, seg_name)
     n_words_total = len(whisper_words)

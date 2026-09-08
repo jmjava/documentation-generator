@@ -1,6 +1,6 @@
 # Milestone: pages duration probes must honor ffprobe returncode
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#143](https://github.com/jmjava/documentation-generator/pull/143)  
 **Depends on:** `milestones/ffprobe-returncode.md` (PR #135),
 `milestones/pages-config-strings.md` (PR #111)

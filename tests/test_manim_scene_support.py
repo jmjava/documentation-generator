@@ -316,6 +316,89 @@ def test_build_timing_enrichment_bool_max_chars_raises(tmp_path: Path) -> None:
         build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
 
 
+def _write_extras_timing(tmp_path: Path, n_words: int = 4) -> list[dict]:
+    anim = tmp_path / "animations"
+    anim.mkdir(parents=True, exist_ok=True)
+    words = [
+        {"start": float(i), "end": float(i) + 0.5, "word": f"w{i}"}
+        for i in range(n_words)
+    ]
+    segs = [
+        {
+            "start": 0.0,
+            "end": float(n_words),
+            "text": " ".join(w["word"] for w in words),
+        }
+    ]
+    (anim / "timing.json").write_text(
+        json.dumps({"08-extras": {"segments": segs, "words": words}}),
+        encoding="utf-8",
+    )
+    return segs
+
+
+def test_build_timing_enrichment_bool_max_words_raises(tmp_path: Path) -> None:
+    cfg = Config.minimal(tmp_path)
+    cfg.raw["manim_scene_generation"] = {"max_whisper_words_in_prompt": True}
+    segs = _write_extras_timing(tmp_path, 4)
+    with pytest.raises(SceneGenerationError, match="max_whisper_words_in_prompt"):
+        build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+
+
+def test_build_timing_enrichment_string_max_words_raises(tmp_path: Path) -> None:
+    cfg = Config.minimal(tmp_path)
+    cfg.raw["manim_scene_generation"] = {"max_whisper_words_in_prompt": "12"}
+    segs = _write_extras_timing(tmp_path, 4)
+    with pytest.raises(SceneGenerationError, match="max_whisper_words_in_prompt"):
+        build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+
+
+def test_build_timing_enrichment_bool_max_segments_raises(tmp_path: Path) -> None:
+    cfg = Config.minimal(tmp_path)
+    cfg.raw["manim_scene_generation"] = {"max_whisper_segments_in_prompt": True}
+    segs = [
+        {"start": 0.0, "end": 1.0, "text": "alpha"},
+        {"start": 1.0, "end": 2.0, "text": "bravo"},
+    ]
+    with pytest.raises(SceneGenerationError, match="max_whisper_segments_in_prompt"):
+        build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+
+
+def test_build_timing_enrichment_zero_max_words_lists_all(tmp_path: Path) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {
+            "manim_scene_generation": {
+                "max_whisper_words_in_prompt": 0,
+                "segments": {"08": {"class_name": "ExtrasScene"}},
+            },
+        },
+    )
+    segs = _write_extras_timing(tmp_path, 4)
+    out = build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+    assert '"word_index": 0' in out
+    assert '"word_index": 3' in out
+    assert "listed 1 of 4" not in out
+
+
+def test_build_timing_enrichment_positive_max_words_truncates(tmp_path: Path) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {
+            "manim_scene_generation": {
+                "max_whisper_words_in_prompt": 2,
+                "segments": {"08": {"class_name": "ExtrasScene"}},
+            },
+        },
+    )
+    segs = _write_extras_timing(tmp_path, 4)
+    out = build_timing_enrichment_for_prompt(cfg, "08", "08-extras", segs)
+    assert '"word_index": 0' in out
+    assert '"word_index": 1' in out
+    assert '"word_index": 3' not in out
+    assert "listed 2 of 4 tokens" in out
+
+
 # ── Class-name derivation ──────────────────────────────────────────────────
 
 
