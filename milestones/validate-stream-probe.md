@@ -1,7 +1,7 @@
 # Milestone: validate stream/drift probes must honor ffprobe returncode
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#145](https://github.com/jmjava/documentation-generator/pull/145)  
 **Depends on:** `milestones/whisper-prompt-caps.md` (PR #144),
 `milestones/pages-ffprobe-returncode.md` (PR #143),
 `milestones/ffprobe-returncode.md` (PR #135)
@@ -23,12 +23,12 @@ Nonzero ffprobe is a failed check. Do not trust leftover JSON.
 
 ## Done when
 
-- [ ] `_check_streams` / `_check_drift` fail when `returncode != 0`
-- [ ] Successful probes still parse streams / drift as before
-- [ ] Tests for leftover JSON on failure vs a real probe
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `_check_streams` / `_check_drift` fail when `returncode != 0`
+- [x] Successful probes still parse streams / drift as before
+- [x] Tests for leftover JSON on failure vs a real probe
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (808 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
