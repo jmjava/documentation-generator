@@ -1,6 +1,7 @@
 # Milestone: yaml-generate must keep string `visual_map` keys
 
 **Status:** Active  
+**PR:** [#138](https://github.com/jmjava/documentation-generator/pull/138)  
 **Depends on:** `milestones/story-end-probe.md` (PR #137),
 `milestones/yaml-generate-mappings.md` (PR #91),
 `milestones/empty-segments-all.md` (PR #124)
@@ -37,12 +38,12 @@ Fail closed. Do not coerce int `1` to `"01"`.
 
 ## Done when
 
-- [ ] Integer `visual_map` key raises; `KeepScene` on key `1` is not rewritten
-- [ ] Integer `segments.all` item raises; committed `"01"` manim row is kept
-- [ ] Non-list `segments.all` raises (discover + hint-declared merge)
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Integer `visual_map` key raises; `KeepScene` on key `1` is not rewritten
+- [x] Integer `segments.all` item raises; committed `"01"` manim row is kept
+- [x] Non-list `segments.all` raises (discover + hint-declared merge)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (779 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
