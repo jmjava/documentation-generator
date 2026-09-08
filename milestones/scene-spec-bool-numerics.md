@@ -1,7 +1,7 @@
 # Milestone: scene-spec numerics must not coerce bools
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#147](https://github.com/jmjava/documentation-generator/pull/147)  
 **Depends on:** `milestones/grok-stt-start-end.md` (PR #146),
 `milestones/visual-beats-numeric.md` (PR #120)
 
@@ -28,12 +28,12 @@ Missing optional keys keep defaults. Explicit `wait_word: 0` stays 0.
 
 ## Done when
 
-- [ ] Bool `wait_word` / `run_time` / `width` / `title.font_size` /
+- [x] Bool `wait_word` / `run_time` / `width` / `title.font_size` /
       `page_transition_run_time` raise `SceneSpecError`
-- [ ] `wait_word: 0` still validates
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] `wait_word: 0` still validates
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (818 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
