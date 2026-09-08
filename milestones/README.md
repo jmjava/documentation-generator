@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[pages-ffprobe-returncode.md](pages-ffprobe-returncode.md)** —
-pages duration badges must not trust ffprobe stdout when the probe
-exits non-zero.
+**Active:** **[whisper-prompt-caps.md](whisper-prompt-caps.md)** —
+timing-enrichment whisper count caps must not coerce bools to 1.
 
 **Shipped:**
+- **[pages-ffprobe-returncode.md](pages-ffprobe-returncode.md)** —
+  pages duration badges must not trust ffprobe stdout when the probe
+  exits non-zero (#143).
 - **[merge-settings-numerics.md](merge-settings-numerics.md)** —
   narration / scene-generation merge must not coerce bool temperature
   or model values (#142).
