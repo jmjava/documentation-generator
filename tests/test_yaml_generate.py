@@ -1041,3 +1041,101 @@ def test_merge_hint_declared_segments_rejects_non_mapping_segment_names(tmp_path
     }
     with pytest.raises(ValueError, match="segment_names must be a YAML mapping"):
         merge_hint_declared_segments(raw, cfg)
+
+
+def test_discover_visual_map_rejects_int_visual_map_key(tmp_path: Path) -> None:
+    """Unquoted YAML ``01:`` is int ``1`` and used to miss ``segments.all: [\"01\"]``.
+
+    Discovery then treated the manim slot as empty, assigned an unused
+    ``*Scene`` class, and ``vm.clear(); vm.update(new_vm)`` dropped ``KeepScene``.
+    """
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class KeepScene(Scene):\n    pass\n\nclass OtherScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    cfg = _minimal_cfg(tmp_path)
+    keep = {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"}
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {1: keep},
+    }
+    with pytest.raises(ConfigError, match="visual_map key must be a YAML string"):
+        discover_visual_map(raw, cfg)
+    assert raw["visual_map"][1]["scene"] == "KeepScene"
+    assert 1 in raw["visual_map"]
+    assert "01" not in raw["visual_map"]
+    assert "OtherScene" not in str(raw["visual_map"])
+
+
+def test_merge_defaults_rejects_int_visual_map_key(tmp_path: Path) -> None:
+    """Sync still walks ``visual_map`` when ``auto_visual_map`` is off."""
+    cfg = _minimal_cfg(tmp_path)
+    keep = {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"}
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "visual_map": {1: keep},
+        "discovery": {"auto_visual_map": False},
+    }
+    with pytest.raises(ConfigError, match="visual_map key must be a YAML string"):
+        merge_defaults(raw, cfg)
+    assert raw["visual_map"][1]["scene"] == "KeepScene"
+    assert 1 in raw["visual_map"]
+
+
+def test_discover_visual_map_rejects_int_segment_all_item(tmp_path: Path) -> None:
+    """Unquoted ``all: [01]`` is ``[1]`` and used to miss ``visual_map[\"01\"]``."""
+    (tmp_path / "animations").mkdir()
+    (tmp_path / "animations" / "scenes.py").write_text(
+        "class KeepScene(Scene):\n    pass\n\nclass OtherScene(Scene):\n    pass\n",
+        encoding="utf-8",
+    )
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": [1], "default": ["01"]},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"}
+        },
+    }
+    with pytest.raises(ConfigError, match=r"segments\.all\[0\] must be a YAML string"):
+        discover_visual_map(raw, cfg)
+    assert raw["visual_map"]["01"]["scene"] == "KeepScene"
+
+
+def test_discover_visual_map_rejects_non_list_all(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path)
+    raw = {
+        "segments": {"all": "01"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "KeepScene", "source": "KeepScene.mp4"}
+        },
+    }
+    with pytest.raises(ValueError, match="segments.all must be a YAML list"):
+        discover_visual_map(raw, cfg)
+    assert raw["visual_map"]["01"]["scene"] == "KeepScene"
+
+
+def test_segments_in_config_rejects_int_ids() -> None:
+    with pytest.raises(ConfigError, match=r"segments\.all\[0\] must be a YAML string"):
+        segments_in_config({"segments": {"all": [1]}})
+
+
+def test_segments_in_config_rejects_non_mapping_segments() -> None:
+    with pytest.raises(ValueError, match="segments must be a YAML mapping"):
+        segments_in_config({"segments": ["01"]})
+
+
+def test_merge_hint_declared_segments_rejects_non_list_all(tmp_path: Path) -> None:
+    """A present non-list ``all`` used to be skipped, then replaced with ``[]``."""
+    hints = tmp_path / "hints"
+    hints.mkdir()
+    (hints / "decl.md").write_text(
+        "---\ndocgen:\n  segment:\n    create: true\n    id: \"02\"\n    stem: 02-x\n---\n",
+        encoding="utf-8",
+    )
+    cfg = _cfg_with_hints_dir(tmp_path)
+    raw = {"segments": {"all": "01"}}
+    with pytest.raises(ValueError, match="segments.all must be a YAML list"):
+        merge_hint_declared_segments(raw, cfg)
+    assert raw["segments"]["all"] == "01"
+    assert "default" not in raw["segments"]
