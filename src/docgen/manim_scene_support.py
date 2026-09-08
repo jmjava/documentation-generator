@@ -515,7 +515,13 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
     `visual_beats`) are not merged from hint files; set them in committed bundle
     ``docgen.yaml`` when needed, or rely on TIMING JSON / auto tables in the spec prompt.
     """
-    from docgen.config import context_path_globs, string_list_block
+    from docgen.config import (
+        context_path_globs,
+        optional_yaml_number,
+        require_optional_yaml_string,
+        require_yaml_string,
+        string_list_block,
+    )
 
     root = cfg.raw.get("manim_scene_generation")
     if not isinstance(root, dict):
@@ -539,12 +545,41 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
         seg, "hints", label=f"manim_scene_generation.segments.{seg_id}.hints"
     )
 
-    model = str(root.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    temperature = float(root.get("temperature", DEFAULT_TEMPERATURE))
-    max_bytes = int(root.get("max_context_bytes", DEFAULT_MAX_CONTEXT_BYTES))
+    raw_model = root.get("model")
+    model = (
+        DEFAULT_MODEL
+        if raw_model is None
+        else require_yaml_string(
+            raw_model, label="manim_scene_generation.model", source="docgen.yaml"
+        )
+    )
+    temperature = optional_yaml_number(
+        root,
+        "temperature",
+        default=DEFAULT_TEMPERATURE,
+        label="manim_scene_generation.temperature",
+    )
+    max_bytes = int(
+        optional_yaml_number(
+            root,
+            "max_context_bytes",
+            default=DEFAULT_MAX_CONTEXT_BYTES,
+            label="manim_scene_generation.max_context_bytes",
+        )
+    )
 
-    sys_override = str(root.get("system_prompt", "")).strip()
-    seg_sys = str(seg.get("system_prompt", "")).strip()
+    raw_sys = root.get("system_prompt")
+    require_optional_yaml_string(
+        raw_sys, label="manim_scene_generation.system_prompt", source="docgen.yaml"
+    )
+    seg_sys_raw = seg.get("system_prompt")
+    require_optional_yaml_string(
+        seg_sys_raw,
+        label=f"manim_scene_generation.segments.{seg_id}.system_prompt",
+        source="docgen.yaml",
+    )
+    sys_override = raw_sys.strip() if isinstance(raw_sys, str) else ""
+    seg_sys = seg_sys_raw.strip() if isinstance(seg_sys_raw, str) else ""
     if seg_sys:
         system_prompt = seg_sys
     elif sys_override:
@@ -552,7 +587,13 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
     else:
         system_prompt = ""
 
-    cls_name = str(seg.get("class_name", "")).strip() or None
+    raw_cls = seg.get("class_name")
+    require_optional_yaml_string(
+        raw_cls,
+        label=f"manim_scene_generation.segments.{seg_id}.class_name",
+        source="docgen.yaml",
+    )
+    cls_name = raw_cls.strip() or None if isinstance(raw_cls, str) else None
 
     return SceneGenerationSettings(
         model=model,
