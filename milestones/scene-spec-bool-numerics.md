@@ -1,6 +1,6 @@
 # Milestone: scene-spec numerics must not coerce bools
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#147](https://github.com/jmjava/documentation-generator/pull/147)  
 **Depends on:** `milestones/grok-stt-start-end.md` (PR #146),
 `milestones/visual-beats-numeric.md` (PR #120)

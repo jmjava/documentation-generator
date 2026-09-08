@@ -469,6 +469,23 @@ def test_validate_rejects_bool_page_transition_run_time() -> None:
         validate_scene_spec(spec)
 
 
+def test_validate_rejects_bool_first_row_title_buff() -> None:
+    spec = _spec_with(layout={"first_row_title_buff": True})
+    with pytest.raises(SceneSpecError, match="first_row_title_buff must be a YAML number"):
+        validate_scene_spec(spec)
+
+
+def test_validate_rejects_string_row_gap() -> None:
+    spec = _spec_with(layout={"row_gap": "0.6"})
+    with pytest.raises(SceneSpecError, match="row_gap must be a YAML number"):
+        validate_scene_spec(spec)
+
+
+def test_validate_accepts_numeric_layout_gaps() -> None:
+    spec = _spec_with(layout={"first_row_title_buff": 0.5, "row_gap": 0.6, "column_gap": 0.8})
+    validate_scene_spec(spec)
+
+
 def test_validate_rejects_wait_word_and_wait_segment_together() -> None:
     with pytest.raises(SceneSpecError, match="at most one"):
         validate_scene_spec(
