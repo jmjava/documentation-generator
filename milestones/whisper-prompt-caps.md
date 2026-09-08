@@ -1,6 +1,6 @@
 # Milestone: Whisper prompt caps must not coerce bools
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#144](https://github.com/jmjava/documentation-generator/pull/144)  
 **Depends on:** `milestones/pages-ffprobe-returncode.md` (PR #143),
 `milestones/merge-settings-numerics.md` (PR #142),
