@@ -1,7 +1,7 @@
 # Milestone: pages duration probes must honor ffprobe returncode
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#143](https://github.com/jmjava/documentation-generator/pull/143)  
 **Depends on:** `milestones/ffprobe-returncode.md` (PR #135),
 `milestones/pages-config-strings.md` (PR #111)
 
@@ -24,12 +24,12 @@ raise — but do not trust stdout on failure.
 
 ## Done when
 
-- [ ] Segment / concat probes ignore stdout when `returncode != 0`
-- [ ] Successful probes still render `~Mm Ss`
-- [ ] Tests for leftover JSON on failure vs a real duration
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Segment / concat probes ignore stdout when `returncode != 0`
+- [x] Successful probes still render `~Mm Ss`
+- [x] Tests for leftover JSON on failure vs a real duration
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (799 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
