@@ -1,5 +1,28 @@
 # Agent context — documentation-generator (`docgen`)
 
+## Session contract (non-negotiable)
+
+Cloud agent `bc-fd13dd23-…2ccd` ran ~22 hours (2026-09-07 → 2026-09-08),
+opened PRs **#73–#149**, and spawned recursive “hunt remaining bugs”
+children. That loop is **forbidden**. Details:
+**`.cursor/rules/no-factory-loop.mdc`**.
+
+- **Finish the user's list** in this run. Do not stop after the first item
+  to ask for a merge, rebase, review, or permission to continue.
+- **Do not ask the user to merge.** Keep working on the same branch and
+  the same PR. They merge when they want.
+- **One request → one branch → one PR** unless they explicitly asked for
+  separate PRs. Update that PR each turn; do not open a new PR per file
+  or per YAML key.
+- **Batch isomorphic holes** (typed config keys, `or default` coerces,
+  the same fail-closed helper on the next field) into that one PR — or
+  stop and list leftovers. Never one-key-per-PR.
+- **When the list is done, STOP.** Do not hunt the next milestone, spawn
+  “hunt remaining / fail-closed holes” agents, or invent
+  `milestones/<one-config-key>.md` as the next task.
+- **If the next patch is the same shape as the last** (new milestone file,
+  same helper, different key): hard stop. Report. Do not open another PR.
+
 ## North star
 
 Stable goals for this repository:
@@ -91,6 +114,11 @@ Tests should cover **CLI-visible behavior** and contracts that adopters rely on:
 
 ## Cursor Cloud specific instructions
 
+- **Session contract first:** see the top of this file and
+  **`.cursor/rules/no-factory-loop.mdc`**. Finish the assigned list on
+  **one** PR. Do not ask to merge. Do not start a YAML-key factory or
+  recursive hunt. `milestones/README.md` **Active** is human-assigned
+  only; an empty Active line means stop, not “pick the next config key”.
 - **Virtualenv:** the project is installed editable into **`/workspace/.venv`** (created by the startup update script). Shells do **not** auto-activate it — run `. /workspace/.venv/bin/activate` (or prefix the venv path) before `docgen`, `pytest`, or `ruff`. The `docgen` console script lives at `/workspace/.venv/bin/docgen`.
 - **System deps are pre-baked in the VM snapshot** (not the update script): `ffmpeg` + `tesseract-ocr` (validation/compose/OCR), plus `build-essential`, `python3-dev`, `libcairo2-dev`, `libpango1.0-dev`, `pkg-config` (needed to build the `manim` extra's `manimpango`/`pycairo` wheels). If a fresh VM ever lacks these, reinstall via apt before `pip install`.
 - **Standard commands** are in `README.md` / `pyproject.toml` / `.github/workflows/ci.yml`: lint `ruff check src/ tests/`; tests `pytest tests/ -v --tb=short`; **required** `docgen benchmark` (CI job `benchmark`). The CI unit job also exports `PYTHONPATH=src` (not needed locally because of the editable install, but harmless).

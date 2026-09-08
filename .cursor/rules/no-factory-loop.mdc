@@ -1,0 +1,59 @@
+---
+description: Finish the user's task list on one PR. Do not hunt remaining YAML keys, ask for merges, or open isomorphic micro-PRs.
+alwaysApply: true
+---
+
+# Finish the list. Do not run a factory loop.
+
+**Incident:** Cloud agent `bc-fd13dd23-…2ccd` (2026-09-07 → 2026-09-08)
+ran ~22 hours, opened PRs **#73–#149**, spawned recursive “hunt remaining
+bugs / next milestone / fail-closed holes” children, and treated every
+leftover YAML key / `or default` coerce as a new milestone + new PR.
+That is a **failed run**, not a workflow to copy.
+
+## Session contract (this repo)
+
+1. **Finish the user's list.** If they gave numbered or bulleted tasks, do
+   all of them in this run. Do not pause after item 1 to ask for a merge,
+   rebase, review, or “should I continue?”
+2. **Do not ask the user to merge.** Continue on the same branch. Update
+   the same PR. They merge when they want. Mentioning a PR link in passing
+   is fine; blocking on merge is not.
+3. **One user request → one branch → one PR** unless they explicitly asked
+   for separate PRs. “Create or update the PR each turn” means **update
+   that PR**, not open a new one per file.
+4. **Batch isomorphic holes.** Many leftover YAML scalars, `or 0.0`
+   coerces, or the same fail-closed helper on the next config key belong
+   in **one** PR (or a stop-and-report list). Not one PR per key.
+5. **After the assigned work is done: STOP.** Report what shipped and any
+   leftover ideas in bullets. Do **not** hunt “remaining bugs”, “next
+   milestone”, or “fail-closed holes”. Do **not** spawn Cloud / background
+   agents to continue hunting unless the user asked for those agents.
+6. **Isomorphic-patch detector (hard stop).** If the next change is the
+   same shape as the last — new `milestones/<one-config-key>.md`, same
+   helper, different key name — you are in the factory. Stop. List the
+   remaining keys for a human. Do not open another PR.
+7. **Do not invent a milestone file** unless the user asked for one, or
+   the work is a real product behavior change (CLI, Manim clock, pipeline,
+   wizard UX a consumer would notice). Typed YAML on yet another key is
+   not a product milestone.
+
+## Caps
+
+- **Max 1 PR** per user message unless they asked for more than one.
+- **Max 1 hunt pass** per run, and only if they asked to hunt. After that
+  pass ships or reports “nothing product-visible”, stop.
+- Do not launch sibling agents named hunt / remaining / next-milestone /
+  fail-closed-holes unless the user asked.
+
+## What counts as progress
+
+Product-visible: CLI behavior, render/sync, wizard UX, a bug a consumer
+would hit.
+
+Not progress: another typed YAML key, another `or default` coerce, another
+`milestones/*.md` for one config field, another draft PR that looks like
+the last one.
+
+If you cannot name the consumer-visible bug in one sentence, do not start
+the patch. Ask is not required — **stop and report**.
