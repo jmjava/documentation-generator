@@ -874,12 +874,27 @@ class Validator:
             )
 
         audio = self._find_audio(seg_id)
-        audio_end = self._probe_media_duration(audio) if audio and not _is_lfs_pointer(audio) else None
-        transcript_end = self._timing_last_end(block if isinstance(block, dict) else {})
-        # Prefer audio duration; fall back to transcript end when probe fails.
-        end_t = audio_end if audio_end is not None else transcript_end
-        if end_t is None or end_t <= 0:
-            return CheckResult("story_end", True, ["Cannot determine audio/transcript end (skipped)"])
+        if audio and not _is_lfs_pointer(audio):
+            audio_end = self._probe_media_duration(audio)
+            if audio_end is None or audio_end <= 0:
+                return CheckResult(
+                    "story_end",
+                    False,
+                    [
+                        f"cannot probe audio duration for {audio.name} — "
+                        "story_end cannot compare last paced reveal to the mp3"
+                    ],
+                )
+            end_t = audio_end
+        else:
+            # No local mp3 (or LFS pointer): compare against transcript end only.
+            end_t = self._timing_last_end(block if isinstance(block, dict) else {})
+            if end_t is None or end_t <= 0:
+                return CheckResult(
+                    "story_end",
+                    True,
+                    ["Cannot determine audio/transcript end (skipped)"],
+                )
 
         early_idle = end_t - last_reveal
         max_early_sec = float(se_cfg.get("max_early_sec", 40.0))

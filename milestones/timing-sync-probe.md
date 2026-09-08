@@ -1,6 +1,6 @@
 # Milestone: timing_sync must fail when the mp3 duration cannot be probed
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#136](https://github.com/jmjava/documentation-generator/pull/136)  
 **Depends on:** `milestones/ffprobe-returncode.md` (PR #135)
 

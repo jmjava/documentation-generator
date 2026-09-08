@@ -240,6 +240,30 @@ class TestStoryEnd:
         check = Validator(cfg)._check_story_end("01")
         assert check.passed, check.details
 
+    def test_unprobed_audio_duration_fails(self, cfg, monkeypatch) -> None:
+        """Probe failure must not fall back to transcript end (hides long audio)."""
+        words = [
+            {"word": "Alpha", "start": 2.0, "end": 2.4},
+            {"word": "Omega", "start": 80.0, "end": 80.5},
+        ]
+        (cfg.animations_dir / "timing.json").write_text(
+            json.dumps(
+                {
+                    "01-x": {
+                        "text": "Alpha Omega",
+                        "words": words,
+                        "segments": [{"start": 0.0, "end": 85.0, "text": "x"}],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        _write_scene_spec(cfg, labels=["Alpha", "Omega"])
+        _patch_audio_duration(monkeypatch, None)
+        check = Validator(cfg)._check_story_end("01")
+        assert not check.passed
+        assert any("cannot probe audio duration" in d for d in check.details)
+
     def test_story_end_disabled_via_config(self, tmp_path, monkeypatch) -> None:
         raw = {
             "segments": {"default": ["01"], "all": ["01"]},
