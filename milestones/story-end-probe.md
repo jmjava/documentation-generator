@@ -1,6 +1,6 @@
 # Milestone: story_end must fail when the mp3 duration cannot be probed
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#137](https://github.com/jmjava/documentation-generator/pull/137)  
 **Depends on:** `milestones/timing-sync-probe.md` (PR #136)
 

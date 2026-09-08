@@ -5,10 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[story-end-probe.md](story-end-probe.md)** —
-`story_end` must fail when the mp3 duration cannot be probed.
+**Active:** **[yaml-visual-map-keys.md](yaml-visual-map-keys.md)** —
+`yaml-generate` must reject integer `visual_map` keys and non-string
+`segments.all` items instead of dropping committed manim rows.
 
 **Shipped:**
+- **[story-end-probe.md](story-end-probe.md)** —
+  `story_end` must fail when the mp3 duration cannot be probed
+  (#137).
 - **[timing-sync-probe.md](timing-sync-probe.md)** —
   `timing_sync` must fail when the mp3 duration cannot be probed
   (#136).

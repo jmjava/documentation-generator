@@ -62,6 +62,53 @@ def _require_yaml_mapping(value: Any, *, label: str) -> dict[str, Any]:
     return value
 
 
+def _require_visual_map_str_keys(vm: dict[Any, Any]) -> None:
+    """Reject integer / bool ``visual_map`` keys (unquoted YAML ``01:`` → ``1``).
+
+    ``Config.from_yaml`` already gates this. ``yaml-generate`` walks a raw
+    mapping from ``load_yaml_mapping`` and used to ``str()`` keys, so a
+    committed manim row on ``1`` missed ``segments.all: [\"01\"]`` and was
+    dropped on rewrite.
+    """
+    from docgen.config import require_yaml_string
+
+    for key in vm:
+        require_yaml_string(key, label="visual_map key", source="docgen.yaml")
+
+
+def _visual_map_mapping(raw: dict[str, Any], *, create_if_missing: bool = False) -> dict[str, Any]:
+    """Return ``visual_map`` as a mapping with YAML-string keys.
+
+    Missing/null is ``{}`` (written back when *create_if_missing*). A present
+    non-mapping or non-string key raises.
+    """
+    vm = raw.get("visual_map")
+    if vm is None:
+        if create_if_missing:
+            vm = {}
+            raw["visual_map"] = vm
+        else:
+            vm = {}
+        return vm
+    vm = _require_yaml_mapping(vm, label="visual_map")
+    _require_visual_map_str_keys(vm)
+    return vm
+
+
+def _require_yaml_str_list(value: Any, *, label: str) -> list[str]:
+    """Require a YAML list of strings (do not ``str()`` ints / bools)."""
+    from docgen.config import require_yaml_string
+
+    if not isinstance(value, list):
+        raise ValueError(
+            f"{label} must be a YAML list, not {type(value).__name__}"
+        )
+    return [
+        require_yaml_string(item, label=f"{label}[{i}]", source="docgen.yaml")
+        for i, item in enumerate(value)
+    ]
+
+
 def _discovery_flag_off(raw: dict[str, Any], key: str) -> bool:
     """True when ``discovery.<key>`` is YAML ``false``.
 
@@ -96,29 +143,32 @@ def narration_segment_pairs(narration_dir: Path) -> list[tuple[str, str]]:
 
 
 def segments_in_config(raw: dict[str, Any]) -> set[str]:
-    seg = raw.get("segments") or {}
-    if not isinstance(seg, dict):
+    seg = raw.get("segments")
+    if seg is None:
         return set()
-    all_ids = _segment_all_ids(seg)
-    return {str(x) for x in all_ids}
+    seg = _require_yaml_mapping(seg, label="segments")
+    return set(_segment_all_ids(seg))
 
 
-def _segment_all_ids(seg: dict[str, Any]) -> list[Any]:
+def _segment_all_ids(seg: dict[str, Any]) -> list[str]:
     """Return ``segments.all`` when the key is present (including an empty list).
 
     Fall back to ``segments.default`` only when ``all`` is missing or null.
     ``all: [] or default`` used to treat an explicit empty ``all`` as missing
     and rewrite ``visual_map`` / ``manim.scenes`` from ``default``.
+
+    A present non-list or non-string item raises so ``str(1)`` cannot miss
+    ``visual_map[\"01\"]`` and drop a committed manim row.
     """
     if "all" in seg and seg.get("all") is not None:
         raw_ids = seg.get("all")
+        label = "segments.all"
     else:
         raw_ids = seg.get("default")
+        label = "segments.default"
     if raw_ids is None:
         return []
-    if not isinstance(raw_ids, list):
-        return []
-    return list(raw_ids)
+    return _require_yaml_str_list(raw_ids, label=label)
 
 
 def narration_not_in_segments(raw: dict[str, Any], narration_dir: Path) -> list[tuple[str, str]]:
@@ -400,14 +450,25 @@ def merge_hint_project(raw: dict[str, Any], cfg: "Config") -> list[str]:
 
 def _segment_lists_to_update(raw: dict[str, Any]) -> list[list[str]]:
     seg = raw.get("segments")
-    if not isinstance(seg, dict):
+    if seg is None:
         return []
+    seg = _require_yaml_mapping(seg, label="segments")
+    from docgen.config import require_yaml_string
+
     buckets: list[list[str]] = []
     seen: set[int] = set()
     for key in ("default", "all"):
         lst = seg.get(key)
-        if not isinstance(lst, list):
+        if lst is None:
             continue
+        if not isinstance(lst, list):
+            raise ValueError(
+                f"segments.{key} must be a YAML list, not {type(lst).__name__}"
+            )
+        for i, item in enumerate(lst):
+            require_yaml_string(
+                item, label=f"segments.{key}[{i}]", source="docgen.yaml"
+            )
         lid = id(lst)
         if lid in seen:
             continue
@@ -656,12 +717,7 @@ def merge_hint_wiring(raw: dict[str, Any], cfg: "Config") -> list[str]:
     changes: list[str] = []
 
     if not hint_merge_off:
-        vm = raw.get("visual_map")
-        if vm is None:
-            vm = {}
-            raw["visual_map"] = vm
-        else:
-            vm = _require_yaml_mapping(vm, label="visual_map")
+        vm = _visual_map_mapping(raw, create_if_missing=True)
         for sid, w in sorted(wirings.items(), key=lambda x: _segment_id_sort_key(x[0])):
             vis = w.get("visual")
             if isinstance(vis, dict) and vis:
@@ -783,11 +839,7 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     scenes_py = cfg.animations_dir / "scenes.py"
     manim_classes = manim_scene_class_names_in_order(scenes_py)
 
-    existing = raw.get("visual_map")
-    if existing is None:
-        existing = {}
-    else:
-        existing = _require_yaml_mapping(existing, label="visual_map")
+    existing = _visual_map_mapping(raw)
 
     for key, spec in existing.items():
         if spec is None:
@@ -801,13 +853,12 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     leftover_non_manim: dict[str, Any] = {}
     for key, spec in existing.items():
         if _visual_entry_type(spec) not in ("", "manim"):
-            leftover_non_manim[str(key)] = spec
+            leftover_non_manim[key] = spec
 
     eligible: list[str] = []
     existing_for: dict[str, Any] = {}
-    for seg_id in all_ids:
-        sid = str(seg_id)
-        spec = existing.get(sid, existing.get(seg_id))
+    for sid in all_ids:
+        spec = existing.get(sid)
         existing_for[sid] = spec
         vt = _visual_entry_type(spec)
         if vt and vt != "manim":
@@ -846,12 +897,7 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
     for key, spec in leftover_non_manim.items():
         new_vm.setdefault(key, spec)
 
-    vm = raw.get("visual_map")
-    if vm is None:
-        vm = {}
-        raw["visual_map"] = vm
-    else:
-        vm = _require_yaml_mapping(vm, label="visual_map")
+    vm = _visual_map_mapping(raw, create_if_missing=True)
     if vm != new_vm:
         vm.clear()
         vm.update(new_vm)
@@ -861,21 +907,17 @@ def discover_visual_map(raw: dict[str, Any], cfg: "Config") -> list[str]:
 
 def _sync_manim_scenes_from_visual_map(raw: dict[str, Any]) -> list[str]:
     """Set ``manim.scenes`` to Manim scene names in ``segments.all`` order (deduped)."""
-    vm = raw.get("visual_map")
-    if vm is None:
-        vm = {}
-    else:
-        vm = _require_yaml_mapping(vm, label="visual_map")
+    vm = _visual_map_mapping(raw)
     seg_block = raw.get("segments")
     if seg_block is None:
-        all_ids: list[Any] = []
+        all_ids: list[str] = []
     else:
         seg_block = _require_yaml_mapping(seg_block, label="segments")
         all_ids = _segment_all_ids(seg_block)
     scenes: list[str] = []
     seen: set[str] = set()
     for sid in all_ids:
-        spec = vm.get(str(sid))
+        spec = vm.get(sid)
         if not isinstance(spec, dict) or spec.get("type") != "manim":
             continue
         sc_raw = spec.get("scene") or spec.get("class")
@@ -909,6 +951,7 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
     if vm is None:
         return []
     vm = _require_yaml_mapping(vm, label="visual_map")
+    _require_visual_map_str_keys(vm)
     mg = raw.get("manim_scene_generation")
     if mg is None:
         return []
@@ -930,8 +973,8 @@ def _sync_manim_segments_from_visual_map(raw: dict[str, Any]) -> list[str]:
         if not cn_raw:
             continue
         cn = str(cn_raw).strip()
-        sid = str(seg_id)
-        prev = old.get(sid, old.get(seg_id))
+        sid = seg_id
+        prev = old.get(sid)
         row: dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
         row["class_name"] = str(cn)
         synced[sid] = row
