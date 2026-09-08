@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[wait-until-word-start.md](wait-until-word-start.md)** —
-`wait_until_word` must raise on a corrupt Whisper `start` instead of
-dumping the next reveal.
+**Active:** **[merge-settings-str-lists.md](merge-settings-str-lists.md)** —
+narration / scene-generation merge must not `str()` hint and path lists.
 
 **Shipped:**
+- **[wait-until-word-start.md](wait-until-word-start.md)** —
+  `wait_until_word` must raise on a corrupt Whisper `start`
+  (#139).
 - **[yaml-visual-map-keys.md](yaml-visual-map-keys.md)** —
   `yaml-generate` must reject integer `visual_map` keys and non-string
   `segments.all` items (#138).

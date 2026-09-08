@@ -50,21 +50,13 @@ class NarrationFromSourceSettings:
     context_globs: list[str]
 
 
-def _as_str_list(x: Any) -> list[str]:
-    if x is None:
-        return []
-    if isinstance(x, str):
-        return [x] if x.strip() else []
-    if isinstance(x, list):
-        return [str(i).strip() for i in x if str(i).strip()]
-    return []
-
-
 def merged_narration_from_source_settings(cfg: "Config", seg_id: str) -> NarrationFromSourceSettings:
     """Merge ``narration_from_source`` defaults with optional ``segments.<seg_id>`` overrides.
 
     ``hints`` are always **authored in YAML by the project owner** (never returned from OpenAI).
     """
+    from docgen.config import context_path_globs, string_list_block
+
     root = cfg.raw.get("narration_from_source")
     if not isinstance(root, dict):
         root = {}
@@ -75,15 +67,17 @@ def merged_narration_from_source_settings(cfg: "Config", seg_id: str) -> Narrati
         if isinstance(raw_seg, dict):
             seg = raw_seg
 
-    ctx_root = root.get("context")
-    ctx_seg = seg.get("context")
-    paths = _as_str_list((ctx_root or {}).get("paths") if isinstance(ctx_root, dict) else None)
-    globs = _as_str_list((ctx_root or {}).get("globs") if isinstance(ctx_root, dict) else None)
-    if isinstance(ctx_seg, dict):
-        paths = paths + _as_str_list(ctx_seg.get("paths"))
-        globs = globs + _as_str_list(ctx_seg.get("globs"))
+    paths, globs = context_path_globs(root, prefix="narration_from_source")
+    extra_paths, extra_globs = context_path_globs(
+        seg, prefix=f"narration_from_source.segments.{seg_id}"
+    )
+    paths = paths + extra_paths
+    globs = globs + extra_globs
 
-    hints = _as_str_list(root.get("hints")) + _as_str_list(seg.get("hints"))
+    hints = string_list_block(root, "hints", label="narration_from_source.hints")
+    hints = hints + string_list_block(
+        seg, "hints", label=f"narration_from_source.segments.{seg_id}.hints"
+    )
 
     model = str(root.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     temperature = float(root.get("temperature", DEFAULT_TEMPERATURE))
