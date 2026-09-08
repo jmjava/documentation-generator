@@ -163,6 +163,31 @@ def string_list_block(
     ]
 
 
+def context_path_globs(
+    block: dict[str, Any],
+    *,
+    prefix: str,
+    source: str = "docgen.yaml",
+) -> tuple[list[str], list[str]]:
+    """Return ``context.paths`` / ``context.globs`` as string lists.
+
+    Missing/null ``context`` is empty lists. A present non-mapping, or
+    non-string list items, raises. Do not ``str()`` integers or wrap a
+    bare string as a one-item path list.
+    """
+    ctx = block.get("context")
+    if ctx is None:
+        return [], []
+    if not isinstance(ctx, dict):
+        raise ConfigError(
+            f"{source}: {prefix}.context must be a YAML mapping, not {type(ctx).__name__}"
+        )
+    return (
+        string_list_block(ctx, "paths", label=f"{prefix}.context.paths", source=source),
+        string_list_block(ctx, "globs", label=f"{prefix}.context.globs", source=source),
+    )
+
+
 def require_hint_and_context_lists(
     block: dict[str, Any],
     *,

@@ -476,16 +476,6 @@ class SceneGenerationSettings:
     class_name: str | None  # set when YAML provides ``segments.<id>.class_name``
 
 
-def _as_str_list(x: Any) -> list[str]:
-    if x is None:
-        return []
-    if isinstance(x, str):
-        return [x] if x.strip() else []
-    if isinstance(x, list):
-        return [str(i).strip() for i in x if str(i).strip()]
-    return []
-
-
 def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerationSettings:
     """Merge ``manim_scene_generation`` defaults with optional per-segment overrides.
 
@@ -525,6 +515,8 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
     `visual_beats`) are not merged from hint files; set them in committed bundle
     ``docgen.yaml`` when needed, or rely on TIMING JSON / auto tables in the spec prompt.
     """
+    from docgen.config import context_path_globs, string_list_block
+
     root = cfg.raw.get("manim_scene_generation")
     if not isinstance(root, dict):
         root = {}
@@ -535,12 +527,17 @@ def merged_scene_generation_settings(cfg: "Config", seg_id: str) -> SceneGenerat
         if isinstance(raw_seg, dict):
             seg = raw_seg
 
-    ctx_root = root.get("context") if isinstance(root.get("context"), dict) else {}
-    ctx_seg = seg.get("context") if isinstance(seg.get("context"), dict) else {}
-    paths = _as_str_list(ctx_root.get("paths")) + _as_str_list(ctx_seg.get("paths"))
-    globs = _as_str_list(ctx_root.get("globs")) + _as_str_list(ctx_seg.get("globs"))
+    paths, globs = context_path_globs(root, prefix="manim_scene_generation")
+    extra_paths, extra_globs = context_path_globs(
+        seg, prefix=f"manim_scene_generation.segments.{seg_id}"
+    )
+    paths = paths + extra_paths
+    globs = globs + extra_globs
 
-    hints = _as_str_list(root.get("hints")) + _as_str_list(seg.get("hints"))
+    hints = string_list_block(root, "hints", label="manim_scene_generation.hints")
+    hints = hints + string_list_block(
+        seg, "hints", label=f"manim_scene_generation.segments.{seg_id}.hints"
+    )
 
     model = str(root.get("model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     temperature = float(root.get("temperature", DEFAULT_TEMPERATURE))

@@ -1,6 +1,6 @@
 # Milestone: wait_until_word must type Whisper `start`
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#139](https://github.com/jmjava/documentation-generator/pull/139)  
 **Depends on:** `milestones/yaml-visual-map-keys.md` (PR #138),
 `milestones/bootstrap-timing-helpers.md` (PR #130),

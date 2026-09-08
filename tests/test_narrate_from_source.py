@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 from docgen.narrate_from_source import (
     build_owner_hints_guidance,
     collect_source_snippets,
@@ -41,6 +41,37 @@ def test_merged_settings_hints_and_segment_override(tmp_path: Path) -> None:
     s = merged_narration_from_source_settings(cfg, "01")
     assert "Global hint." in s.hints and "Segment hint." in s.hints
     assert "README.md" in s.context_paths and "src/x.ts" in s.context_paths
+
+
+def test_merged_settings_rejects_int_context_paths(tmp_path: Path) -> None:
+    """``str(1)`` used to become a fake path ``\"1\"`` and skip the real files."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"narration_from_source": {"context": {"paths": ["README.md"]}}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "README.md").write_text("r", encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    cfg.raw["narration_from_source"]["context"]["paths"] = [1]
+    with pytest.raises(ConfigError, match=r"context\.paths\[0\] must be a YAML string"):
+        merged_narration_from_source_settings(cfg, "01")
+
+
+def test_merged_settings_rejects_string_hints(tmp_path: Path) -> None:
+    """A bare string used to wrap as a one-item list; a mapping became ``[]``."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump({"narration_from_source": {"hints": ["Keep it short."]}}),
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    cfg.raw["narration_from_source"]["hints"] = "Keep it short."
+    with pytest.raises(ConfigError, match="narration_from_source.hints must be a YAML list"):
+        merged_narration_from_source_settings(cfg, "01")
+    cfg.raw["narration_from_source"]["hints"] = ["Keep it short."]
+    cfg.raw["narration_from_source"]["context"] = ["README.md"]
+    with pytest.raises(ConfigError, match="narration_from_source.context must be a YAML mapping"):
+        merged_narration_from_source_settings(cfg, "01")
 
 
 def test_collect_source_snippets_respects_extra_paths(tmp_path: Path) -> None:

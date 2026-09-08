@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from docgen.config import Config
+from docgen.config import Config, ConfigError
 from docgen.manim_scene_support import (
     BOOTSTRAP_HEADER,
     DEFAULT_MODEL,
@@ -250,6 +250,25 @@ def test_settings_root_and_segment_overrides_merge(tmp_path: Path) -> None:
     assert s.hints == ["root-hint", "seg-hint-1", "seg-hint-2"]
     assert s.context_paths == ["src/docgen/cli.py", "src/docgen/compose.py"]
     assert s.class_name == "ExtrasScene"
+
+
+def test_settings_rejects_int_hint_and_string_paths(tmp_path: Path) -> None:
+    cfg = _write_cfg(
+        tmp_path,
+        {
+            "manim_scene_generation": {
+                "hints": ["root-hint"],
+                "context": {"paths": ["src/docgen/cli.py"]},
+            }
+        },
+    )
+    cfg.raw["manim_scene_generation"]["hints"] = [True]
+    with pytest.raises(ConfigError, match=r"manim_scene_generation\.hints\[0\] must be a YAML string"):
+        merged_scene_generation_settings(cfg, "08")
+    cfg.raw["manim_scene_generation"]["hints"] = ["root-hint"]
+    cfg.raw["manim_scene_generation"]["context"]["paths"] = "src/docgen/cli.py"
+    with pytest.raises(ConfigError, match="context.paths must be a YAML list"):
+        merged_scene_generation_settings(cfg, "08")
 
 
 def test_settings_zero_temperature_is_not_replaced_by_default(tmp_path: Path) -> None:
