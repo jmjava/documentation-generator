@@ -1,6 +1,7 @@
 # Milestone: merge settings must not `str()` hint/path lists
 
 **Status:** Active  
+**PR:** [#140](https://github.com/jmjava/documentation-generator/pull/140)  
 **Depends on:** `milestones/wait-until-word-start.md` (PR #139),
 `milestones/context-path-lists.md` (PR #90)
 
@@ -29,12 +30,12 @@ Fail closed. Do not coerce. Missing/null lists stay `[]`.
 
 ## Done when
 
-- [ ] Integer / bool hint and path items raise
-- [ ] A bare string `hints` / `paths` raises (not wrapped)
-- [ ] A non-mapping `context` raises (not skipped)
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Integer / bool hint and path items raise
+- [x] A bare string `hints` / `paths` raises (not wrapped)
+- [x] A non-mapping `context` raises (not skipped)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (789 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
