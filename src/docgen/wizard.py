@@ -361,7 +361,7 @@ def generate_narration_via_llm(
     current = (current_narration or "").strip()
     mode_norm = str(mode or "generate").strip().lower()
     if mode_norm not in ("generate", "revise"):
-        mode_norm = "generate"
+        raise ValueError(f"mode must be 'generate' or 'revise', not {mode!r}")
     # Auto-revise when the caller supplied both an existing script and notes.
     if mode_norm == "generate" and current and notes:
         mode_norm = "revise"
@@ -658,14 +658,13 @@ def create_app(config: Any | None = None) -> Flask:
         except WizardError as exc:
             return jsonify({"error": str(exc)}), 400
         if topic_label is None and cfg is not None and seg_id_hint:
-            try:
-                topic_label = cfg.narration_topic_label(seg_id_hint)
-            except Exception:
-                topic_label = None
+            topic_label = cfg.narration_topic_label(seg_id_hint)
 
         effective_mode = str(mode or "generate").strip().lower()
         if effective_mode not in ("generate", "revise"):
-            effective_mode = "generate"
+            return jsonify({
+                "error": f"mode must be 'generate' or 'revise', not {mode!r}",
+            }), 400
         if effective_mode == "generate" and current_narration.strip() and revision_notes.strip():
             effective_mode = "revise"
 
