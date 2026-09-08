@@ -1,6 +1,6 @@
 # Milestone: scene-spec layout gaps must be YAML numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#148](https://github.com/jmjava/documentation-generator/pull/148)  
 **Depends on:** `milestones/scene-spec-bool-numerics.md` (PR #147)
 

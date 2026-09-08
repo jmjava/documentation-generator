@@ -658,11 +658,19 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise AIError(f"xAI STT returned non-JSON: {data[:200]!r}") from exc
     text = str(parsed.get("text") or "")
-    raw_words = parsed.get("words") or []
+    raw_words = parsed.get("words")
+    if raw_words is None:
+        raw_words = []
+    elif not isinstance(raw_words, list):
+        raise AIError(
+            f"xAI STT words must be a JSON array, not {type(raw_words).__name__}"
+        )
     words: list[dict[str, Any]] = []
-    for w in raw_words:
+    for i, w in enumerate(raw_words):
         if not isinstance(w, dict):
-            continue
+            raise AIError(
+                f"xAI STT words[{i}] must be a JSON object, not {type(w).__name__}"
+            )
         token = str(w.get("word") or w.get("text") or "").strip()
         if not token:
             continue
@@ -679,22 +687,33 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     else:
         duration = _stt_json_number(raw_dur, label="duration")
     segments = parsed.get("segments")
-    if not isinstance(segments, list) or not segments:
+    if segments is None:
+        segments = []
+    elif not isinstance(segments, list):
+        raise AIError(
+            f"xAI STT segments must be a JSON array, not {type(segments).__name__}"
+        )
+    if not segments:
         segments = (
             [{"start": words[0]["start"], "end": words[-1]["end"], "text": text}]
             if words
             else [{"start": 0.0, "end": duration, "text": text}]
         )
     else:
-        segments = [
-            {
-                "start": _stt_json_number(s.get("start"), label="segments[].start"),
-                "end": _stt_json_number(s.get("end"), label="segments[].end"),
-                "text": str(s.get("text") or ""),
-            }
-            for s in segments
-            if isinstance(s, dict)
-        ]
+        typed_segments: list[dict[str, Any]] = []
+        for i, s in enumerate(segments):
+            if not isinstance(s, dict):
+                raise AIError(
+                    f"xAI STT segments[{i}] must be a JSON object, not {type(s).__name__}"
+                )
+            typed_segments.append(
+                {
+                    "start": _stt_json_number(s.get("start"), label="segments[].start"),
+                    "end": _stt_json_number(s.get("end"), label="segments[].end"),
+                    "text": str(s.get("text") or ""),
+                }
+            )
+        segments = typed_segments
     return {"text": text, "segments": segments, "words": words}
 
 
