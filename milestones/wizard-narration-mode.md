@@ -1,6 +1,7 @@
 # Milestone: wizard / LLM narration mode must not silently generate
 
 **Status:** Active  
+**PR:** [#141](https://github.com/jmjava/documentation-generator/pull/141)  
 **Depends on:** `milestones/merge-settings-str-lists.md` (PR #140),
 `milestones/wizard-json-object.md` (PR #129)
 
@@ -27,12 +28,12 @@ swallowed.
 
 ## Done when
 
-- [ ] Wizard unknown `mode` returns 400 and does not call the LLM
-- [ ] `generate_narration_via_llm` / `generate_narration_markdown` raise
-- [ ] Missing `mode` still defaults to generate
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Wizard unknown `mode` returns 400 and does not call the LLM
+- [x] `generate_narration_via_llm` / `generate_narration_markdown` raise
+- [x] Missing `mode` still defaults to generate
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (792 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
