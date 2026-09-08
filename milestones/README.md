@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[grok-stt-start-end.md](grok-stt-start-end.md)** —
-Grok STT word/segment `start` / `end` must be JSON numbers, not bools.
+**Active:** **[scene-spec-bool-numerics.md](scene-spec-bool-numerics.md)** —
+scene-spec `wait_word` / `run_time` / sizes must not coerce YAML bools.
 
 **Shipped:**
+- **[grok-stt-start-end.md](grok-stt-start-end.md)** —
+  Grok STT word/segment `start` / `end` must be JSON numbers, not bools
+  (#146).
 - **[validate-stream-probe.md](validate-stream-probe.md)** —
   validate stream/drift checks must not trust ffprobe stdout when the
   probe exits non-zero (#145).

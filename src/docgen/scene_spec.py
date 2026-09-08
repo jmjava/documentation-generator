@@ -86,6 +86,17 @@ ALLOWED_COLORS = frozenset(
 )
 
 ALLOWED_PAGE_TRANSITIONS = frozenset({"fade", "slide", "none"})
+
+
+def _is_yaml_number(value: Any) -> bool:
+    """YAML number: int/float, not bool (``bool`` is a subclass of ``int``)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_yaml_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 # Spec-geometry floors — tighter than this and boxes collide or sit on the title.
 MIN_TITLE_ROW_BUFF = 0.35
 MIN_ROW_GAP = 0.2
@@ -116,7 +127,7 @@ def layout_stack_budget(title: dict[str, Any], layout: dict[str, Any] | None) ->
     layout = layout or {}
     buff = float(layout.get("first_row_title_buff", 0.5))
     fs = title.get("font_size")
-    if not isinstance(fs, (int, float)):
+    if not _is_yaml_number(fs):
         fs = 36
     has_sub = bool(str(title.get("subtitle") or "").strip())
     band = _title_band_estimate(int(fs), has_subtitle=has_sub)
@@ -1486,7 +1497,7 @@ def layout_overlap_violations(spec: dict[str, Any]) -> list[str]:
         )
 
     fs = title.get("font_size")
-    if not isinstance(fs, (int, float)):
+    if not _is_yaml_number(fs):
         fs = 36
     has_sub = bool(str(title.get("subtitle") or "").strip())
     band = _title_band_estimate(int(fs), has_subtitle=has_sub)
@@ -1579,7 +1590,7 @@ def _validate_image_element(box: dict[str, Any], *, bp: str) -> None:
         if fld not in box:
             raise SceneSpecError(f"{bp}: missing {fld}")
         v = box[fld]
-        if not isinstance(v, (int, float)) or v <= 0:
+        if not _is_yaml_number(v) or v <= 0:
             raise SceneSpecError(f"{bp}: {fld} must be a positive number")
     for fld in ("color", "font_size"):
         if fld in box:
@@ -1615,14 +1626,14 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
         if "run_time" not in row:
             raise SceneSpecError(f"{rp}: run_time is required")
         rt = row["run_time"]
-        if not isinstance(rt, (int, float)) or rt <= 0:
+        if not _is_yaml_number(rt) or rt <= 0:
             raise SceneSpecError(f"{rp}: run_time must be a positive number")
         _validate_pace_field(row, path=rp)
         ws = row.get("wait_segment")
-        if ws is not None and (not isinstance(ws, int) or ws < 0):
+        if ws is not None and (not _is_yaml_int(ws) or ws < 0):
             raise SceneSpecError(f"{rp}: wait_segment must be a non-negative int or null")
         ww = row.get("wait_word")
-        if ww is not None and (not isinstance(ww, int) or ww < 0):
+        if ww is not None and (not _is_yaml_int(ww) or ww < 0):
             raise SceneSpecError(f"{rp}: wait_word must be a non-negative int or null")
         if ws is not None and ww is not None:
             raise SceneSpecError(
@@ -1646,7 +1657,7 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                     f"or ``wait_segment`` on the row for legacy upgrade."
                 )
             bww = box.get("wait_word")
-            if bww is not None and (not isinstance(bww, int) or bww < 0):
+            if bww is not None and (not _is_yaml_int(bww) or bww < 0):
                 raise SceneSpecError(f"{bp}: wait_word must be a non-negative int or null")
             if bww is not None:
                 box_pacing = True
@@ -1662,7 +1673,7 @@ def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None
                 )
             for num_f in ("width", "height", "font_size"):
                 v = box[num_f]
-                if not isinstance(v, (int, float)) or v <= 0:
+                if not _is_yaml_number(v) or v <= 0:
                     raise SceneSpecError(f"{bp}: {num_f} must be a positive number")
             bsub = box.get("subtitle")
             if bsub is not None:
@@ -1785,6 +1796,9 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         raise SceneSpecError(
             f"{path_label}: title.color must be one of {sorted(ALLOWED_COLORS)}"
         )
+    tfs = title["font_size"]
+    if not _is_yaml_number(tfs) or tfs <= 0:
+        raise SceneSpecError(f"{path_label}: title.font_size must be a positive number")
     tsub = title.get("subtitle")
     if tsub is not None:
         if not isinstance(tsub, str):
@@ -1809,7 +1823,7 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
             f"{path_label}: layout.page_transition must be one of {sorted(ALLOWED_PAGE_TRANSITIONS)}"
         )
     ptrt = layout.get("page_transition_run_time", 0.45)
-    if not isinstance(ptrt, (int, float)) or not (0 < float(ptrt) <= 5.0):
+    if not _is_yaml_number(ptrt) or not (0 < float(ptrt) <= 5.0):
         raise SceneSpecError(
             f"{path_label}: layout.page_transition_run_time must be a number in (0, 5] if set"
         )
@@ -1821,7 +1835,7 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         )
     if "dwell_run_time" in layout:
         drt = layout.get("dwell_run_time")
-        if not isinstance(drt, (int, float)) or not (0 < float(drt) <= 3.0):
+        if not _is_yaml_number(drt) or not (0 < float(drt) <= 3.0):
             raise SceneSpecError(
                 f"{path_label}: layout.dwell_run_time must be a number in (0, 3] if set"
             )

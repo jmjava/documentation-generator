@@ -1,6 +1,6 @@
 # Milestone: Grok STT start/end must be JSON numbers
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#146](https://github.com/jmjava/documentation-generator/pull/146)  
 **Depends on:** `milestones/validate-stream-probe.md` (PR #145),
 `milestones/timing-start-end.md` (PR #134),
