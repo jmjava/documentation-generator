@@ -1,7 +1,7 @@
 # Milestone: scene-spec layout gaps must be YAML numbers
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#148](https://github.com/jmjava/documentation-generator/pull/148)  
 **Depends on:** `milestones/scene-spec-bool-numerics.md` (PR #147)
 
 ## Problem
@@ -26,11 +26,11 @@ be YAML numbers (not bool). Missing keys keep compile defaults.
 
 ## Done when
 
-- [ ] Bool / string layout gaps raise `SceneSpecError`
-- [ ] Missing gaps still validate (defaults at compile)
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Bool / string layout gaps raise `SceneSpecError`
+- [x] Missing gaps still validate (defaults at compile)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (821 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
