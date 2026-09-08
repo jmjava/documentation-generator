@@ -5,11 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[validate-stream-probe.md](validate-stream-probe.md)** —
-validate stream/drift checks must not trust ffprobe stdout when the
-probe exits non-zero.
+**Active:** **[grok-stt-start-end.md](grok-stt-start-end.md)** —
+Grok STT word/segment `start` / `end` must be JSON numbers, not bools.
 
 **Shipped:**
+- **[validate-stream-probe.md](validate-stream-probe.md)** —
+  validate stream/drift checks must not trust ffprobe stdout when the
+  probe exits non-zero (#145).
 - **[whisper-prompt-caps.md](whisper-prompt-caps.md)** —
   timing-enrichment whisper count caps must not coerce bools to 1
   (#144).

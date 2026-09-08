@@ -632,6 +632,16 @@ def _grok_tts(
     output_path.write_bytes(body)
 
 
+def _stt_json_number(value: Any, *, label: str) -> float:
+    """Require a JSON number so bools/strings do not become fake timestamps."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AIError(
+            f"xAI STT {label} must be a JSON number, not {type(value).__name__} "
+            f"({value!r})"
+        )
+    return float(value)
+
+
 def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     if not settings.api_key:
         raise AIError(f"xAI STT needs an API key. {settings.auth_help()}")
@@ -658,12 +668,16 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
             continue
         words.append(
             {
-                "start": float(w.get("start") or 0.0),
-                "end": float(w.get("end") or 0.0),
+                "start": _stt_json_number(w.get("start"), label="words[].start"),
+                "end": _stt_json_number(w.get("end"), label="words[].end"),
                 "word": token,
             }
         )
-    duration = float(parsed.get("duration") or (words[-1]["end"] if words else 0.0))
+    raw_dur = parsed.get("duration")
+    if raw_dur is None:
+        duration = words[-1]["end"] if words else 0.0
+    else:
+        duration = _stt_json_number(raw_dur, label="duration")
     segments = parsed.get("segments")
     if not isinstance(segments, list) or not segments:
         segments = (
@@ -674,8 +688,8 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
     else:
         segments = [
             {
-                "start": float(s.get("start") or 0.0),
-                "end": float(s.get("end") or 0.0),
+                "start": _stt_json_number(s.get("start"), label="segments[].start"),
+                "end": _stt_json_number(s.get("end"), label="segments[].end"),
                 "text": str(s.get("text") or ""),
             }
             for s in segments
