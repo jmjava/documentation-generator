@@ -1,6 +1,6 @@
 # Milestone: merge settings must not `str()` hint/path lists
 
-**Status:** Active  
+**Status:** Shipped  
 **PR:** [#140](https://github.com/jmjava/documentation-generator/pull/140)  
 **Depends on:** `milestones/wait-until-word-start.md` (PR #139),
 `milestones/context-path-lists.md` (PR #90)

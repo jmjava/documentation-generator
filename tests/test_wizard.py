@@ -399,6 +399,57 @@ def test_generate_narration_requires_sources_in_generate_mode(tmp_path, monkeypa
     assert called["n"] == 0
 
 
+def test_generate_narration_rejects_unknown_mode(tmp_path, monkeypatch):
+    """Unknown mode used to silently become generate and still call the LLM."""
+    from docgen.config import Config
+    from docgen.wizard import create_app
+
+    repo = tmp_path / "proj"
+    repo.mkdir()
+    yaml_path = repo / "docgen.yaml"
+    yaml_path.write_text(
+        "repo_root: .\nsegments:\n  default: ['01']\n  all: ['01']\n",
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(yaml_path)
+    called = {"n": 0}
+
+    def boom(**_kwargs):
+        called["n"] += 1
+        return "should not run"
+
+    monkeypatch.setattr("docgen.wizard.generate_narration_via_llm", boom)
+    client = create_app(cfg).test_client()
+    resp = client.post(
+        "/api/generate-narration",
+        json={
+            "segment_id": "01",
+            "segment_name": "01-intro",
+            "mode": "delete",
+            "source_paths": ["README.md"],
+            "revision_notes": "wipe it",
+            "current_narration": "old script",
+        },
+    )
+    assert resp.status_code == 400
+    assert "mode must be 'generate' or 'revise'" in resp.get_json()["error"]
+    assert called["n"] == 0
+
+
+def test_generate_narration_via_llm_rejects_unknown_mode() -> None:
+    from docgen.wizard import generate_narration_via_llm
+
+    with pytest.raises(ValueError, match="mode must be 'generate' or 'revise'"):
+        generate_narration_via_llm(
+            source_texts=["## File: a.md\nx"],
+            guidance="",
+            system_prompt="x",
+            model="gpt-4o",
+            segment_name="01",
+            mode="delete",
+        )
+
+
 def test_generate_narration_via_llm_generate_requires_sources() -> None:
     from docgen.wizard import generate_narration_via_llm
 

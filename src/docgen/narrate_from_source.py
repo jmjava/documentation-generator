@@ -239,7 +239,7 @@ def generate_narration_markdown(
 
     mode_norm = str(mode or "generate").strip().lower()
     if mode_norm not in ("generate", "revise"):
-        mode_norm = "generate"
+        raise ValueError(f"mode must be 'generate' or 'revise', not {mode!r}")
     notes = (revision_notes or "").strip()
 
     settings = merged_narration_from_source_settings(cfg, seg_id)

@@ -145,6 +145,24 @@ def test_generate_narration_markdown_calls_openai(tmp_path: Path) -> None:
         assert "- Keep it short." in call_kw.get("guidance", "")
 
 
+def test_generate_narration_markdown_rejects_unknown_mode(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {"context": {"paths": ["lib.py"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "lib.py").write_text("def f(): pass\n", encoding="utf-8")
+    cfg = Config.from_yaml(tmp_path / "docgen.yaml")
+    with pytest.raises(ValueError, match="mode must be 'generate' or 'revise'"):
+        generate_narration_markdown(cfg, "01", extra_paths=[], extra_hints=[], mode="delete")
+
+
 def test_write_narration_markdown_creates_file(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / "docgen.yaml").write_text(
