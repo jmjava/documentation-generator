@@ -378,15 +378,29 @@ class _TimedScene(Scene):
             self.wait(duration)
             self._clock += duration
 
+    def _timing_start(self, row, label: str) -> float:
+        """Return a Whisper row ``start`` as float; raise if missing or non-numeric."""
+        if not isinstance(row, dict):
+            kind = "null" if row is None else type(row).__name__
+            raise TypeError(f"{label} must be a JSON object, not {kind}")
+        if "start" not in row or row["start"] is None:
+            tkind = "missing" if "start" not in row else "null"
+            raise TypeError(f"{label}.start must be a JSON number, not {tkind}")
+        val = row["start"]
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            raise TypeError(
+                f"{label}.start must be a JSON number, not {type(val).__name__}"
+            )
+        return float(val)
+
     def wait_until_word(self, words, index: int):
-        """Wait until Whisper ``words[index]['start']`` (no-op if index invalid)."""
+        """Wait until Whisper ``words[index]['start']`` (no-op if index invalid).
+
+        Corrupt ``start`` raises so the clock cannot dump the next reveal.
+        """
         if not words or index < 0 or index >= len(words):
             return
-        try:
-            t = float(words[index].get("start", 0.0))
-        except (TypeError, ValueError):
-            return
-        self.wait_until(t)
+        self.wait_until(self._timing_start(words[index], f"timing word[{index}]"))
 
     def pace_to_beat(self, segments, beat_index, num_beats, segment_indices=None):
         """Wait until the Whisper segment start for this story beat.
@@ -405,13 +419,13 @@ class _TimedScene(Scene):
                 return
             j = int(segment_indices[beat_index])
             j = max(0, min(n - 1, j))
-            self.wait_until(float(segments[j].get("start", 0.0)))
+            self.wait_until(self._timing_start(segments[j], f"timing segment[{j}]"))
             return
         if n == 1:
-            self.wait_until(float(segments[0].get("start", 0.0)))
+            self.wait_until(self._timing_start(segments[0], "timing segment[0]"))
             return
         si = min(int(round(beat_index * (n - 1) / max(num_beats - 1, 1))), n - 1)
-        self.wait_until(float(segments[si].get("start", 0.0)))
+        self.wait_until(self._timing_start(segments[si], f"timing segment[{si}]"))
 
     def paced_reveal(self, segments, mobjects, segment_indices, run_time=0.55):
         """Reveal each mobject at its paired Whisper segment start.
@@ -1321,7 +1335,9 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
             timed = _class_method(node, "timed_play")
             if timed is None:
                 return True
-            return "not_past" not in _fn_arg_names(timed)
+            if "not_past" not in _fn_arg_names(timed):
+                return True
+            return "must be a JSON number" not in ast.unparse(node)
         if name in {"_load_timing", "_load_timing_words"} and isinstance(
             node, ast.FunctionDef
         ) and node.name == name:

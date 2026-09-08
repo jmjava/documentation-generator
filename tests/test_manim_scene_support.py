@@ -863,6 +863,103 @@ def test_refresh_bootstrap_helpers_upgrades_object_only_timing_loaders(tmp_path:
     assert "must be a JSON number" in p.read_text(encoding="utf-8")
 
 
+_SWALLOWING_TIMED_SCENE = '''
+class _TimedScene(Scene):
+    def setup(self):
+        self._clock = 0.0
+
+    def timed_play(self, *animations, run_time=1.0, not_past=None, **kwargs):
+        self.play(*animations, run_time=run_time, **kwargs)
+        self._clock += run_time
+
+    def wait_until_word(self, words, index: int):
+        if not words or index < 0 or index >= len(words):
+            return
+        try:
+            t = float(words[index].get("start", 0.0))
+        except (TypeError, ValueError):
+            return
+        self.wait_until(t)
+'''
+
+
+def test_refresh_bootstrap_helpers_upgrades_swallowing_wait_until_word(tmp_path: Path) -> None:
+    """``not_past`` alone is not enough — swallowed start still dumps reveals."""
+    p = tmp_path / "scenes.py"
+    p.write_text("from manim import *\n" + _SWALLOWING_TIMED_SCENE, encoding="utf-8")
+    changed = refresh_bootstrap_helpers(p)
+    assert changed == ["_TimedScene"]
+    text = p.read_text(encoding="utf-8")
+    assert "must be a JSON number" in text
+    assert "except (TypeError, ValueError)" not in text
+
+
+def _exec_timed_scene() -> dict:
+    class Scene:
+        def __init__(self) -> None:
+            self.waits: list[float] = []
+
+        def play(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        def wait(self, duration: float) -> None:
+            self.waits.append(duration)
+
+    ns: dict = {"Scene": Scene}
+    src = _bootstrap_helper_source("_TimedScene")
+    exec(compile(src, "<_TimedScene>", "exec"), ns)
+    return ns
+
+
+def test_wait_until_word_rejects_missing_start() -> None:
+    scene = _exec_timed_scene()["_TimedScene"]()
+    scene.setup()
+    with pytest.raises(TypeError, match=r"timing word\[0\]\.start must be a JSON number, not missing"):
+        scene.wait_until_word([{"word": "hi", "end": 1.0}], 0)
+    assert scene._clock == 0.0
+    assert scene.waits == []
+
+
+def test_wait_until_word_rejects_string_and_bool_start() -> None:
+    ns = _exec_timed_scene()
+    scene = ns["_TimedScene"]()
+    scene.setup()
+    with pytest.raises(TypeError, match=r"timing word\[0\]\.start must be a JSON number, not str"):
+        scene.wait_until_word([{"start": "soon"}], 0)
+    scene2 = ns["_TimedScene"]()
+    scene2.setup()
+    with pytest.raises(TypeError, match=r"timing word\[0\]\.start must be a JSON number, not bool"):
+        scene2.wait_until_word([{"start": True}], 0)
+    assert scene._clock == 0.0
+    assert scene2._clock == 0.0
+
+
+def test_wait_until_word_noop_invalid_index_still_skips() -> None:
+    scene = _exec_timed_scene()["_TimedScene"]()
+    scene.setup()
+    scene.wait_until_word([{"start": 1.5}], 9)
+    scene.wait_until_word([], 0)
+    scene.wait_until_word(None, 0)
+    assert scene._clock == 0.0
+    assert scene.waits == []
+
+
+def test_wait_until_word_waits_numeric_start() -> None:
+    scene = _exec_timed_scene()["_TimedScene"]()
+    scene.setup()
+    scene.wait_until_word([{"start": 1.5, "end": 2.0}], 0)
+    assert scene._clock == pytest.approx(1.5)
+    assert scene.waits == [pytest.approx(1.5)]
+
+
+def test_pace_to_beat_rejects_missing_segment_start() -> None:
+    scene = _exec_timed_scene()["_TimedScene"]()
+    scene.setup()
+    with pytest.raises(TypeError, match=r"timing segment\[0\]\.start must be a JSON number, not missing"):
+        scene.pace_to_beat([{"end": 1.0}], 0, 1)
+    assert scene._clock == 0.0
+
+
 
 def test_ensure_bootstrap_refreshes_stale_helpers(tmp_path: Path) -> None:
     p = tmp_path / "scenes.py"

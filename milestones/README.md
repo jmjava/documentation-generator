@@ -5,11 +5,14 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[yaml-visual-map-keys.md](yaml-visual-map-keys.md)** —
-`yaml-generate` must reject integer `visual_map` keys and non-string
-`segments.all` items instead of dropping committed manim rows.
+**Active:** **[wait-until-word-start.md](wait-until-word-start.md)** —
+`wait_until_word` must raise on a corrupt Whisper `start` instead of
+dumping the next reveal.
 
 **Shipped:**
+- **[yaml-visual-map-keys.md](yaml-visual-map-keys.md)** —
+  `yaml-generate` must reject integer `visual_map` keys and non-string
+  `segments.all` items (#138).
 - **[story-end-probe.md](story-end-probe.md)** —
   `story_end` must fail when the mp3 duration cannot be probed
   (#137).
