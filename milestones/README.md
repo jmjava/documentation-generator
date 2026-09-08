@@ -5,10 +5,13 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[ffprobe-returncode.md](ffprobe-returncode.md)** —
-ffprobe duration probes must honor exit status; image compose needs `-t`.
+**Active:** **[timing-sync-probe.md](timing-sync-probe.md)** —
+`timing_sync` must fail when the mp3 duration cannot be probed.
 
 **Shipped:**
+- **[ffprobe-returncode.md](ffprobe-returncode.md)** —
+  ffprobe duration probes must honor exit status; image compose needs `-t`
+  (#135).
 - **[timing-start-end.md](timing-start-end.md)** —
   `timing.json` word/segment `start` / `end` must be JSON numbers
   (#134).
