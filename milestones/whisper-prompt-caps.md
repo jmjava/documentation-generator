@@ -1,7 +1,7 @@
 # Milestone: Whisper prompt caps must not coerce bools
 
 **Status:** Active  
-**PR:** (this PR)  
+**PR:** [#144](https://github.com/jmjava/documentation-generator/pull/144)  
 **Depends on:** `milestones/pages-ffprobe-returncode.md` (PR #143),
 `milestones/merge-settings-numerics.md` (PR #142),
 `milestones/generation-zero-values.md` (PR #122),
@@ -32,12 +32,12 @@ Fail closed on present non-number caps. Missing/null still means 0
 
 ## Done when
 
-- [ ] Bool / string whisper count caps raise `SceneGenerationError`
-- [ ] `max_whisper_words_in_prompt: 0` still lists every word
-- [ ] Chars type-check stays (shared helper)
-- [ ] `ruff check src/ tests/`
-- [ ] `pytest tests/`
-- [ ] `docgen benchmark` (no clock change; meets baseline)
+- [x] Bool / string whisper count caps raise `SceneGenerationError`
+- [x] `max_whisper_words_in_prompt: 0` still lists every word
+- [x] Chars type-check stays (shared helper)
+- [x] `ruff check src/ tests/`
+- [x] `pytest tests/` (804 passed, 1 skipped)
+- [x] `docgen benchmark` (no clock change; meets baseline)
 
 ## Out of scope
 
