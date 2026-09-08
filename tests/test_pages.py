@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
 
 from docgen.config import Config, ConfigError
-from docgen.pages import PagesGenerator, _esc
+from docgen.pages import PagesGenerator, _esc, _ffprobe_duration_label
 
 
 def test_esc_ampersand():
@@ -163,6 +165,115 @@ def test_index_html_extra_links_rejects_non_mapping_items(tmp_path: Path) -> Non
                 "extra_links": ["https://example.com"],
             },
         )
+
+
+class _FakeProbe:
+    def __init__(self, returncode: int, stdout: str) -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = "error"
+
+
+def _write_recording(tmp_path: Path, name: str = "01-overview.mp4") -> Path:
+    rec = tmp_path / "recordings"
+    rec.mkdir(parents=True)
+    path = rec / name
+    path.write_bytes(b"fake-mp4")
+    return path
+
+
+def test_ffprobe_duration_label_ignores_stdout_when_ffprobe_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _write_recording(tmp_path)
+    leftover = json.dumps({"format": {"duration": "999.0"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(1, leftover)
+    )
+    assert _ffprobe_duration_label(path, fallback="varies") == "varies"
+    assert _ffprobe_duration_label(path, fallback="concat") == "concat"
+
+
+def test_ffprobe_duration_label_formats_successful_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _write_recording(tmp_path)
+    ok = json.dumps({"format": {"duration": "125.4"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(0, ok)
+    )
+    assert _ffprobe_duration_label(path, fallback="varies") == "~2m 5s"
+
+
+def test_index_html_duration_varies_when_ffprobe_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {"title": "Demos", "demos_subdir": "demos"},
+        segments_all=["01"],
+        segment_names={"01": "01-overview"},
+    )
+    _write_recording(tmp_path)
+    leftover = json.dumps({"format": {"duration": "999.0"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(1, leftover)
+    )
+    PagesGenerator(cfg).generate_index_html(force=True)
+    html = (tmp_path / "docs" / "index.html").read_text(encoding="utf-8")
+    assert "~16m 39s" not in html
+    assert ">varies<" in html
+
+
+def test_index_html_concat_duration_fallback_when_ffprobe_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = {
+        "repo_root": ".",
+        "dirs": {
+            "animations": "animations",
+            "audio": "audio",
+            "recordings": "recordings",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-overview"},
+        "visual_map": {},
+        "pages": {"title": "Demos", "demos_subdir": "demos", "segments": {}},
+        "concat": {"full-demo": ["01"]},
+    }
+    path = tmp_path / "docgen.yaml"
+    path.write_text(yaml.dump(cfg), encoding="utf-8")
+    loaded = Config.from_yaml(path)
+    rec = tmp_path / "recordings"
+    rec.mkdir(parents=True)
+    (rec / "full-demo.mp4").write_bytes(b"fake-mp4")
+    leftover = json.dumps({"format": {"duration": "999.0"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(1, leftover)
+    )
+    PagesGenerator(loaded).generate_index_html(force=True)
+    html = (tmp_path / "docs" / "index.html").read_text(encoding="utf-8")
+    assert "~16m 39s" not in html
+    assert ">concat<" in html
+
+
+def test_index_html_duration_badge_from_successful_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _write_pages_cfg(
+        tmp_path,
+        {"title": "Demos", "demos_subdir": "demos"},
+        segments_all=["01"],
+        segment_names={"01": "01-overview"},
+    )
+    _write_recording(tmp_path)
+    ok = json.dumps({"format": {"duration": "125.4"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(0, ok)
+    )
+    PagesGenerator(cfg).generate_index_html(force=True)
+    html = (tmp_path / "docs" / "index.html").read_text(encoding="utf-8")
+    assert "~2m 5s" in html
 
 
 def test_index_html_rejects_non_mapping_pages_segments(tmp_path: Path) -> None:
