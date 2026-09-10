@@ -308,6 +308,66 @@ def test_grok_stt_bool_duration_raises(tmp_path: Path, monkeypatch: pytest.Monke
             transcribe_audio(mp3, cfg=cfg)
 
 
+def test_grok_stt_string_words_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps({"text": "Hello", "words": "hello"}).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match="words must be a JSON array"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+def test_grok_stt_non_object_word_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps(
+        {
+            "text": "Hello",
+            "words": [{"text": "Hello", "start": 0.0, "end": 0.4}, "world"],
+        }
+    ).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match=r"words\[1\] must be a JSON object"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+def test_grok_stt_object_segments_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps(
+        {
+            "text": "Hello",
+            "words": [{"text": "Hello", "start": 0.0, "end": 0.4}],
+            "segments": {"start": 0.0, "end": 0.4, "text": "Hello"},
+        }
+    ).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match="segments must be a JSON array"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+def test_grok_stt_missing_words_still_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps({"text": "Hello", "duration": 1.2}).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        result = transcribe_audio(mp3, cfg=cfg)
+    assert result["words"] == []
+    assert result["segments"][0]["end"] == 1.2
+
+
 def test_unknown_provider_raises() -> None:
     with pytest.raises(ValueError, match="Unknown AI provider"):
         from docgen.ai_client import normalize_provider
