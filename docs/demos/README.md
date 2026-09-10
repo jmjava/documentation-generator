@@ -1,8 +1,8 @@
-# docgen demo videos (dogfood)
+# Example bundle (leftover — not the integration test of record)
 
-**Where recordings land:** composed segment MP4s and `full-demo.mp4` are written to **`recordings/`** in this directory — i.e. **[`documentation-generator/docs/demos/recordings/`](https://github.com/jmjava/documentation-generator/tree/main/docs/demos/recordings)** on GitHub. That is the library’s **dogfood** output path. It is **not** the same as a product repo’s slim **`docs/rendered/`** tree (from **`docs/rendered-site/`**) used for **courseforge.github.io** aggregation.
+This tree is a **leftover in-repo example** of a consumer bundle layout (`docgen.yaml` + hints + narration). The library **no longer ships dogfood**; downstream repos are the integration test of record — see **[`milestones/upstream-dogfood.md`](../../milestones/upstream-dogfood.md)**.
 
-This tree is the **in-repo dogfood** bundle: same **`docgen.yaml`** + CLI workflow as any downstream repo (paths relative to this directory unless noted).
+Composed MP4s land under **`recordings/`** here when someone still runs the pipeline locally. That is **not** a product repo’s **`docs/rendered/`** tree (Courseforge Pages aggregation).
 
 Use **one** path below—they are **not** combined in a single session:
 
@@ -57,14 +57,14 @@ words), keep ~3 rows/page, and follow **`hints/manim-scene-specs.md`**.
 
 ## Full reset (total nuke + regen)
 
-**`_full-reset-regenerate.sh`** automates a **full** dogfood regen (see script header for exact steps): essentially **`clean-bundle`**, **`init`**, **`yaml-generate`**, then OpenAI-backed **`narration-generate`** / **`scene-spec-generate --all --compile`**, **`generate-all`**, and **`validate --pre-push`**.
+**`_full-reset-regenerate.sh`** automates a **full** regen of this leftover example (see script header for exact steps): essentially **`clean-bundle`**, **`init`**, **`yaml-generate`**, then OpenAI-backed **`narration-generate`** / **`scene-spec-generate --all --compile`**, **`generate-all`**, and **`validate --pre-push`**.
 
 ```bash
 cd docs/demos
 ./_full-reset-regenerate.sh
 ```
 
-**Removed by clean-bundle** includes segment narration (unless **`--keep-narration`**), **`animations/`**, **`audio/*.mp3`**, **`recordings/*.mp4`**, etc. **Preserved:** **`narration/README.md`**, maintainer **`hints/**`**, repo-root **`fixtures/`** per bundle policy.
+**Removed by clean-bundle** includes segment narration (unless **`--keep-narration`**), **`animations/`**, **`audio/*.mp3`**, **`recordings/*.mp4`**, etc. **Preserved:** **`narration/README.md`** and maintainer **`hints/**`**.
 
 ## Commands (typical)
 

@@ -1,6 +1,7 @@
-# Session notes
+# Session notes (historical)
 
-Brief log of what was decided or shipped in working sessions.
+Leftover working-session log. Playwright / `playwright_test` / catalog items below
+were **removed** from the library. Current CLI: root **`README.md`**.
 
 ---
 

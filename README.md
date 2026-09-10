@@ -220,6 +220,7 @@ docgen --repo /path/to/your-project generate-all
 |---------|-------------|
 | `docgen --repo PATH_OR_URL …` | Target a consumer checkout or clone URL (also `DOCGEN_REPO`). Finds `docs/demos/docgen.yaml`. Does **not** copy this library into the consumer `src/` |
 | `docgen --version` | Show installed version + recommended `pip install` line (external tool) |
+| `docgen ai-status` | Print the resolved AI provider and which env var supplied the key (never the secret) |
 | `docgen init [TARGET_DIR] [--defaults] [--segments-file FILE]` | Scaffold a bundle: `docgen.yaml`, `requirements-docgen.txt`, wrapper scripts, directories |
 | `docgen wizard [--port 8501]` | Local web GUI: focus files, **revise narration**, asset freshness / rebuild-from-here, Vue **Benchmark** view, and a **Tool** tab to upgrade the installed `docgen` package (pip) + rewrite `requirements-docgen.txt` |
 | `docgen gui [--view benchmark] [--browser] [--smoke]` | Desktop GUI (Vue + Flask). Install `docgen[gui]` for a pywebview window; `--browser` uses the system browser; `--smoke` is a headless HTTP check |
@@ -314,6 +315,7 @@ validation:
     tolerance_sec: 3.0
     prefer_scene_spec_labels: true  # OCR anchors from paced box labels when specs exist
     visual_types: [manim]    # only check types with on-screen text
+```
 
 ```yaml
 ai:
