@@ -15,10 +15,12 @@ docgen --config docgen.yaml manim
 
 echo "=== [$(date +%H:%M:%S)] Step 3: Durations check ==="
 echo "  Manim:"
-for f in animations/media/videos/scenes/720p30/*.mp4; do
+shopt -s nullglob
+for f in animations/media/videos/scenes/*/*.mp4; do
     dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null)
     echo "    $(basename "$f"): ${dur}s"
 done
+shopt -u nullglob
 echo "  Audio:"
 for f in audio/*.mp3; do
     dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null)

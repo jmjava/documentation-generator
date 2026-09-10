@@ -224,6 +224,70 @@ def test_cli_list_dirs_is_click_error(tmp_path: Path) -> None:
     assert "Traceback" not in combined
 
 
+def test_cli_validate_help_lists_contract_flags() -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    result = CliRunner().invoke(main, ["validate", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--pre-push" in result.output
+    assert "--max-drift" in result.output
+
+
+def test_cli_validate_without_bundle_is_click_error(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--config", str(tmp_path / "missing.yaml"), "validate"],
+    )
+    assert result.exit_code != 0
+    combined = result.output + result.stderr
+    assert "docgen.yaml" in combined
+    assert "AttributeError" not in combined
+    assert "Traceback" not in combined
+    assert result.exception is None or not isinstance(result.exception, AttributeError)
+
+
+def test_cli_validate_pre_push_missing_recording_is_soft(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "visual_map": {"01": {"type": "still", "source": "01.mp4"}},
+    }
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text(yaml.dump(raw), encoding="utf-8")
+    (tmp_path / "narration").mkdir()
+    (tmp_path / "narration" / "01-intro.md").write_text(
+        "This segment is a short still-image intro.\n",
+        encoding="utf-8",
+    )
+    for name in ("audio", "animations", "recordings"):
+        (tmp_path / name).mkdir()
+
+    result = CliRunner().invoke(main, ["--config", str(yaml_path), "validate", "--pre-push"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 0, combined
+    assert "All checks passed" in combined
+    assert "WARN" in combined and "recording_exists" in combined
+    assert "AttributeError" not in combined
+    assert "Traceback" not in combined
+
+
 def test_cli_lint_empty_segments_is_click_error(tmp_path: Path) -> None:
     from click.testing import CliRunner
 

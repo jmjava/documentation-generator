@@ -7,7 +7,7 @@ These documents are **historical** design notes and completed or deferred roadma
 | `milestone-1.md` | Production hardening (mostly shipped) |
 | `milestone-2.md` | Slide deck generation (deferred) |
 | `milestone-3.md` | Multi-language narration (deferred) |
-| `milestone-4-playwright-test-video.md` | Early Playwright + `visual_map` architecture (superseded by the active checklist + code) |
+| `milestone-4-playwright-test-video.md` | Early Playwright + `visual_map` architecture (superseded; Playwright path removed) |
 | `milestone-5-embedded-ai-embabel.md` | Embabel / embedded AI sketch (future) |
 
-Use **[`../checklist-playwright-auto-narration.md`](../checklist-playwright-auto-narration.md)** for the current in-repo plan.
+The Playwright / VHS / demo-function path was **removed**. Current CLI and consumer-dogfood posture: root **[`README.md`](../../README.md)** and **[`upstream-dogfood.md`](../upstream-dogfood.md)**.

@@ -40,6 +40,7 @@ The Playwright/VHS/demo-function/per-function/discover-tests/catalog surface are
 
 Commands registered on the **`docgen`** CLI include:
 
+- **`ai-status`** — print the resolved AI provider and which env var supplied the key (never the secret).
 - **`init`** — scaffold bundle layout and `docgen.yaml`.
 - **`wizard`** — local web UI for narration/bootstrap workflows (focus files, **in-place narration revise**, per-segment **asset freshness** + **rebuild-from-here**, Vue **Benchmark** view, **Tool** tab to pip-upgrade docgen and pin `requirements-docgen.txt`).
 - **`gui`** — desktop window over the same Vue/Flask UI (`pip install 'docgen[gui]'` for pywebview). ``--smoke`` is a headless HTTP check. PyInstaller spec: ``packaging/docgen-gui.spec``. Frozen apps resolve templates/static/benchmark JSON via ``docgen.resources``.
