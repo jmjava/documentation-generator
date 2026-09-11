@@ -112,6 +112,20 @@
       "defect_points": 0,
       "quality_points": 18,
       "score": 100
+    },
+    "legacy_wait_segment": {
+      "role": "quality",
+      "wait_skips": 0,
+      "overshoots": 0,
+      "hold_idle_violations": 0,
+      "cadence_violations": 0,
+      "sim_drift": 0,
+      "mid_hold_pulses": 5,
+      "box_reveals": 1,
+      "last_motion_frac": 0.9935,
+      "defect_points": 0,
+      "quality_points": 18,
+      "score": 100
     }
   }
 }

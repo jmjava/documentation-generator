@@ -6,7 +6,7 @@ optional ``wait_word`` indices on each **box** into the Whisper **words** list i
 (wait until that token's ``start``). Rows may still carry legacy ``wait_segment`` or a single
 ``wait_word`` (applied only to the **first** box in that row after compile). On-disk YAML may
 still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to the first box's
-``wait_word`` when ``words`` exist.
+``wait_word`` when ``words`` exist and writes the YAML back so compile cannot leave a key it rejects.
 ``class ...(_TimedScene)`` body that:
 
 * Lays out each **page** as a vertical stack of rows (``VGroup`` per row,
@@ -40,6 +40,7 @@ not a blind label count). ``docgen validate`` re-checks coverage when a ``*.scen
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 from dataclasses import dataclass
@@ -1116,6 +1117,62 @@ def upgrade_wait_segments_to_wait_words(
     elif isinstance(out.get("rows"), list):
         out["rows"] = [dict(r) if isinstance(r, dict) else r for r in out["rows"]]
         _rows(out["rows"])
+    return out
+
+
+def spec_has_wait_segment(spec: dict[str, Any]) -> bool:
+    """True if any row or box still carries legacy ``wait_segment``."""
+    for rows in _spec_pages_rows(spec):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("wait_segment") is not None:
+                return True
+            for box in row.get("boxes") or []:
+                if isinstance(box, dict) and box.get("wait_segment") is not None:
+                    return True
+    return False
+
+
+def _flat_spec_rows(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for rows in _spec_pages_rows(spec):
+        for row in rows:
+            if isinstance(row, dict):
+                out.append(row)
+    return out
+
+
+def _overlay_row_wait_words(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    dst.pop("wait_segment", None)
+    dst.pop("wait_word", None)
+    sboxes = src.get("boxes") or []
+    dboxes = dst.get("boxes") or []
+    for db, sb in zip(dboxes, sboxes):
+        if not isinstance(db, dict) or not isinstance(sb, dict):
+            continue
+        db.pop("wait_segment", None)
+        ww = sb.get("wait_word")
+        if ww is None:
+            db.pop("wait_word", None)
+        else:
+            db["wait_word"] = int(ww)
+
+
+def disk_spec_with_merged_wait_words(
+    original: dict[str, Any],
+    merged: dict[str, Any],
+) -> dict[str, Any]:
+    """Copy compiled ``wait_word`` pacing onto the authored spec; drop ``wait_segment``."""
+    out = copy.deepcopy(original)
+    src_rows = _flat_spec_rows(merged)
+    dst_rows = _flat_spec_rows(out)
+    if len(src_rows) != len(dst_rows):
+        return out
+    for dst, src in zip(dst_rows, src_rows):
+        _overlay_row_wait_words(dst, src)
+    if "timing_key" not in original:
+        out.pop("timing_key", None)
     return out
 
 

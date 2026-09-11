@@ -10,7 +10,13 @@ import yaml
 
 from docgen.config import Config
 from docgen.manim_scene_support import BOOTSTRAP_HEADER, SceneGenerationError
-from docgen.scene_retime import list_scene_spec_paths, retime_compile_all, retime_compile_spec
+from docgen.scene_retime import (
+    list_scene_spec_paths,
+    persist_upgraded_wait_segment_yaml,
+    retime_compile_all,
+    retime_compile_spec,
+)
+from docgen.scene_spec import SceneSpecError
 from docgen.scene_spec_generate import linted_class_block_from_spec
 
 
@@ -38,30 +44,33 @@ def _cfg(tmp_path: Path) -> Config:
     return Config.from_yaml(p)
 
 
-def _write_spec(tmp_path: Path, *, label: str = "Hello") -> Path:
+def _write_spec(
+    tmp_path: Path, *, label: str = "Hello", wait_segment: int | None = None
+) -> Path:
     specs = tmp_path / "animations" / "specs"
     specs.mkdir(parents=True, exist_ok=True)
     path = specs / "01-demo.scene.yaml"
+    row: dict[str, object] = {
+        "run_time": 1.0,
+        "boxes": [
+            {
+                "label": label,
+                "color": "C_GREEN",
+                "width": 3.0,
+                "height": 0.9,
+                "font_size": 18,
+            }
+        ],
+    }
+    if wait_segment is not None:
+        row["wait_segment"] = wait_segment
     path.write_text(
         yaml.dump(
             {
                 "segment_id": "01",
                 "class_name": "DemoScene",
                 "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
-                "rows": [
-                    {
-                        "run_time": 1.0,
-                        "boxes": [
-                            {
-                                "label": label,
-                                "color": "C_GREEN",
-                                "width": 3.0,
-                                "height": 0.9,
-                                "font_size": 18,
-                            }
-                        ],
-                    }
-                ],
+                "rows": [row],
             }
         ),
         encoding="utf-8",
@@ -392,9 +401,91 @@ def test_retime_compile_spec_rewrites_scenes_py(tmp_path: Path) -> None:
     )
     result = retime_compile_spec(cfg, path)
     assert result["wrote"] is True
+    assert result["yaml_wrote"] is False
     assert result["class_name"] == "DemoScene"
     text = (tmp_path / "animations" / "scenes.py").read_text(encoding="utf-8")
     assert "wait_until_word(timing_words, 1)" in text
+
+
+def test_retime_compile_spec_upgrades_wait_segment_yaml(tmp_path: Path) -> None:
+    """Leftover #12: compile must write wait_word YAML, not leave wait_segment."""
+    cfg = _cfg(tmp_path)
+    path = _write_spec(tmp_path, label="Hello", wait_segment=0)
+    _write_timing(
+        tmp_path,
+        [
+            {"word": "noise", "start": 0.0, "end": 0.2},
+            {"word": "Hello", "start": 1.0, "end": 1.3},
+        ],
+    )
+    result = retime_compile_spec(cfg, path)
+    assert result["wrote"] is True
+    assert result["yaml_wrote"] is True
+    dumped = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert "wait_segment" not in dumped["rows"][0]
+    assert dumped["rows"][0]["boxes"][0]["wait_word"] == 1
+    text = (tmp_path / "animations" / "scenes.py").read_text(encoding="utf-8")
+    assert "wait_until_word(timing_words, 1)" in text
+
+
+def test_retime_compile_spec_dry_run_leaves_wait_segment_yaml(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    path = _write_spec(tmp_path, label="Hello", wait_segment=0)
+    _write_timing(
+        tmp_path,
+        [
+            {"word": "noise", "start": 0.0, "end": 0.2},
+            {"word": "Hello", "start": 1.0, "end": 1.3},
+        ],
+    )
+    result = retime_compile_spec(cfg, path, dry_run=True)
+    assert result["wrote"] is False
+    assert result["yaml_wrote"] is False
+    dumped = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert dumped["rows"][0]["wait_segment"] == 0
+
+
+def test_persist_upgraded_wait_segment_yaml_fails_closed_on_row_count_mismatch() -> None:
+    original = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_segment": 0,
+                "boxes": [{"label": "A", "color": "C_GREEN", "width": 3.0, "height": 1.0, "font_size": 18}],
+            },
+            {
+                "run_time": 1.0,
+                "wait_segment": 1,
+                "boxes": [{"label": "B", "color": "C_BLUE", "width": 3.0, "height": 1.0, "font_size": 18}],
+            },
+        ],
+    }
+    merged = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 18,
+                        "wait_word": 0,
+                    }
+                ],
+            }
+        ],
+    }
+    path = Path("01-demo.scene.yaml")
+    with pytest.raises(SceneSpecError, match="left wait_segment on disk"):
+        persist_upgraded_wait_segment_yaml(path, original, merged)
 
 
 def test_retime_compile_all_reports_failures(tmp_path: Path) -> None:
