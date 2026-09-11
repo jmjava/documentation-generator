@@ -145,3 +145,34 @@ def test_probe_duration_rejects_nonzero_ffprobe_exit(monkeypatch) -> None:
     monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
     with pytest.raises(AlignmentError, match="ffprobe failed"):
         probe_duration(Path("/tmp/x.mp3"))
+
+
+def test_detect_speech_intervals_rejects_nonzero_ffmpeg_exit(monkeypatch) -> None:
+    from pathlib import Path
+
+    from docgen.align import AlignmentError, detect_speech_intervals
+
+    class _Proc:
+        returncode = 1
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
+    with pytest.raises(AlignmentError, match="ffmpeg silencedetect failed"):
+        detect_speech_intervals(Path("/tmp/x.mp3"), 10.0)
+
+
+def test_detect_speech_intervals_empty_stderr_is_full_span_only_on_success(
+    monkeypatch,
+) -> None:
+    from pathlib import Path
+
+    from docgen.align import detect_speech_intervals
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
+    assert detect_speech_intervals(Path("/tmp/x.mp3"), 10.0) == [(0.0, 10.0)]

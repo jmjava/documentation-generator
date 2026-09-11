@@ -34,10 +34,11 @@ If you still need the legacy behaviour, pin a pre-removal commit
   `gpt-4o-mini-tts`, or xAI `/v1/tts` when `ai.provider` is `grok`.
 - **Word-level timestamps without Whisper** — the default `local` engine aligns
   the known narration text against the TTS mp3 offline (ffmpeg `silencedetect`
-  + proportional interpolation); no API call or transcription. Network
-  transcription (`timestamps.engine: whisper`) uses OpenAI `whisper-1` or xAI
-  `/v1/stt` when the provider is Grok. Both engines write the same
-  `timing.json` shape.
+  + proportional interpolation); no API call or transcription. Failed ffmpeg
+  `silencedetect` raises `AlignmentError` (empty stderr is not treated as
+  full-span speech). Network transcription (`timestamps.engine: whisper`) uses
+  OpenAI `whisper-1` or xAI `/v1/stt` when the provider is Grok. Both engines
+  write the same `timing.json` shape.
 - **Manim animations (default: declarative scene specs)** — primary visual surface.
   Prefer **`animations/specs/*.scene.yaml`** via **`docgen scene-spec-generate`**
   + **`scene-compile`**. On **`generate-all`**, if no specs exist yet, the pipeline

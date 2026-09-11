@@ -130,6 +130,12 @@ def detect_speech_intervals(
         raise AlignmentError("ffmpeg not found in PATH (required for local timing)") from exc
     except subprocess.TimeoutExpired as exc:
         raise AlignmentError(f"ffmpeg silencedetect timed out on {audio_path}") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()[:200]
+        extra = f": {detail}" if detail else ""
+        raise AlignmentError(
+            f"ffmpeg silencedetect failed on {audio_path} (exit {proc.returncode}){extra}"
+        )
     return parse_silencedetect_output(proc.stderr or "", duration)
 
 
