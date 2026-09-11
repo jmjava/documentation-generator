@@ -213,6 +213,48 @@ def test_cli_compose_falls_back_to_segments_all_when_default_empty(tmp_path: Pat
     assert "Composing 1 segments" in result.output
 
 
+def test_cli_compose_uses_segments_all_not_default(tmp_path: Path, monkeypatch) -> None:
+    """Bare compose walks ``segments.all``, matching generate-all.
+
+    ``default: ["01"]`` plus ``all: ["01", "02"]`` must try both. With 01
+    muxable and 02 missing visuals, the CLI fail-closes on 1/2 instead of
+    exiting 0 after only the default set.
+    """
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+    from docgen.compose import Composer
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01", "02"]},
+        "segment_names": {"01": "01-demo", "02": "02-next"},
+        "visual_map": {
+            "01": {"type": "manim", "source": "Scene01.mp4"},
+            "02": {"type": "manim", "source": "Scene02.mp4"},
+        },
+        "manim": {"quality": "1080p30"},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "01-demo.mp3").write_bytes(b"audio")
+    video_dir = tmp_path / "animations" / "media" / "videos" / "scenes" / "1080p30"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    (video_dir / "Scene01.mp4").write_bytes(b"video")
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(Composer, "_probe_duration", lambda self, _p: 10.0)
+    monkeypatch.setattr(Composer, "_run_ffmpeg", lambda self, _cmd: None)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(c.yaml_path), "compose"])
+    combined = result.output + result.stderr
+    assert result.exit_code != 0
+    assert "Composing 2 segments" in combined
+    assert "1/2" in combined
+    assert "02" in combined
+
+
 def test_cli_lint_exits_nonzero_when_narration_missing(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
