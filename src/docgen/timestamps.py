@@ -229,8 +229,9 @@ class TimestampExtractor:
         """Extract timestamps for ``segments.all`` and write timing.json.
 
         Walks configured segment ids via :meth:`Config.find_segment_asset` (no
-        ``*.mp3`` glob). Missing audio for a listed segment is an error. With
-        no ``segments.all`` entries, existing ``timing.json`` is left unchanged.
+        ``*.mp3`` glob). Missing audio for a listed segment is an error. An
+        empty ``segments.all`` raises :class:`TimestampError` (same as TTS)
+        and does not treat an existing ``timing.json`` as success.
 
         Successful runs **merge** stems into the existing file (same as the
         wizard per-segment timestamps step) so extra keys not in
@@ -254,8 +255,10 @@ class TimestampExtractor:
 
         seg_ids = [str(s) for s in self.config.segments_all]
         if not seg_ids:
-            print("[timestamps] segments.all is empty; leaving timing.json unchanged")
-            return
+            raise TimestampError(
+                "segments.all is empty — add segment ids in docgen.yaml "
+                "(or hints + yaml-generate) before timestamps"
+            )
 
         missing: list[str] = []
         jobs: list[tuple[str, Path]] = []

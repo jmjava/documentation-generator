@@ -107,16 +107,20 @@ class TestExtractLocal:
             TimestampExtractor(cfg).extract_all()
         assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}
 
-    def test_empty_segments_all_leaves_existing_timing_json(self, tmp_path) -> None:
+    def test_empty_segments_all_stale_timing_json_raises(self, tmp_path) -> None:
         (tmp_path / "docgen.yaml").write_text(
             yaml.dump({"segments": {"all": []}}), encoding="utf-8"
         )
         cfg = Config.from_yaml(tmp_path / "docgen.yaml")
         out = cfg.animations_dir / "timing.json"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text('{"keep": true}\n', encoding="utf-8")
-        TimestampExtractor(cfg).extract_all()
-        assert json.loads(out.read_text(encoding="utf-8")) == {"keep": True}
+        stale = {"keep": True, "legacy-stem": {"text": "stale"}}
+        out.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+        from docgen.timestamps import TimestampError
+
+        with pytest.raises(TimestampError, match="segments.all is empty"):
+            TimestampExtractor(cfg).extract_all()
+        assert json.loads(out.read_text(encoding="utf-8")) == stale
 
     def test_heading_only_narration_fails_loud(self, cfg, monkeypatch) -> None:
         _fake_audio_env(monkeypatch)
