@@ -344,3 +344,62 @@ def test_pipeline_fails_when_segments_all_empty(tmp_path, monkeypatch) -> None:
 
     assert "timestamps" not in calls
     assert "compose" not in calls
+
+
+def test_pipeline_av_sync_fail_stops_complete(tmp_path, monkeypatch, capsys) -> None:
+    """One av_sync passed=False must stop generate-all before Pipeline complete."""
+    from docgen.validate import Validator as RealValidator
+
+    calls: list[str] = []
+
+    class OkComposer:
+        def __init__(self, _config) -> None:
+            pass
+
+        def compose_segments(self, _segments) -> int:
+            calls.append("compose")
+            return 1
+
+    _patch_pipeline_stages(monkeypatch, OkComposer, calls)
+
+    import docgen.validate as validate_module
+
+    # Use real run_pre_push so soft_checks policy is under test, not FakeValidator.
+    monkeypatch.setattr(validate_module, "Validator", RealValidator)
+
+    def fake_run_all(self, max_drift_override=None):
+        return [
+            {
+                "segment": "01",
+                "checks": [
+                    {
+                        "name": "av_sync",
+                        "passed": False,
+                        "details": ["desynced board"],
+                    }
+                ],
+            }
+        ]
+
+    monkeypatch.setattr(RealValidator, "run_all", fake_run_all)
+
+    animations_dir = tmp_path / "animations"
+    animations_dir.mkdir(parents=True)
+    cfg = SimpleNamespace(
+        animations_dir=animations_dir,
+        segments_all=["01"],
+        visual_map={"01": {"type": "manim", "scene": "Scene01"}},
+        pipeline_manim_scene_names=lambda: ["Scene01"],
+    )
+
+    with pytest.raises(SystemExit) as ei:
+        Pipeline(cfg).run(skip_tts=True, skip_manim=True, skip_scene_retime=True)
+    assert ei.value.code == 1
+
+    out = capsys.readouterr().out
+    assert "Pipeline complete" not in out
+    assert "FAIL" in out and "av_sync" in out
+    assert "WARN" not in out
+    assert "compose" in calls
+    assert "concat" not in calls
+    assert not any(str(c).startswith("pages:") for c in calls)

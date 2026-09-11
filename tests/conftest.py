@@ -46,7 +46,7 @@ _FFMPEG_ONLY_VALIDATE_TESTS = frozenset(
         "tests/test_validate.py::TestComposeGuard::test_compose_rejects_short_video",
         "tests/test_validate.py::TestComposeGuard::test_compose_allows_matching_durations",
         "tests/test_validate.py::TestComposeGuard::test_compose_nonstrict_warns",
-        "tests/test_validate.py::TestValidateSegmentIntegration::test_static_video_does_not_fail_pre_push",
+        "tests/test_validate.py::TestValidateSegmentIntegration::test_static_video_fails_pre_push",
     }
 )
 

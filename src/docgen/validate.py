@@ -318,7 +318,10 @@ class Validator:
 
         Missing recordings are reported as warnings, not failures — a project
         that hasn't generated videos yet should still be pushable.  Quality
-        checks on *existing* recordings and narration lint are hard failures.
+        checks on *existing* recordings — including visual-sync (``av_sync``,
+        ``subject_beat_coverage``, ``ocr_scan``, ``layout``, ``freeze_ratio``)
+        — and narration lint are hard failures so ``generate-all`` cannot
+        print ``Pipeline complete`` after a desynced mux.
         """
         reports = self.run_all()
         hard_fail = False
@@ -326,17 +329,10 @@ class Validator:
             if isinstance(r, dict):
                 for c in r.get("checks", []):
                     if not c.get("passed", True):
+                        # Only "not generated yet" stays soft. Visual-sync FAILs
+                        # used to warn here, which let generate-all finish.
                         soft_checks = {
                             "recording_exists",
-                            "ocr_scan",
-                            "freeze_ratio",
-                            "layout",
-                            # OCR keyword anchoring is heuristic; warn, don't block.
-                            "av_sync",
-                            # Subject-beat coverage is enforced hard at scene-spec-generate;
-                            # on pre-push warn so shipping committed recordings is not blocked
-                            # by a new heuristic gate mid-regeneration.
-                            "subject_beat_coverage",
                         }
                         if c.get("name") in soft_checks:
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
@@ -841,7 +837,7 @@ class Validator:
 
         Muxed recordings can still match mp3 length (compose freezes the last frame)
         while the diagram finished early. Uses scene-spec label→``wait_word`` starts
-        vs audio/transcript end. Hard fail in ``--pre-push`` (not soft like ``av_sync``).
+        vs audio/transcript end. Hard fail in ``--pre-push`` (same as ``av_sync``).
         """
         se_cfg = self.config.story_end_config
         if not se_cfg.get("enabled", True):

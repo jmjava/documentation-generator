@@ -299,7 +299,7 @@ class TestComposeGuard:
 
 class TestValidateSegmentIntegration:
     def test_frozen_video_is_soft_warning(self, config, cfg_dir):
-        """Static video flags freeze_ratio but pre-push treats it as a warning."""
+        """Static video flags freeze_ratio (pre-push treats that FAIL as hard)."""
         _make_video(cfg_dir / "recordings" / "01-test.mp4", 10, frames_fn=_static_gray)
         v = Validator(config)
         report = v.validate_segment("01")
@@ -334,8 +334,8 @@ class TestValidateSegmentIntegration:
         with pytest.raises(SystemExit):
             v.run_pre_push()
 
-    def test_static_video_does_not_fail_pre_push(self, config, cfg_dir):
-        """freeze_ratio is a soft check — static (non-black) video only warns."""
+    def test_static_video_fails_pre_push(self, config, cfg_dir, capsys):
+        """freeze_ratio is a hard visual-sync check — static video fails pre-push."""
         vid = cfg_dir / "recordings" / "01-test.mp4"
         vid_raw = cfg_dir / "recordings" / "01-test-raw.mp4"
         _make_video(vid_raw, 10, frames_fn=_static_gray)
@@ -348,7 +348,12 @@ class TestValidateSegmentIntegration:
         )
         (cfg_dir / "narration" / "01-test.md").write_text("Narration text here.\n")
         v = Validator(config)
-        v.run_pre_push()  # should NOT raise
+        with pytest.raises(SystemExit) as ei:
+            v.run_pre_push()
+        assert ei.value.code == 1
+        out = capsys.readouterr().out
+        assert "FAIL" in out
+        assert "freeze_ratio" in out
 
 
 # ── Manim scene lint ───────────────────────────────────────────────────
@@ -677,6 +682,60 @@ class TestFfprobeJsonReturncode:
         )
         result = Validator(config)._check_drift(tmp_path / "ok.mp4", max_drift=2.75)
         assert result.passed is True
+
+
+@pytest.mark.parametrize(
+    "check_name",
+    ("av_sync", "subject_beat_coverage", "ocr_scan", "layout", "freeze_ratio"),
+)
+def test_run_pre_push_visual_sync_fail_is_hard(check_name: str, capsys) -> None:
+    """Visual-sync FAILs must be FAIL + SystemExit, not WARN (leftover #2)."""
+    v = Validator.__new__(Validator)
+
+    def _reports(_max_drift_override=None):
+        return [
+            {
+                "segment": "01",
+                "checks": [
+                    {"name": check_name, "passed": False, "details": ["desynced"]},
+                ],
+            }
+        ]
+
+    v.run_all = _reports  # type: ignore[method-assign]
+    with pytest.raises(SystemExit) as ei:
+        v.run_pre_push()
+    assert ei.value.code == 1
+    out = capsys.readouterr().out
+    assert f"FAIL [01] {check_name}" in out
+    assert "WARN" not in out
+    assert "[validate] All checks passed" not in out
+
+
+def test_run_pre_push_missing_recording_stays_soft(capsys) -> None:
+    """recording_exists remains a warning so ungenerated bundles stay pushable."""
+    v = Validator.__new__(Validator)
+
+    def _reports(_max_drift_override=None):
+        return [
+            {
+                "segment": "01",
+                "checks": [
+                    {
+                        "name": "recording_exists",
+                        "passed": False,
+                        "details": ["No recording for 01"],
+                    },
+                ],
+            }
+        ]
+
+    v.run_all = _reports  # type: ignore[method-assign]
+    v.run_pre_push()
+    out = capsys.readouterr().out
+    assert "WARN [01] recording_exists" in out
+    assert "FAIL" not in out
+    assert "[validate] All checks passed" in out
 
 
 # ── Helper to create silent audio ─────────────────────────────────────
