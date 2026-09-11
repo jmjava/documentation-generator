@@ -15,6 +15,7 @@ Select via ``timestamps.engine`` in docgen.yaml or ``docgen timestamps --engine`
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -32,10 +33,21 @@ def _json_kind(value: Any) -> str:
     return "null" if value is None else type(value).__name__
 
 
+def _non_finite_kind(value: float) -> str | None:
+    """Label for NaN / ±Infinity. ``isinstance(x, float)`` accepts those."""
+    if math.isfinite(value):
+        return None
+    if math.isnan(value):
+        return "NaN"
+    return "-Infinity" if value < 0 else "Infinity"
+
+
 def _json_number_kind(row: dict[str, Any], time_key: str) -> str | None:
-    """Return a kind label when *time_key* is not a JSON number; ``None`` when ok.
+    """Return a kind label when *time_key* is not a finite JSON number; ``None`` when ok.
 
     ``bool`` is a subclass of ``int``: ``start: true`` used to become ``1.0s``.
+    Python ``json`` also accepts ``NaN`` / ``Infinity``, which defeat every
+    numeric clock gate if treated as ordinary floats.
     """
     if time_key not in row:
         return "missing"
@@ -44,14 +56,43 @@ def _json_number_kind(row: dict[str, Any], time_key: str) -> str | None:
         return "null"
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return _json_kind(value)
-    return None
+    return _non_finite_kind(float(value))
+
+
+def require_finite_word_times(
+    words: list[Any] | None,
+    *,
+    label: str = "words",
+) -> None:
+    """Raise :class:`TimestampError` if any present ``start`` / ``end`` is not finite.
+
+    Missing keys are allowed so in-memory compile words may omit ``end``.
+    Present non-numbers, ``NaN``, and ``±Infinity`` are rejected.
+    """
+    if not words:
+        return
+    if not isinstance(words, list):
+        raise TimestampError(f"{label} must be a JSON array, not {_json_kind(words)}")
+    for i, item in enumerate(words):
+        if not isinstance(item, dict):
+            raise TimestampError(
+                f"{label}[{i}] must be a JSON object, not {_json_kind(item)}"
+            )
+        for time_key in ("start", "end"):
+            if time_key not in item:
+                continue
+            kind = _json_number_kind(item, time_key)
+            if kind is not None:
+                raise TimestampError(
+                    f"{label}[{i}].{time_key} must be a JSON number, not {kind}"
+                )
 
 
 def _require_timing_object_list(
     path_name: str, stem: str, payload: dict[str, Any], key: str
 ) -> None:
     """Require ``words`` / ``segments`` (when present and not null) to be object arrays
-    whose ``start`` / ``end`` are JSON numbers.
+    whose ``start`` / ``end`` are finite JSON numbers.
     """
     if key not in payload:
         return
@@ -82,9 +123,10 @@ def load_bundle_timing(config: "Config") -> dict[str, Any]:
 
     A missing file is ``{}``. Corrupt JSON, a non-object root, a non-object
     per-stem value, a present ``words`` / ``segments`` field that is not an
-    array of objects, or a row whose ``start`` / ``end`` is not a JSON number
-    raises :class:`TimestampError` so compile/validate cannot treat garbage as
-    empty ``words`` or wait until ``0.0``.
+    array of objects, or a row whose ``start`` / ``end`` is not a finite JSON
+    number (``NaN`` / ``±Infinity`` included) raises :class:`TimestampError`
+    so compile/validate cannot treat garbage as empty ``words`` or wait until
+    ``0.0``.
     """
     path = config.animations_dir / "timing.json"
     if not path.is_file():
@@ -194,7 +236,7 @@ class TimestampExtractor:
         wizard per-segment timestamps step) so extra keys not in
         ``segments.all`` are not wiped. Corrupt JSON, a non-object root, a
         non-object stem, a non-array ``words`` / ``segments`` field, or a row
-        whose ``start`` / ``end`` is not a JSON number raises
+        whose ``start`` / ``end`` is not a finite JSON number raises
         :class:`TimestampError` and the file is not rewritten.
         """
         chosen = self.resolve_engine(engine)

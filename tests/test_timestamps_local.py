@@ -370,6 +370,21 @@ class TestExtractLocal:
             with pytest.raises(TimestampError, match=match):
                 load_bundle_timing(cfg)
 
+    @pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity"), (float("-inf"), "-Infinity")))
+    def test_load_bundle_timing_rejects_non_finite_start_end(self, cfg, bad: float, kind: str) -> None:
+        from docgen.timestamps import TimestampError, load_bundle_timing
+
+        out = cfg.animations_dir / "timing.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"01-x": {"words": [{"word": "hi", "start": bad, "end": 0.1}]}}
+        out.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
+        with pytest.raises(TimestampError, match=rf"words\[0\]\.start must be a JSON number, not {kind}"):
+            load_bundle_timing(cfg)
+        payload = {"01-x": {"segments": [{"text": "hi", "start": 0.0, "end": bad}]}}
+        out.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
+        with pytest.raises(TimestampError, match=rf"segments\[0\]\.end must be a JSON number, not {kind}"):
+            load_bundle_timing(cfg)
+
     def test_load_bundle_timing_accepts_numeric_start_end(self, cfg) -> None:
         from docgen.timestamps import load_bundle_timing
 

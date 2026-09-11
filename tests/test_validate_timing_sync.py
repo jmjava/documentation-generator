@@ -54,6 +54,26 @@ def cfg(tmp_path) -> Config:
 
 
 class TestTimingSync:
+    @pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity")))
+    def test_non_finite_word_start_fails(self, cfg, monkeypatch, bad: float, kind: str) -> None:
+        (cfg.animations_dir / "timing.json").write_text(
+            json.dumps(
+                {
+                    "01-x": {
+                        "text": "hello",
+                        "segments": [{"start": 0.0, "end": 1.0, "text": "hello"}],
+                        "words": [{"start": bad, "end": 1.0, "word": "hello"}],
+                    }
+                },
+                allow_nan=True,
+            ),
+            encoding="utf-8",
+        )
+        _patch_audio_duration(monkeypatch, 1.2)
+        check = Validator(cfg)._check_timing_sync("01")
+        assert not check.passed
+        assert any(kind in d for d in check.details)
+
     def test_fresh_timing_passes(self, cfg, monkeypatch) -> None:
         _write_timing(cfg, last_end=10.0)
         _patch_audio_duration(monkeypatch, 10.4)

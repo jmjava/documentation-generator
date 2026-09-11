@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from docgen.cli import main
 from docgen.scene_benchmark import (
+    BenchmarkCase,
     compare_to_baseline,
     default_baseline_path,
     format_table,
@@ -18,7 +20,8 @@ from docgen.scene_benchmark import (
     standard_cases,
 )
 from docgen.scene_clock_harness import run_compiled_scene_clock
-from docgen.scene_spec import compile_scene_class
+from docgen.scene_spec import SceneSpecError, compile_scene_class
+from docgen.timestamps import TimestampError
 
 
 def test_corpus_ids_are_stable() -> None:
@@ -50,6 +53,31 @@ def test_clamped_issue66_case_does_not_skip_waits() -> None:
     assert score.wait_skips == 0
     assert score.overshoots == 0
     assert score.defect_points == 0
+
+
+@pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity")))
+def test_non_finite_word_start_fails_compile_and_benchmark(bad: float, kind: str) -> None:
+    """NaN / Infinity starts must not compile or score 100 (leftover #4)."""
+    donor = next(c for c in standard_cases() if c.id == "wide_hold")
+    words = [
+        {"word": "Alpha", "start": bad, "end": 1.4},
+        {"word": "Beta", "start": 8.0, "end": 8.3},
+        {"word": "Gamma", "start": 16.0, "end": 16.3},
+        {"word": "tail", "start": 24.0, "end": 24.4},
+    ]
+    with pytest.raises(SceneSpecError, match=rf"timing words\[0\]\.start must be a JSON number, not {kind}"):
+        compile_scene_class(donor.spec, words=words)
+    poisoned = BenchmarkCase(
+        id="nonfinite_starts",
+        title="Control: NaN/Infinity starts must not score 100",
+        spec=donor.spec,
+        words=words,
+        role="quality",
+        compile_with_words=True,
+    )
+    with pytest.raises(TimestampError, match=rf"timing words\[0\]\.start must be a JSON number, not {kind}"):
+        score = score_case(poisoned)
+        assert score.score != 100
 
 
 def test_harness_runs_real_timed_scene_clock() -> None:

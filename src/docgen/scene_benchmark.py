@@ -29,6 +29,7 @@ from docgen.scene_spec import (
     reveal_cadence_violations,
     simulate_reveal_timeline,
 )
+from docgen.timestamps import require_finite_word_times
 
 BASELINE_NAME = "baseline.json"
 
@@ -273,6 +274,7 @@ def standard_cases() -> list[BenchmarkCase]:
 
 def score_case(case: BenchmarkCase) -> CaseScore:
     words = case.words
+    require_finite_word_times(words, label="timing words")
     compile_words = words if case.compile_with_words else None
     src = compile_scene_class(case.spec, words=compile_words)
     trace: ClockTrace = run_compiled_scene_clock(src, words)

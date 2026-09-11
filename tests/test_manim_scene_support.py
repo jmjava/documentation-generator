@@ -924,6 +924,24 @@ def test_load_timing_helpers_accept_object_rows(tmp_path: Path) -> None:
     assert ns["_load_timing_words"]("missing") == []
 
 
+@pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity"), (float("-inf"), "-Infinity")))
+def test_load_timing_helpers_reject_non_finite_start_end(
+    tmp_path: Path, bad: float, kind: str
+) -> None:
+    ns = _exec_timing_loaders(
+        tmp_path,
+        {"01-x": {"words": [{"word": "hi", "start": bad, "end": 0.1}]}},
+    )
+    with pytest.raises(TypeError, match=rf"\.words\[0\].start must be a JSON number, not {kind}"):
+        ns["_load_timing_words"]("01-x")
+    ns2 = _exec_timing_loaders(
+        tmp_path,
+        {"01-x": {"segments": [{"text": "hi", "start": 0.0, "end": bad}]}},
+    )
+    with pytest.raises(TypeError, match=rf"\.segments\[0\].end must be a JSON number, not {kind}"):
+        ns2["_load_timing"]("01-x")
+
+
 def test_load_timing_helpers_reject_non_numeric_start_end(tmp_path: Path) -> None:
     ns = _exec_timing_loaders(
         tmp_path,
@@ -1031,6 +1049,16 @@ def test_wait_until_word_rejects_missing_start() -> None:
     scene.setup()
     with pytest.raises(TypeError, match=r"timing word\[0\]\.start must be a JSON number, not missing"):
         scene.wait_until_word([{"word": "hi", "end": 1.0}], 0)
+    assert scene._clock == 0.0
+    assert scene.waits == []
+
+
+@pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity"), (float("-inf"), "-Infinity")))
+def test_wait_until_word_rejects_non_finite_start(bad: float, kind: str) -> None:
+    scene = _exec_timed_scene()["_TimedScene"]()
+    scene.setup()
+    with pytest.raises(TypeError, match=rf"timing word\[0\]\.start must be a JSON number, not {kind}"):
+        scene.wait_until_word([{"start": bad, "end": 1.0}], 0)
     assert scene._clock == 0.0
     assert scene.waits == []
 
