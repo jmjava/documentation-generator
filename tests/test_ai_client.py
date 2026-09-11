@@ -358,6 +358,48 @@ def test_grok_stt_non_object_word_raises(tmp_path: Path, monkeypatch: pytest.Mon
             transcribe_audio(mp3, cfg=cfg)
 
 
+@pytest.mark.parametrize("token", ("", "   "))
+def test_grok_stt_empty_first_word_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, token: str
+) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps(
+        {
+            "text": "Hello",
+            "words": [
+                {"text": token, "start": 0.0, "end": 0.1},
+                {"text": "Hello", "start": 0.1, "end": 0.4},
+            ],
+        }
+    ).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match=r"words\[0\] must have a non-empty word token"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+def test_grok_stt_inverted_interval_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps(
+        {
+            "text": "Hello",
+            "words": [{"text": "Hello", "start": 0.4, "end": 0.1}],
+        }
+    ).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match=r"words\[\] end must be >= start"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
 def test_grok_stt_object_segments_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
     monkeypatch.setenv("XAI_API_KEY", "xai-test")
