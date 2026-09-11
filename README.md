@@ -59,7 +59,7 @@ If you still need the legacy behaviour, pin a pre-removal commit
   Manim scene lint, **timing_sync** (stale `timing.json` vs regenerated mp3 —
   hard fail), **story_end** (paced visual story finishes long before narration —
   hard fail), and **av_sync** (OCR check that scene-spec label anchors appear on
-  screen near their spoken time — soft warning).
+  screen near their spoken time — hard fail on `--pre-push` / `generate-all`).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
   `.gitignore`.
 - **Wizard** — local web GUI to bootstrap narration scripts from existing project
@@ -310,7 +310,7 @@ validation:
     enabled: true
     max_early_sec: 40.0      # idle after last paced box
     max_early_ratio: 0.45    # and idle / audio_end (both must exceed to fail)
-  av_sync:                   # OCR anchor check (soft warning in --pre-push)
+  av_sync:                   # OCR anchor check (hard fail in --pre-push / generate-all)
     enabled: true
     tolerance_sec: 3.0
     prefer_scene_spec_labels: true  # OCR anchors from paced box labels when specs exist
