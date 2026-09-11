@@ -263,7 +263,8 @@ already on disk. (`docgen yaml-generate` also keeps
 `manim_scene_generation.segments` in step with `visual_map`.)
 
 The **`visual_map`** key is maintainer-owned per-segment wiring. Supported types
-are `manim`, `mixed`, `still`, and `image`.
+are `manim`, `mixed`, `still`, and `image`. A `mixed` row raises `ComposeError`
+if any listed source file is missing (it does not mux the present subset).
 
 ### `env_file` and the shell
 
