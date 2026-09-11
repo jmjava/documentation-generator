@@ -5,13 +5,20 @@ repositories that install `docgen` and maintain their own demo bundle. The
 library no longer ships an in-repo dogfood; consumers are the integration test
 of record.
 
-**Active:** **[grok-stt-words-list.md](grok-stt-words-list.md)** —
-Grok STT `words` / `segments` must be JSON arrays of objects.
+**Agent stop:** The YAML-key / fail-closed-key hunting program (PRs
+**#73–#149**, agent `…2ccd`) is **closed**. Shipping one typed-config
+milestone does **not** authorize opening the next key as a new PR. Batch
+isomorphic leftovers or stop. See the session contract in `AGENTS.md` and
+**`.cursor/rules/no-factory-loop.mdc`**.
+
+**Active:** none (human-assigned only). Do not invent the next
+`milestones/*.md` or PR because this line is empty.
 
 **Shipped:**
+- **[grok-stt-words-list.md](grok-stt-words-list.md)** —
+  Grok STT `words` / `segments` must be JSON arrays of objects (#149).
 - **[scene-spec-layout-gaps.md](scene-spec-layout-gaps.md)** —
-  scene-spec layout gaps must not coerce YAML bools to 1.0
-  (#148).
+  scene-spec layout gaps must not coerce YAML bools to 1.0 (#148).
 - **[scene-spec-bool-numerics.md](scene-spec-bool-numerics.md)** —
   scene-spec `wait_word` / `run_time` / sizes must not coerce YAML bools
   (#147).
