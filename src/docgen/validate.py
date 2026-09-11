@@ -2,7 +2,9 @@
 
 Core checks (freeze_ratio, blank_frames) use only cv2 — always available.
 OCR / av_sync / layout need pytesseract plus the tesseract binary. Missing
-either fails those checks (not skip-PASS). Other cv2 checks still run.
+either fails those checks (not skip-PASS). Missing audio or a Git LFS pointer
+fails ``timing_sync`` and recording media gates (not skip-PASS). Other cv2
+checks still run.
 """
 
 from __future__ import annotations
@@ -99,6 +101,36 @@ def _is_lfs_pointer(path: Path) -> bool:
             return f.read(len(_LFS_SIGNATURE)) == _LFS_SIGNATURE
     except OSError:
         return False
+
+
+def _unusable_audio_detail(seg_id: str, audio: Path | None) -> str | None:
+    """Return a fail-closed detail when the segment mp3 is missing or an LFS pointer."""
+    if audio is None:
+        return (
+            f"No audio for {seg_id} — timing_sync cannot compare the mp3 to timing.json"
+        )
+    if _is_lfs_pointer(audio):
+        return f"Audio is an LFS pointer ({audio.name}) — not actual media"
+    return None
+
+
+_LFS_MEDIA_GATES = ("stream_presence", "av_drift", "ocr_scan", "av_sync")
+
+
+def _lfs_pointer_media_fails(seg_id: str, rec: Path) -> list[CheckResult]:
+    """Fail recording media gates when the file is a Git LFS pointer, not video."""
+    detail = f"LFS pointer — media checks cannot run for {seg_id} ({rec.name})"
+    return [CheckResult(name, False, [detail]) for name in _LFS_MEDIA_GATES]
+
+
+def _is_pre_push_soft(check: dict[str, Any]) -> bool:
+    """True for not-generated-yet gaps. LFS pointers and stale timing stay hard."""
+    name = check.get("name")
+    if name == "recording_exists":
+        return True
+    if name != "timing_sync":
+        return False
+    return any("No audio for " in str(d) for d in check.get("details") or [])
 
 
 def _is_text_call(node: ast.Call) -> bool:
@@ -293,9 +325,7 @@ class Validator:
         rec = self._find_recording(seg_id)
 
         if rec and _is_lfs_pointer(rec):
-            report.checks.append(
-                CheckResult("lfs_pointer", True, [f"LFS pointer — skipping media checks for {seg_id}"])
-            )
+            report.checks.extend(_lfs_pointer_media_fails(seg_id, rec))
         elif rec:
             vmap0 = self.config.visual_map.get(seg_id, {})
             vt0 = vmap0.get("type") if isinstance(vmap0, dict) else None
@@ -342,10 +372,7 @@ class Validator:
                     if not c.get("passed", True):
                         # Only "not generated yet" stays soft. Visual-sync FAILs
                         # used to warn here, which let generate-all finish.
-                        soft_checks = {
-                            "recording_exists",
-                        }
-                        if c.get("name") in soft_checks:
+                        if _is_pre_push_soft(c):
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
                             hard_fail = True
@@ -767,10 +794,10 @@ class Validator:
             return CheckResult("timing_sync", True, ["validation.timing_sync disabled (skipped)"])
 
         audio = self._find_audio(seg_id)
-        if not audio:
-            return CheckResult("timing_sync", True, [f"No audio for {seg_id} (skipped)"])
-        if _is_lfs_pointer(audio):
-            return CheckResult("timing_sync", True, ["Audio is an LFS pointer (skipped)"])
+        unusable = _unusable_audio_detail(seg_id, audio)
+        if unusable:
+            return CheckResult("timing_sync", False, [unusable])
+        assert audio is not None
 
         is_manim = self.config.visual_map.get(seg_id, {}).get("type") == "manim"
         from docgen.timestamps import TimestampError
