@@ -123,6 +123,16 @@ def _lfs_pointer_media_fails(seg_id: str, rec: Path) -> list[CheckResult]:
     return [CheckResult(name, False, [detail]) for name in _LFS_MEDIA_GATES]
 
 
+def _is_pre_push_soft(check: dict[str, Any]) -> bool:
+    """True for not-generated-yet gaps. LFS pointers and stale timing stay hard."""
+    name = check.get("name")
+    if name == "recording_exists":
+        return True
+    if name != "timing_sync":
+        return False
+    return any("No audio for " in str(d) for d in check.get("details") or [])
+
+
 def _is_text_call(node: ast.Call) -> bool:
     func = node.func
     if isinstance(func, ast.Name):
@@ -362,10 +372,7 @@ class Validator:
                     if not c.get("passed", True):
                         # Only "not generated yet" stays soft. Visual-sync FAILs
                         # used to warn here, which let generate-all finish.
-                        soft_checks = {
-                            "recording_exists",
-                        }
-                        if c.get("name") in soft_checks:
+                        if _is_pre_push_soft(c):
                             print(f"WARN [{r.get('segment')}] {c.get('name')}: {c.get('details')}")
                         else:
                             hard_fail = True

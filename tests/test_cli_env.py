@@ -284,6 +284,8 @@ def test_cli_validate_pre_push_missing_recording_is_soft(tmp_path: Path) -> None
     assert result.exit_code == 0, combined
     assert "All checks passed" in combined
     assert "WARN" in combined and "recording_exists" in combined
+    assert "WARN" in combined and "timing_sync" in combined
+    assert "FAIL" not in combined
     assert "AttributeError" not in combined
     assert "Traceback" not in combined
 

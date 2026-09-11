@@ -606,3 +606,9 @@ class TestMissingMediaFails:
             assert by_name[name]["passed"] is False, name
             assert any("LFS pointer" in d for d in by_name[name]["details"])
             assert not any("skipped" in d.lower() for d in by_name[name]["details"])
+
+    def test_lfs_pointer_audio_pre_push_is_hard(self, tmp_path) -> None:
+        cfg = _bundle(tmp_path)
+        _write_lfs_pointer(cfg.audio_dir / "01-x.mp3")
+        with pytest.raises(SystemExit):
+            Validator(cfg).run_pre_push()
