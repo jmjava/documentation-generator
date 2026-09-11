@@ -190,7 +190,9 @@ pytest
 docgen benchmark          # required: scene-timing corpus vs committed baseline
 ```
 
-CI runs **`ruff`**, **`pytest`**, and a required **`benchmark`** job (`docgen benchmark`).
+CI runs **`ruff`**, **`pytest`**, a required **`benchmark`** job (`docgen benchmark`),
+and a **`validate`** job (`docgen validate` on a scratch `init` bundle — no in-repo
+dogfood tree; a listed segment with no recordings must exit 1).
 CI also installs `ffmpeg` and `tesseract` via apt for unit tests — see `.github/workflows/ci.yml`.
 
 **Roadmap:** [milestones/README.md](milestones/README.md).
