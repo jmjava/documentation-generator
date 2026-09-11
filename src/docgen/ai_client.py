@@ -643,6 +643,38 @@ def _stt_json_number(value: Any, *, label: str) -> float:
     return float(value)
 
 
+def _stt_ordered_interval(start: float, end: float, *, label: str) -> None:
+    """Reject inverted STT intervals so wait indices cannot run backward."""
+    if end < start:
+        raise AIError(f"STT {label} end must be >= start, not {end} < {start}")
+
+
+def _grok_stt_word(w: Any, index: int) -> dict[str, Any]:
+    """Map one Grok word; empty tokens and inverted intervals are AIError."""
+    if not isinstance(w, dict):
+        raise AIError(
+            f"xAI STT words[{index}] must be a JSON object, not {type(w).__name__}"
+        )
+    token = str(w.get("word") or w.get("text") or "").strip()
+    if not token:
+        raise AIError(f"xAI STT words[{index}] must have a non-empty word token")
+    start = _stt_json_number(w.get("start"), label="words[].start")
+    end = _stt_json_number(w.get("end"), label="words[].end")
+    _stt_ordered_interval(start, end, label="words[]")
+    return {"start": start, "end": end, "word": token}
+
+
+def _grok_stt_segment(s: Any, index: int) -> dict[str, Any]:
+    if not isinstance(s, dict):
+        raise AIError(
+            f"xAI STT segments[{index}] must be a JSON object, not {type(s).__name__}"
+        )
+    start = _stt_json_number(s.get("start"), label="segments[].start")
+    end = _stt_json_number(s.get("end"), label="segments[].end")
+    _stt_ordered_interval(start, end, label="segments[]")
+    return {"start": start, "end": end, "text": str(s.get("text") or "")}
+
+
 def _openai_stt_word(w: Any) -> dict[str, Any]:
     return {
         "start": _stt_json_number(_stt_field(w, "start"), label="words[].start"),
@@ -690,22 +722,7 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
         raise AIError(
             f"xAI STT words must be a JSON array, not {type(raw_words).__name__}"
         )
-    words: list[dict[str, Any]] = []
-    for i, w in enumerate(raw_words):
-        if not isinstance(w, dict):
-            raise AIError(
-                f"xAI STT words[{i}] must be a JSON object, not {type(w).__name__}"
-            )
-        token = str(w.get("word") or w.get("text") or "").strip()
-        if not token:
-            continue
-        words.append(
-            {
-                "start": _stt_json_number(w.get("start"), label="words[].start"),
-                "end": _stt_json_number(w.get("end"), label="words[].end"),
-                "word": token,
-            }
-        )
+    words = [_grok_stt_word(w, i) for i, w in enumerate(raw_words)]
     raw_dur = parsed.get("duration")
     if raw_dur is None:
         duration = words[-1]["end"] if words else 0.0
@@ -725,20 +742,7 @@ def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
             else [{"start": 0.0, "end": duration, "text": text}]
         )
     else:
-        typed_segments: list[dict[str, Any]] = []
-        for i, s in enumerate(segments):
-            if not isinstance(s, dict):
-                raise AIError(
-                    f"xAI STT segments[{i}] must be a JSON object, not {type(s).__name__}"
-                )
-            typed_segments.append(
-                {
-                    "start": _stt_json_number(s.get("start"), label="segments[].start"),
-                    "end": _stt_json_number(s.get("end"), label="segments[].end"),
-                    "text": str(s.get("text") or ""),
-                }
-            )
-        segments = typed_segments
+        segments = [_grok_stt_segment(s, i) for i, s in enumerate(segments)]
     return {"text": text, "segments": segments, "words": words}
 
 

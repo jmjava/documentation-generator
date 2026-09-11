@@ -39,7 +39,8 @@ If you still need the legacy behaviour, pin a pre-removal commit
   full-span speech). Network transcription (`timestamps.engine: whisper`) uses
   OpenAI `whisper-1` or xAI `/v1/stt` when the provider is Grok. Both engines
   write the same `timing.json` shape. OpenAI whisper-1 word/segment `start`/`end`
-  must be finite JSON numbers (bool/NaN raise `AIError`).
+  must be finite JSON numbers (bool/NaN raise `AIError`). Grok `/v1/stt` rejects
+  empty word tokens and inverted `end < start` intervals (`AIError`).
 - **Manim animations (default: declarative scene specs)** — primary visual surface.
   Prefer **`animations/specs/*.scene.yaml`** via **`docgen scene-spec-generate`**
   + **`scene-compile`**. On **`generate-all`**, if no specs exist yet, the pipeline
