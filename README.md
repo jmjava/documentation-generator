@@ -40,7 +40,9 @@ If you still need the legacy behaviour, pin a pre-removal commit
   OpenAI `whisper-1` or xAI `/v1/stt` when the provider is Grok. Both engines
   write the same `timing.json` shape. OpenAI whisper-1 word/segment `start`/`end`
   must be finite JSON numbers (bool/NaN raise `AIError`). Grok `/v1/stt` rejects
-  empty word tokens and inverted `end < start` intervals (`AIError`).
+  empty word tokens and inverted `end < start` intervals (`AIError`). Empty
+  `segments.all` raises `TimestampError` (same as TTS) and does not leave a
+  stale `timing.json` as success.
 - **Manim animations (default: declarative scene specs)** — primary visual surface.
   Prefer **`animations/specs/*.scene.yaml`** via **`docgen scene-spec-generate`**
   + **`scene-compile`**. On **`generate-all`**, if no specs exist yet, the pipeline
@@ -238,7 +240,7 @@ docgen --repo /path/to/your-project generate-all
 | `docgen gui [--view benchmark] [--browser] [--smoke]` | Desktop GUI (Vue + Flask). Install `docgen[gui]` for a pywebview window; `--browser` uses the system browser; `--smoke` is a headless HTTP check |
 | `docgen freeze [--dist DIR] [--smoke]` | PyInstaller onedir for **`docgen-gui` only** (`pip install 'docgen[packaging]'`). Not the full Manim CLI |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
-| `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription) |
+| `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription). Empty `segments.all` is `TimestampError` (stale `timing.json` is not success) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
