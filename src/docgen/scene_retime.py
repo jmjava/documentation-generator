@@ -27,6 +27,34 @@ def list_scene_spec_paths(cfg: "Config", *, segment_id: str | None = None) -> li
     return sorted(specs_dir.glob("*.scene.yaml"))
 
 
+def persist_upgraded_wait_segment_yaml(
+    spec_path: Path,
+    original: dict[str, Any],
+    merged: dict[str, Any],
+) -> bool:
+    """Write ``wait_word`` YAML when the source still had ``wait_segment``.
+
+    Raises ``SceneSpecError`` if the overlay would leave ``wait_segment`` on disk.
+    """
+    from docgen.scene_spec import (
+        SceneSpecError,
+        disk_spec_with_merged_wait_words,
+        spec_has_wait_segment,
+    )
+    from docgen.scene_spec_generate import spec_to_yaml_text
+
+    if not spec_has_wait_segment(original):
+        return False
+    disk = disk_spec_with_merged_wait_words(original, merged)
+    if spec_has_wait_segment(disk):
+        raise SceneSpecError(
+            f"{spec_path.name}: scene-compile left wait_segment on disk — "
+            "could not persist wait_word YAML"
+        )
+    spec_path.write_text(spec_to_yaml_text(disk), encoding="utf-8")
+    return True
+
+
 def retime_compile_spec(
     cfg: "Config",
     spec_path: Path,
@@ -36,6 +64,7 @@ def retime_compile_spec(
     """Load one spec, re-derive ``wait_word`` from timing, compile into ``scenes.py``.
 
     Raises ``SceneGenerationError`` / ``SceneSpecError`` on schema or pacing failure.
+    Legacy ``wait_segment`` is upgraded and written back (not left for a later reject).
     """
     from docgen.scene_spec import load_scene_spec
     from docgen.scene_spec_generate import (
@@ -55,7 +84,9 @@ def retime_compile_spec(
             "timing_key": merged.get("timing_key"),
             "class_block": class_block,
             "wrote": False,
+            "yaml_wrote": False,
         }
+    yaml_wrote = persist_upgraded_wait_segment_yaml(spec_path, raw, merged)
     scenes_path = inject_class_block_into_scenes_py(
         cfg, seg_id=sid, class_name=class_name, class_block=class_block
     )
@@ -66,6 +97,7 @@ def retime_compile_spec(
         "timing_key": merged.get("timing_key"),
         "scenes_path": scenes_path,
         "wrote": True,
+        "yaml_wrote": yaml_wrote,
     }
 
 

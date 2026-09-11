@@ -28,6 +28,8 @@ from docgen.scene_spec import (
     compile_scene_class,
     reveal_cadence_violations,
     simulate_reveal_timeline,
+    spec_has_wait_segment,
+    upgrade_wait_segments_to_wait_words,
 )
 from docgen.timestamps import require_finite_word_times
 
@@ -269,18 +271,48 @@ def standard_cases() -> list[BenchmarkCase]:
                 {"word": "tail", "start": 18.0, "end": 18.5},
             ],
         ),
+        BenchmarkCase(
+            id="legacy_wait_segment",
+            title="Row-level wait_segment upgrades to wait_word before compile",
+            spec=_wait_segment_row_spec(),
+            words=[
+                {"word": "Alpha", "start": 1.2, "end": 1.5},
+                {"word": "tail", "start": 18.0, "end": 18.5},
+            ],
+        ),
     ]
+
+
+def _wait_segment_row_spec() -> dict[str, Any]:
+    spec = _spec("legacy_wait_segment", [_box("Alpha")], run_time=0.6)
+    spec["rows"][0]["wait_segment"] = 0
+    return spec
+
+
+def spec_ready_for_clock(
+    spec: dict[str, Any], words: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Upgrade leftover ``wait_segment`` so ``compile_scene_class`` can score the case."""
+    if not spec_has_wait_segment(spec):
+        return spec
+    segments = [
+        {"start": float(w.get("start", 0.0)), "end": float(w.get("end", 0.0))}
+        for w in words
+        if isinstance(w, dict)
+    ]
+    return upgrade_wait_segments_to_wait_words(spec, words, segments)
 
 
 def score_case(case: BenchmarkCase) -> CaseScore:
     words = case.words
     require_finite_word_times(words, label="timing words")
     compile_words = words if case.compile_with_words else None
-    src = compile_scene_class(case.spec, words=compile_words)
+    spec = spec_ready_for_clock(case.spec, words)
+    src = compile_scene_class(spec, words=compile_words)
     trace: ClockTrace = run_compiled_scene_clock(src, words)
     audio_end = float(audio_end_from_words(words) or 0.0)
     issues = clock_contract_violations(trace, words, audio_end=audio_end)
-    sim = simulate_reveal_timeline(case.spec, words, clamp_run_times=case.compile_with_words)
+    sim = simulate_reveal_timeline(spec, words, clamp_run_times=case.compile_with_words)
     drift = simulator_exec_drift_violations(sim, trace)
     cadence = reveal_cadence_violations(sim, audio_end=audio_end)
     idle = hold_idle_violations(sim, audio_end=audio_end)

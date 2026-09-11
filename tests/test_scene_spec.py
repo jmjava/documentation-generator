@@ -14,6 +14,7 @@ from docgen.scene_spec import (
     auto_paginate,
     coerce_legacy_wait_at_to_whisper_rows,
     compile_scene_class,
+    disk_spec_with_merged_wait_words,
     cluster_subject_beats,
     count_spec_labels,
     iter_paced_label_anchors,
@@ -28,6 +29,7 @@ from docgen.scene_spec import (
     reveal_cadence_violations,
     segment_index_for_whisper_time,
     simulate_reveal_timeline,
+    spec_has_wait_segment,
     sync_row_labels_to_whisper_words,
     validate_scene_spec,
 )
@@ -274,6 +276,54 @@ def test_coerce_legacy_wait_at_drops_when_no_words_even_if_segments_exist() -> N
     assert "wait_at" not in merged["rows"][0]
     out = compile_scene_class(merged)
     assert "wait_until_word" not in out
+
+
+def test_disk_spec_with_merged_wait_words_drops_wait_segment() -> None:
+    original = {
+        "segment_id": "03",
+        "class_name": "SegScene",
+        "title": {"text": "T", "font_size": 40, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "wait_segment": 0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                    }
+                ],
+            },
+        ],
+    }
+    merged = {
+        **original,
+        "timing_key": "03-x",
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "A",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 1.0,
+                        "font_size": 20,
+                        "wait_word": 2,
+                    }
+                ],
+            },
+        ],
+    }
+    assert spec_has_wait_segment(original)
+    out = disk_spec_with_merged_wait_words(original, merged)
+    assert not spec_has_wait_segment(out)
+    assert "timing_key" not in out
+    assert out["rows"][0]["boxes"][0]["wait_word"] == 2
+    compile_scene_class({**out, "timing_key": "03-x"})
 
 
 def test_compile_rejects_wait_segment() -> None:

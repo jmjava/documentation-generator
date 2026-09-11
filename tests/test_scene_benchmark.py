@@ -17,6 +17,7 @@ from docgen.scene_benchmark import (
     load_baseline,
     run_benchmark,
     score_case,
+    spec_ready_for_clock,
     standard_cases,
 )
 from docgen.scene_clock_harness import run_compiled_scene_clock
@@ -35,6 +36,7 @@ def test_corpus_ids_are_stable() -> None:
         "paged_slide",
         "flow_edges",
         "audio_tail",
+        "legacy_wait_segment",
     ]
 
 
@@ -97,6 +99,20 @@ def test_wide_hold_executes_more_than_one_pulse() -> None:
     score = score_case(case)
     assert score.mid_hold_pulses >= 2
     assert score.wait_skips == 0
+
+
+def test_legacy_wait_segment_upgrades_before_compile() -> None:
+    """Leftover #12: row-level wait_segment is benchmarked after upgrade."""
+    case = next(c for c in standard_cases() if c.id == "legacy_wait_segment")
+    assert case.spec["rows"][0]["wait_segment"] == 0
+    ready = spec_ready_for_clock(case.spec, case.words)
+    assert "wait_segment" not in ready["rows"][0]
+    assert ready["rows"][0]["boxes"][0]["wait_word"] == 0
+    src = compile_scene_class(ready, words=case.words)
+    assert "wait_until_word(timing_words, 0)" in src
+    score = score_case(case)
+    assert score.wait_skips == 0
+    assert score.defect_points == 0
 
 
 def test_emphasis_none_emits_no_pulses() -> None:
