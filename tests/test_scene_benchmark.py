@@ -170,6 +170,8 @@ def test_ci_workflow_requires_docgen_benchmark() -> None:
     assert "\n  benchmark:" in text
     assert "docgen benchmark" in text
     assert "Scene-timing benchmark" in text
+    assert "scripts/test-check-complexity.sh" in text
+    assert "scripts/check-complexity.py" in text
 
 
 def test_agent_rules_require_benchmark() -> None:

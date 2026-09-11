@@ -15,11 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - run: pip install ruff lizard==1.24.0
       - run: ruff check src/ tests/
+      - name: Complexity proving test
+        run: bash scripts/test-check-complexity.sh
+      - name: PR-diff complexity
+        run: python3 scripts/check-complexity.py --base origin/main --paths src
 
   unit:
     runs-on: ubuntu-latest
