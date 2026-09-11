@@ -491,13 +491,14 @@ class TestLayoutCheckErrors:
         assert any("conf is not int" in d for d in check.details)
         assert not any("(skipped)" in d for d in check.details)
 
-    def test_tesseract_missing_still_skips(self, cfg, monkeypatch) -> None:
+    def test_tesseract_missing_fails(self, cfg, monkeypatch) -> None:
         rec = cfg.recordings_dir / "01-x.mp4"
         rec.write_bytes(b"not a video")
         self._fake_tesseract(monkeypatch, installed=False)
         check = Validator(cfg)._check_layout(rec)
-        assert check.passed
-        assert any("tesseract not installed" in d for d in check.details)
+        assert check.passed is False
+        assert any("tesseract unavailable" in d for d in check.details)
+        assert not any("skipped" in d.lower() for d in check.details)
 
     def test_failed_report_still_fails(self, cfg, monkeypatch) -> None:
         from docgen.manim_layout import LayoutIssue, LayoutReport
@@ -521,3 +522,41 @@ class TestLayoutCheckErrors:
         check = Validator(cfg)._check_layout(rec)
         assert not check.passed
         assert any("overlap" in d for d in check.details)
+
+
+def _fake_tesseract_missing(monkeypatch, *, mode: str) -> None:
+    if mode == "no_module":
+        monkeypatch.setitem(sys.modules, "pytesseract", None)
+        return
+
+    pt = types.ModuleType("pytesseract")
+
+    def _missing() -> str:
+        raise RuntimeError("tesseract is not installed")
+
+    pt.get_tesseract_version = _missing
+    monkeypatch.setitem(sys.modules, "pytesseract", pt)
+
+
+class TestTesseractMissingFails:
+    """Missing tesseract must fail OCR / av_sync / layout, not skip-PASS."""
+
+    @pytest.mark.parametrize("check_name", ("ocr_scan", "layout", "av_sync"))
+    @pytest.mark.parametrize("mode", ("no_binary", "no_module"))
+    def test_tesseract_missing_does_not_skip_pass(
+        self, cfg, monkeypatch, check_name: str, mode: str
+    ) -> None:
+        rec = cfg.recordings_dir / "01-x.mp4"
+        rec.write_bytes(b"not a video")
+        _fake_tesseract_missing(monkeypatch, mode=mode)
+        v = Validator(cfg)
+        if check_name == "ocr_scan":
+            check = v._check_ocr(rec, [])
+        elif check_name == "layout":
+            check = v._check_layout(rec)
+        else:
+            check = v._check_av_sync("01", rec)
+        assert check.name == check_name
+        assert check.passed is False
+        assert any("tesseract unavailable" in d for d in check.details)
+        assert not any("skipped" in d.lower() for d in check.details)

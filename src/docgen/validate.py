@@ -1,8 +1,8 @@
 """Unified validator combining all quality checks.
 
 Core checks (freeze_ratio, blank_frames) use only cv2 — always available.
-OCR text scanning uses pytesseract — degrades gracefully if tesseract
-binary is missing, but cv2 checks still run and still fail the build.
+OCR / av_sync / layout need pytesseract plus the tesseract binary. Missing
+either fails those checks (not skip-PASS). Other cv2 checks still run.
 """
 
 from __future__ import annotations
@@ -47,6 +47,17 @@ class ValidationReport:
                 for c in self.checks
             ],
         }
+
+
+def _tesseract_unavailable_detail() -> str | None:
+    """Return a fail-closed detail if pytesseract or the tesseract binary is missing."""
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+    except Exception as exc:
+        return f"tesseract unavailable ({type(exc).__name__}: {exc})"
+    return None
 
 
 def _sample_frames(path: Path, interval_sec: float = 2.0) -> list[tuple[float, np.ndarray]]:
@@ -445,7 +456,7 @@ class Validator:
 
         return CheckResult("blank_frames", passed, details)
 
-    # ── OCR text scanning (pytesseract — degrades if binary missing) ──
+    # ── OCR text scanning (pytesseract — fail-closed if binary missing) ──
 
     def _check_ocr(
         self, path: Path, samples: list[tuple[float, np.ndarray]]
@@ -453,15 +464,14 @@ class Validator:
         """Run OCR on sampled frames to detect error text in recordings.
 
         Uses the SAME samples as freeze/blank checks so the entire video
-        is covered.  Gracefully skips if tesseract binary is not installed.
+        is covered. Missing tesseract fails the check (not skip-PASS).
         """
         import re
 
-        try:
-            import pytesseract
-            pytesseract.get_tesseract_version()
-        except Exception:
-            return CheckResult("ocr_scan", True, ["tesseract binary not installed (skipped)"])
+        unavail = _tesseract_unavailable_detail()
+        if unavail:
+            return CheckResult("ocr_scan", False, [unavail])
+        import pytesseract
 
         error_patterns = self.config.ocr_config.get("error_patterns", [])
         if not error_patterns or not samples:
@@ -630,11 +640,9 @@ class Validator:
 
     def _check_layout(self, path: Path) -> CheckResult:
         """Run overlap/spacing/edge layout checks on a Manim video recording."""
-        try:
-            import pytesseract
-            pytesseract.get_tesseract_version()
-        except Exception:
-            return CheckResult("layout", True, ["tesseract not installed — layout check skipped"])
+        unavail = _tesseract_unavailable_detail()
+        if unavail:
+            return CheckResult("layout", False, [unavail])
 
         try:
             from docgen.manim_layout import LayoutValidator
@@ -952,8 +960,8 @@ class Validator:
         """OCR anchor check: spoken keywords should be visible on screen near their spoken time.
 
         Heuristic (soft in --pre-push). Uses ``timing.json`` — no network calls.
-        Skips when tesseract is unavailable, timing data is missing, or the
-        segment's visual type is not in ``validation.av_sync.visual_types``.
+        Missing tesseract fails the check. Timing data or a visual type outside
+        ``validation.av_sync.visual_types`` still skip when those gates apply.
         """
         sync_cfg = self.config.av_sync_config
         if not sync_cfg.get("enabled", True):
@@ -964,11 +972,9 @@ class Validator:
         if allowed and vt not in allowed:
             return CheckResult("av_sync", True, [f"visual type {vt!r} not checked (skipped)"])
 
-        try:
-            import pytesseract
-            pytesseract.get_tesseract_version()
-        except Exception:
-            return CheckResult("av_sync", True, ["tesseract binary not installed (skipped)"])
+        unavail = _tesseract_unavailable_detail()
+        if unavail:
+            return CheckResult("av_sync", False, [unavail])
 
         from docgen.timestamps import TimestampError
 
