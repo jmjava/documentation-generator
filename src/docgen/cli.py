@@ -486,13 +486,14 @@ def compose(
 ) -> None:
     """Compose segments (audio + video via ffmpeg).
 
-    Pass segment IDs to compose specific ones, or omit for the default set.
+    Pass segment IDs to compose specific ones, or omit for ``segments.all``
+    (same set as ``generate-all``).
     """
     from docgen.compose import ComposeError, Composer, filter_segments_by_visual_types
 
     cfg = _require_config(ctx)
     comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
-    target = list(segments) if segments else list(cfg.segments_default or cfg.segments_all)
+    target = list(segments) if segments else list(cfg.segments_all)
     target = filter_segments_by_visual_types(cfg, target, only_visual_types)
     if only_visual_types and not target:
         raise click.ClickException(
@@ -501,8 +502,7 @@ def compose(
         )
     if not target:
         raise click.ClickException(
-            "[compose] no segments to compose — set segments.default or "
-            "segments.all, or pass segment ids"
+            "[compose] no segments to compose — set segments.all, or pass segment ids"
         )
     click.echo(f"=== Composing {len(target)} segments ===")
     try:

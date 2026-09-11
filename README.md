@@ -243,7 +243,7 @@ docgen --repo /path/to/your-project generate-all
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription). Empty `segments.all` is `TimestampError` (stale `timing.json` is not success) |
 | `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
-| `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video) |
+| `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video). Omit ids to walk `segments.all` (same as `generate-all`); a mapped segment with missing audio/visuals is a hard fail |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
 | `docgen lint [--segment 01]` | Narration lint only |
 | `docgen concat [--config full-demo]` | Concatenate full demo files |
