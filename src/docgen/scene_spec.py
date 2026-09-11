@@ -40,6 +40,7 @@ not a blind label count). ``docgen validate`` re-checks coverage when a ``*.scen
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -819,9 +820,12 @@ def _word_start_at(words: list[dict[str, Any]], index: int | None) -> float | No
     if not isinstance(w, dict):
         return None
     try:
-        return float(w.get("start", 0.0))
+        start = float(w.get("start", 0.0))
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(start):
+        return None
+    return start
 
 
 def iter_reveal_slots(
@@ -1987,6 +1991,13 @@ def compile_scene_class(
     while narration continues (issue #66).
     """
     validate_scene_spec(spec, path_label="spec")
+    if words:
+        from docgen.timestamps import TimestampError, require_finite_word_times
+
+        try:
+            require_finite_word_times(words, label="timing words")
+        except TimestampError as exc:
+            raise SceneSpecError(str(exc)) from exc
 
     class_name = str(spec["class_name"]).strip()
     timing_key = spec.get("timing_key")

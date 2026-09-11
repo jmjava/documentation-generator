@@ -207,7 +207,12 @@ def audio_end_from_words(words: list[dict] | None) -> float | None:
         if not isinstance(word, dict):
             continue
         try:
-            end = max(end, float(word.get("end", 0.0)))
+            val = float(word.get("end", 0.0))
         except (TypeError, ValueError):
             continue
+        if not math.isfinite(val):
+            raise ValueError(
+                f"timing word end must be a finite JSON number, not {val!r}"
+            )
+        end = max(end, val)
     return end if end > 0 else None

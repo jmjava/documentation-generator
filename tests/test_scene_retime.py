@@ -85,6 +85,41 @@ def _write_timing(tmp_path: Path, words: list[dict]) -> None:
     )
 
 
+@pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity")))
+def test_linted_class_block_fails_closed_on_non_finite_word_start(
+    tmp_path: Path, bad: float, kind: str
+) -> None:
+    cfg = _cfg(tmp_path)
+    _write_timing(
+        tmp_path,
+        [
+            {"word": "Hello", "start": bad, "end": 0.3},
+            {"word": "world", "start": 0.4, "end": 0.7},
+        ],
+    )
+    spec = {
+        "segment_id": "01",
+        "class_name": "DemoScene",
+        "title": {"text": "Demo", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "label": "Hello",
+                        "color": "C_GREEN",
+                        "width": 3.0,
+                        "height": 0.9,
+                        "font_size": 18,
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(SceneGenerationError, match=rf"must be a JSON number, not {kind}"):
+        linted_class_block_from_spec(cfg, spec, timing_key="01-demo")
+
+
 def test_linted_class_block_fails_closed_on_unmatched_label(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     _write_timing(

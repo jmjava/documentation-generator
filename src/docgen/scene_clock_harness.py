@@ -10,6 +10,7 @@ install, no ffmpeg. The clock that production uses is the clock we score.
 from __future__ import annotations
 
 import ast
+import math
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
@@ -209,6 +210,8 @@ def _exec_namespace(
         try:
             if words_arg and 0 <= int(index) < len(words_arg):
                 target = float(words_arg[int(index)].get("start", 0.0))
+                if not math.isfinite(target):
+                    target = None
         except (TypeError, ValueError, AttributeError):
             target = None
         orig(self, words_arg, index)

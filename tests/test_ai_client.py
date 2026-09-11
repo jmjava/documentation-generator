@@ -256,6 +256,27 @@ def test_grok_stt_zero_start_is_not_replaced(tmp_path: Path, monkeypatch: pytest
     assert result["words"][0]["end"] == 0.4
 
 
+@pytest.mark.parametrize("bad, kind", ((float("nan"), "NaN"), (float("inf"), "Infinity")))
+def test_grok_stt_non_finite_start_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad: float, kind: str
+) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    body = json.dumps(
+        {
+            "text": "Hello",
+            "words": [{"text": "Hello", "start": bad, "end": 0.4}],
+        },
+        allow_nan=True,
+    ).encode()
+    with patch("docgen.ai_client._http_with_retries", return_value=body):
+        with pytest.raises(AIError, match=rf"words\[\]\.start must be a JSON number, not {kind}"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
 def test_grok_stt_bool_start_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
     monkeypatch.setenv("XAI_API_KEY", "xai-test")

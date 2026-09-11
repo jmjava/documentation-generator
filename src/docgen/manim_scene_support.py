@@ -185,6 +185,13 @@ def _load_timing(segment_key: str) -> list[dict]:
                     f"timing.json[{segment_key!r}].segments[{i}].{time_key} "
                     f"must be a JSON number, not {tkind}"
                 )
+            import math
+            if not math.isfinite(val):
+                tkind = "NaN" if math.isnan(val) else ("-Infinity" if val < 0 else "Infinity")
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].segments[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
     return list(segs)
 
 
@@ -228,6 +235,13 @@ def _load_timing_words(segment_key: str) -> list[dict]:
             val = item[time_key]
             if isinstance(val, bool) or not isinstance(val, (int, float)):
                 tkind = type(val).__name__
+                raise TypeError(
+                    f"timing.json[{segment_key!r}].words[{i}].{time_key} "
+                    f"must be a JSON number, not {tkind}"
+                )
+            import math
+            if not math.isfinite(val):
+                tkind = "NaN" if math.isnan(val) else ("-Infinity" if val < 0 else "Infinity")
                 raise TypeError(
                     f"timing.json[{segment_key!r}].words[{i}].{time_key} "
                     f"must be a JSON number, not {tkind}"
@@ -391,6 +405,10 @@ class _TimedScene(Scene):
             raise TypeError(
                 f"{label}.start must be a JSON number, not {type(val).__name__}"
             )
+        import math
+        if not math.isfinite(val):
+            tkind = "NaN" if math.isnan(val) else ("-Infinity" if val < 0 else "Infinity")
+            raise TypeError(f"{label}.start must be a JSON number, not {tkind}")
         return float(val)
 
     def wait_until_word(self, words, index: int):
@@ -1389,7 +1407,10 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
                 return True
             if "not_past" not in _fn_arg_names(timed):
                 return True
-            return "must be a JSON number" not in ast.unparse(node)
+            return (
+                "must be a JSON number" not in ast.unparse(node)
+                or "isfinite" not in ast.unparse(node)
+            )
         if name in {"_load_timing", "_load_timing_words"} and isinstance(
             node, ast.FunctionDef
         ) and node.name == name:
@@ -1397,6 +1418,7 @@ def helper_needs_refresh(tree: ast.AST, name: str) -> bool:
             return (
                 "must be a JSON object" not in src
                 or "must be a JSON number" not in src
+                or "isfinite" not in src
             )
         if name == "_image" and isinstance(node, ast.FunctionDef) and node.name == "_image":
             return False

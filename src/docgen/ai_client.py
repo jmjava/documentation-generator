@@ -29,6 +29,7 @@ Cursor Cloud's ``crsr_`` ``OPENAI_API_KEY`` proxy is skipped.
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import time
@@ -633,12 +634,15 @@ def _grok_tts(
 
 
 def _stt_json_number(value: Any, *, label: str) -> float:
-    """Require a JSON number so bools/strings do not become fake timestamps."""
+    """Require a finite JSON number so bools/strings/NaN do not become fake timestamps."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise AIError(
             f"xAI STT {label} must be a JSON number, not {type(value).__name__} "
             f"({value!r})"
         )
+    if not math.isfinite(value):
+        kind = "NaN" if math.isnan(value) else ("-Infinity" if value < 0 else "Infinity")
+        raise AIError(f"xAI STT {label} must be a JSON number, not {kind}")
     return float(value)
 
 

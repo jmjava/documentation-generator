@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1027,9 +1028,11 @@ class Validator:
                     if not isinstance(e, dict):
                         continue
                     try:
-                        ends.append(float(e.get("end", 0.0)))
+                        val = float(e.get("end", 0.0))
                     except (TypeError, ValueError):
                         continue
+                    if math.isfinite(val):
+                        ends.append(val)
                 if ends:
                     return max(ends)
         return None
