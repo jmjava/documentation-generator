@@ -376,6 +376,50 @@ def test_grok_stt_object_segments_raises(tmp_path: Path, monkeypatch: pytest.Mon
             transcribe_audio(mp3, cfg=cfg)
 
 
+def _openai_whisper_result(*, text: str, words: list, segments: list | None = None) -> MagicMock:
+    result = MagicMock()
+    result.text = text
+    result.words = words
+    result.segments = [] if segments is None else segments
+    return result
+
+
+def test_openai_whisper_bool_word_start_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    fake = MagicMock()
+    fake.audio.transcriptions.create.return_value = _openai_whisper_result(
+        text="Hi",
+        words=[{"start": True, "end": 0.4, "word": "Hi"}],
+    )
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with pytest.raises(AIError, match="words\\[\\]\\.start must be a JSON number"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+def test_openai_whisper_maps_typed_words(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    fake = MagicMock()
+    fake.audio.transcriptions.create.return_value = _openai_whisper_result(
+        text="Hi",
+        words=[{"start": 0.0, "end": 0.4, "word": "Hi"}],
+        segments=[{"start": 0.0, "end": 0.4, "text": "Hi"}],
+    )
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        result = transcribe_audio(mp3, cfg=cfg)
+    assert result["words"] == [{"start": 0.0, "end": 0.4, "word": "Hi"}]
+    assert result["segments"] == [{"start": 0.0, "end": 0.4, "text": "Hi"}]
+
+
 def test_grok_stt_missing_words_still_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOCGEN_AI_PROVIDER", "grok")
     monkeypatch.setenv("XAI_API_KEY", "xai-test")

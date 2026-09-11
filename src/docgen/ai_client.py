@@ -470,17 +470,7 @@ def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> 
         raise AIError(
             f"{_vendor(settings)} connection error: {exc} — re-run when connectivity is restored."
         ) from exc
-    return {
-        "text": result.text,
-        "segments": [
-            {"start": s.start, "end": s.end, "text": s.text}
-            for s in (result.segments or [])
-        ],
-        "words": [
-            {"start": w.start, "end": w.end, "word": w.word}
-            for w in (result.words or [])
-        ],
-    }
+    return _openai_stt_payload(result)
 
 
 def fetch_url_bytes(url: str, *, timeout: int = 120) -> bytes:
@@ -633,17 +623,48 @@ def _grok_tts(
     output_path.write_bytes(body)
 
 
+def _stt_field(obj: Any, name: str) -> Any:
+    """Read an STT word/segment field from an SDK object or a JSON dict."""
+    if isinstance(obj, dict):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
 def _stt_json_number(value: Any, *, label: str) -> float:
     """Require a finite JSON number so bools/strings/NaN do not become fake timestamps."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise AIError(
-            f"xAI STT {label} must be a JSON number, not {type(value).__name__} "
+            f"STT {label} must be a JSON number, not {type(value).__name__} "
             f"({value!r})"
         )
     if not math.isfinite(value):
         kind = "NaN" if math.isnan(value) else ("-Infinity" if value < 0 else "Infinity")
-        raise AIError(f"xAI STT {label} must be a JSON number, not {kind}")
+        raise AIError(f"STT {label} must be a JSON number, not {kind}")
     return float(value)
+
+
+def _openai_stt_word(w: Any) -> dict[str, Any]:
+    return {
+        "start": _stt_json_number(_stt_field(w, "start"), label="words[].start"),
+        "end": _stt_json_number(_stt_field(w, "end"), label="words[].end"),
+        "word": _stt_field(w, "word"),
+    }
+
+
+def _openai_stt_segment(s: Any) -> dict[str, Any]:
+    return {
+        "start": _stt_json_number(_stt_field(s, "start"), label="segments[].start"),
+        "end": _stt_json_number(_stt_field(s, "end"), label="segments[].end"),
+        "text": _stt_field(s, "text"),
+    }
+
+
+def _openai_stt_payload(result: Any) -> dict[str, Any]:
+    return {
+        "text": result.text,
+        "segments": [_openai_stt_segment(s) for s in (result.segments or [])],
+        "words": [_openai_stt_word(w) for w in (result.words or [])],
+    }
 
 
 def _grok_stt(audio_path: Path, settings: AISettings) -> dict[str, Any]:
