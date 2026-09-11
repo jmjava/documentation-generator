@@ -313,6 +313,34 @@ def test_run_ffmpeg_timeout_without_output_raises(tmp_path: Path, monkeypatch) -
     assert not missing.exists()
 
 
+def test_compose_mixed_missing_source_raises(tmp_path: Path, monkeypatch) -> None:
+    """A mixed row with present.mp4 + missing.mp4 must fail closed, not mux the subset."""
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {
+            "01": {"type": "mixed", "sources": ["present.mp4", "missing.mp4"]},
+        },
+    }
+    c = _write_cfg(tmp_path, cfg)
+    (tmp_path / "audio").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "audio" / "01-demo.mp3").write_bytes(b"fake-mp3")
+    (tmp_path / "present.mp4").write_bytes(b"fake-mp4")
+    (tmp_path / "recordings").mkdir(parents=True, exist_ok=True)
+
+    composer = Composer(c)
+    ran = {"n": 0}
+
+    def boom(_cmd):
+        ran["n"] += 1
+
+    monkeypatch.setattr(composer, "_run_ffmpeg", boom)
+    with pytest.raises(ComposeError, match="missing.mp4"):
+        composer.compose_segments(["01"])
+    assert ran["n"] == 0
+
+
 def test_compose_image_raises_when_audio_duration_unknown(tmp_path: Path, monkeypatch) -> None:
     cfg = {
         "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},

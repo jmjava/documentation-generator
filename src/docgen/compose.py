@@ -186,12 +186,26 @@ class Composer:
 
         return True
 
+    def _require_mixed_sources(self, seg_id: str, video_paths: list[Path]) -> list[Path]:
+        """Return declared mixed sources, or raise if any path is missing.
+
+        A present-plus-missing list must not silently mux the subset.
+        An empty ``sources`` list stays a skip (no declared files to require).
+        """
+        missing = [path for path in video_paths if not path.exists()]
+        if missing:
+            names = ", ".join(path.name for path in missing)
+            raise ComposeError(
+                f"mixed segment {seg_id} missing source(s): {names}"
+            )
+        return list(video_paths)
+
     def _compose_mixed(self, seg_id: str, video_paths: list[Path]) -> bool:
         audio = self._find_audio(seg_id)
         if not audio:
             print(f"    SKIP: no audio for {seg_id}")
             return False
-        existing = [v for v in video_paths if v.exists()]
+        existing = self._require_mixed_sources(seg_id, video_paths)
         if not existing:
             print(f"    SKIP: no video sources for mixed segment {seg_id}")
             return False
