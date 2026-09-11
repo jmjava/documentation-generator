@@ -288,6 +288,42 @@ def test_cli_validate_pre_push_missing_recording_is_soft(tmp_path: Path) -> None
     assert "Traceback" not in combined
 
 
+def test_cli_validate_default_fail_exits_1(tmp_path: Path) -> None:
+    """Click-invoke default validate (no --pre-push) must exit 1 on FAIL."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "visual_map": {"01": {"type": "still", "source": "01.mp4"}},
+    }
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text(yaml.dump(raw), encoding="utf-8")
+    (tmp_path / "narration").mkdir()
+    (tmp_path / "narration" / "01-intro.md").write_text(
+        "This segment is a short still-image intro.\n",
+        encoding="utf-8",
+    )
+    for name in ("audio", "animations", "recordings"):
+        (tmp_path / name).mkdir()
+
+    result = CliRunner().invoke(main, ["--config", str(yaml_path), "validate"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "FAIL" in combined
+    assert "recording_exists" in combined
+    assert "AttributeError" not in combined
+    assert "Traceback" not in combined
+
+
 def test_cli_lint_empty_segments_is_click_error(tmp_path: Path) -> None:
     from click.testing import CliRunner
 

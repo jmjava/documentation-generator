@@ -535,9 +535,14 @@ def validate(ctx: click.Context, max_drift: float | None, pre_push: bool) -> Non
     v = Validator(cfg)
     if pre_push:
         v.run_pre_push()
-    else:
-        report = v.run_all(max_drift_override=max_drift)
-        v.print_report(report)
+        return
+    report = v.run_all(max_drift_override=max_drift)
+    v.print_report(report)
+    if any(
+        isinstance(r, dict) and not r.get("passed", True)
+        for r in report
+    ):
+        raise SystemExit(1)
 
 
 @main.command()
