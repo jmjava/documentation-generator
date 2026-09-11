@@ -42,6 +42,19 @@ class AlignmentError(RuntimeError):
     """Raised when local alignment cannot run (missing ffmpeg, unreadable audio)."""
 
 
+def _raise_if_nonzero(
+    proc: subprocess.CompletedProcess[str],
+    audio_path: Path,
+    tool: str,
+) -> None:
+    """Fail closed on a non-zero ffmpeg/ffprobe exit, even when stderr is empty."""
+    if proc.returncode == 0:
+        return
+    detail = (proc.stderr or proc.stdout or "").strip()[:200]
+    extra = f": {detail}" if detail else ""
+    raise AlignmentError(f"{tool} failed on {audio_path} (exit {proc.returncode}){extra}")
+
+
 def split_sentences(text: str) -> list[str]:
     """Split narration plain text into spoken sentences (paragraphs then punctuation)."""
     out: list[str] = []
@@ -98,12 +111,7 @@ def probe_duration(audio_path: Path) -> float:
         raise AlignmentError("ffprobe not found in PATH (required for local timing)") from exc
     except subprocess.TimeoutExpired as exc:
         raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
-    if out.returncode != 0:
-        detail = (out.stderr or out.stdout or "").strip()[:200]
-        extra = f": {detail}" if detail else ""
-        raise AlignmentError(
-            f"ffprobe failed on {audio_path} (exit {out.returncode}){extra}"
-        )
+    _raise_if_nonzero(out, audio_path, "ffprobe")
     try:
         return float(out.stdout.strip())
     except ValueError as exc:
@@ -130,6 +138,7 @@ def detect_speech_intervals(
         raise AlignmentError("ffmpeg not found in PATH (required for local timing)") from exc
     except subprocess.TimeoutExpired as exc:
         raise AlignmentError(f"ffmpeg silencedetect timed out on {audio_path}") from exc
+    _raise_if_nonzero(proc, audio_path, "ffmpeg silencedetect")
     return parse_silencedetect_output(proc.stderr or "", duration)
 
 
