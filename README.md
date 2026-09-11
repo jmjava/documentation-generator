@@ -67,7 +67,9 @@ If you still need the legacy behaviour, pin a pre-removal commit
   Missing audio or an LFS pointer fails `timing_sync` and recording media gates
   (`stream_presence`, `av_drift`, `ocr_scan`, `av_sync`) instead of skip-PASS.
   Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` for
-  `type: manim` instead of skip-PASS.
+  `type: manim` instead of skip-PASS. A hand-edited generated-region label
+  or `run_time` in `scenes.py` fails `scene_assets` compile_sync (clock /
+  benchmark still execute a fresh `compile_scene_class`, not the on-disk file).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
   `.gitignore`.
 - **Wizard** — local web GUI to bootstrap narration scripts from existing project
