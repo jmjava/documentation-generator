@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,11 @@ from docgen.scene_asset_validate import (
     bundle_scene_asset_violations,
     compiled_scene_sync_violations,
     dwell_overshoot_violations,
+    generated_labels_from_source,
     helper_api_violations,
     hold_idle_violations,
     motion_plan_from_source,
+    play_run_times_from_source,
     scene_asset_violations_for_segment,
 )
 from docgen.scene_spec import (
@@ -283,6 +286,67 @@ def test_compiled_sync_fails_when_class_missing() -> None:
     spec = _spec([_box("Alpha")])
     issues = compiled_scene_sync_violations(spec, None, BOOTSTRAP_HEADER)
     assert any("not in scenes.py" in i for i in issues)
+
+
+def test_compiled_sync_fails_when_generated_label_changed() -> None:
+    """Leftover #11: motion_plan ignores label text; compile_sync must not."""
+    spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
+    words = _wide_words()
+    class_src = compile_scene_class(spec, words=words)
+    tampered = class_src.replace("'Alpha'", "'Hacked'", 1)
+    assert "'Hacked'" in tampered
+    assert motion_plan_from_source(class_src) == motion_plan_from_source(tampered)
+    assert generated_labels_from_source(class_src) != generated_labels_from_source(tampered)
+    issues = compiled_scene_sync_violations(spec, words, BOOTSTRAP_HEADER + "\n" + tampered)
+    assert issues
+    assert any("compile_sync" in i and "stale" in i for i in issues)
+
+
+def test_compiled_sync_fails_when_run_time_changed() -> None:
+    """Leftover #11: motion_plan ignores timed_play run_time; compile_sync must not."""
+    spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
+    words = _wide_words()
+    class_src = compile_scene_class(spec, words=words)
+    tampered, n = re.subn(r"run_time=\d+(?:\.\d+)?", "run_time=9.99", class_src, count=1)
+    assert n == 1
+    assert motion_plan_from_source(class_src) == motion_plan_from_source(tampered)
+    assert play_run_times_from_source(class_src) != play_run_times_from_source(tampered)
+    issues = compiled_scene_sync_violations(spec, words, BOOTSTRAP_HEADER + "\n" + tampered)
+    assert issues
+    assert any("compile_sync" in i and "stale" in i for i in issues)
+
+
+def test_scene_assets_fails_when_generated_label_changed(tmp_path: Path) -> None:
+    """Change a generated-region label in scenes.py; scene_assets must fail."""
+    cfg = _bundle(tmp_path)
+    specs = cfg.animations_dir / "specs"
+    specs.mkdir(parents=True)
+    spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
+    (specs / "01-x.scene.yaml").write_text(yaml.dump(spec), encoding="utf-8")
+    words = _wide_words()
+    (cfg.animations_dir / "timing.json").write_text(
+        json.dumps(
+            {
+                "01-x": {
+                    "text": "Alpha Beta tail",
+                    "words": words,
+                    "segments": [{"start": 1.2, "end": 16.4, "text": "Alpha Beta tail"}],
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    class_src = compile_scene_class({**spec, "timing_key": "01-x"}, words=words)
+    tampered = class_src.replace("'Alpha'", "'Hacked'", 1)
+    (cfg.animations_dir / "scenes.py").write_text(
+        BOOTSTRAP_HEADER + "\n" + tampered, encoding="utf-8"
+    )
+    issues = scene_asset_violations_for_segment(cfg, "01")
+    assert any("compile_sync" in i and "stale" in i for i in issues)
+    check = Validator(cfg)._check_scene_assets("01")
+    assert not check.passed
+    assert any("compile_sync" in d for d in check.details)
 
 
 def test_layout_budget_is_reported_as_overlap(tmp_path: Path) -> None:

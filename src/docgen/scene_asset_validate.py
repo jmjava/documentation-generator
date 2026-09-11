@@ -14,7 +14,9 @@ Historical failure modes this module is meant to catch **offline**:
   ``MANIM_FONT``.
 * **Stale helpers / stale compile** — ``scenes.py`` still has center-to-center
   arrows or a ``_box`` that cannot take ``shape=``, or the generated class
-  no longer matches ``compile_scene_class`` (missing Indicate, old FadeIn).
+  no longer matches a fresh ``compile_scene_class`` (missing Indicate, old
+  FadeIn, hand-edited box/title label, or ``run_time``). Clock / benchmark
+  still execute that fresh compile, not the on-disk ``scenes.py``.
 """
 
 from __future__ import annotations
@@ -115,6 +117,63 @@ def _first_arg_id(call: ast.Call) -> str | None:
     if call.args and isinstance(call.args[0], ast.Name):
         return call.args[0].id
     return None
+
+
+def _const_value(node: ast.AST) -> object | None:
+    if isinstance(node, ast.Constant):
+        return node.value
+    return None
+
+
+def _construct_calls(source: str) -> list[ast.Call]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if isinstance(item, ast.FunctionDef) and item.name == "construct":
+                return [c for c in ast.walk(item) if isinstance(c, ast.Call)]
+    return []
+
+
+def generated_labels_from_source(source: str) -> list[str]:
+    """Ordered ``_box`` / ``Text`` string labels from a compiled ``construct``."""
+    labels: list[str] = []
+    for call in _construct_calls(source):
+        if _call_name(call) not in {"_box", "Text"} or not call.args:
+            continue
+        val = _const_value(call.args[0])
+        if isinstance(val, str):
+            labels.append(val)
+    return labels
+
+
+def play_run_times_from_source(source: str) -> list[object]:
+    """Ordered ``timed_play(..., run_time=)`` constants from ``construct``."""
+    times: list[object] = []
+    for call in _construct_calls(source):
+        if _call_name(call) != "timed_play":
+            continue
+        for kw in call.keywords:
+            if kw.arg != "run_time":
+                continue
+            val = _const_value(kw.value)
+            if val is not None:
+                times.append(val)
+            break
+    return times
+
+
+def _sync_fingerprint(source: str) -> tuple[list[str], list[str], list[object]]:
+    """Motion tokens plus the label / run_time text ``motion_plan`` ignores."""
+    return (
+        motion_plan_from_source(source),
+        generated_labels_from_source(source),
+        play_run_times_from_source(source),
+    )
 
 
 def motion_plan_from_source(source: str) -> list[str]:
@@ -242,8 +301,8 @@ def compiled_scene_sync_violations(
         expected_src = compile_scene_class(spec, words=words or None)
     except SceneSpecError as exc:
         return [f"compile_sync: cannot compile spec ({exc})"]
-    expected = motion_plan_from_source(expected_src)
-    got = motion_plan_from_source(actual)
+    expected = _sync_fingerprint(expected_src)
+    got = _sync_fingerprint(actual)
     if expected == got:
         return []
     return [
