@@ -145,11 +145,12 @@ class TestTimingSync:
         check = Validator(cfg)._check_timing_sync("01")
         assert check.passed
 
-    def test_no_audio_skips(self, tmp_path) -> None:
+    def test_no_audio_fails(self, tmp_path) -> None:
         cfg = _bundle(tmp_path)
         check = Validator(cfg)._check_timing_sync("01")
-        assert check.passed
-        assert any("skipped" in d.lower() for d in check.details)
+        assert check.passed is False
+        assert any("No audio" in d for d in check.details)
+        assert not any("skipped" in d.lower() for d in check.details)
 
     def test_disabled_via_config(self, tmp_path, monkeypatch) -> None:
         cfg = _bundle(tmp_path)
@@ -560,3 +561,48 @@ class TestTesseractMissingFails:
         assert check.passed is False
         assert any("tesseract unavailable" in d for d in check.details)
         assert not any("skipped" in d.lower() for d in check.details)
+
+
+_LFS_POINTER_BYTES = (
+    b"version https://git-lfs.github.com/spec/v1\n"
+    b"oid sha256:" + (b"ab" * 32) + b"\n"
+    b"size 123\n"
+)
+
+
+def _write_lfs_pointer(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_LFS_POINTER_BYTES)
+
+
+class TestMissingMediaFails:
+    """Pointer-only or omitted audio must fail media gates, not skip-PASS."""
+
+    def test_omitted_audio_timing_sync_fails(self, tmp_path) -> None:
+        cfg = _bundle(tmp_path)
+        check = Validator(cfg)._check_timing_sync("01")
+        assert check.name == "timing_sync"
+        assert check.passed is False
+        assert any("No audio" in d for d in check.details)
+        assert not any("skipped" in d.lower() for d in check.details)
+
+    def test_lfs_pointer_audio_timing_sync_fails(self, tmp_path) -> None:
+        cfg = _bundle(tmp_path)
+        _write_lfs_pointer(cfg.audio_dir / "01-x.mp3")
+        check = Validator(cfg)._check_timing_sync("01")
+        assert check.name == "timing_sync"
+        assert check.passed is False
+        assert any("LFS pointer" in d for d in check.details)
+        assert not any("skipped" in d.lower() for d in check.details)
+
+    def test_lfs_pointer_recording_does_not_skip_pass(self, tmp_path) -> None:
+        cfg = _bundle(tmp_path)
+        _write_lfs_pointer(cfg.recordings_dir / "01-x.mp4")
+        report = Validator(cfg).validate_segment("01")
+        assert report["passed"] is False
+        by_name = {c["name"]: c for c in report["checks"]}
+        for name in ("stream_presence", "av_drift", "ocr_scan", "av_sync"):
+            assert name in by_name, name
+            assert by_name[name]["passed"] is False, name
+            assert any("LFS pointer" in d for d in by_name[name]["details"])
+            assert not any("skipped" in d.lower() for d in by_name[name]["details"])
