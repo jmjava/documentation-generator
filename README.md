@@ -66,6 +66,8 @@ If you still need the legacy behaviour, pin a pre-removal commit
   Missing tesseract fails `ocr_scan` / `av_sync` / `layout` instead of skip-PASS.
   Missing audio or an LFS pointer fails `timing_sync` and recording media gates
   (`stream_presence`, `av_drift`, `ocr_scan`, `av_sync`) instead of skip-PASS.
+  Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` for
+  `type: manim` instead of skip-PASS.
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
   `.gitignore`.
 - **Wizard** — local web GUI to bootstrap narration scripts from existing project

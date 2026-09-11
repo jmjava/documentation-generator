@@ -62,6 +62,18 @@ def _tesseract_unavailable_detail() -> str | None:
     return None
 
 
+def _missing_manim_spec_result(check_name: str, spec_label: str) -> CheckResult:
+    """Fail-closed when a manim segment has no declarative ``*.scene.yaml``."""
+    return CheckResult(
+        check_name,
+        False,
+        [
+            f"No {spec_label} — {check_name} cannot score a manim segment "
+            "without a declarative spec (hand-authored scenes.py is not skip-PASS)"
+        ],
+    )
+
+
 def _sample_frames(path: Path, interval_sec: float = 2.0) -> list[tuple[float, np.ndarray]]:
     """Read frames at *interval_sec* across the entire video. Returns (timestamp, frame) pairs."""
     cap = cv2.VideoCapture(str(path))
@@ -592,24 +604,17 @@ class Validator:
                 ["validation.subject_beat_coverage disabled in config (skipped)"],
             )
 
+        seg_name = self.config.resolve_segment_name(seg_id)
+        spec_path = self.config.animations_dir / "specs" / f"{seg_name}.scene.yaml"
+        if not spec_path.is_file():
+            return _missing_manim_spec_result("subject_beat_coverage", spec_path.name)
+
         narr_path = self._find_narration(seg_id)
         if narr_path is None or not narr_path.is_file():
             return CheckResult(
                 "subject_beat_coverage",
                 True,
                 ["No narration file (skipped)"],
-            )
-
-        seg_name = self.config.resolve_segment_name(seg_id)
-        spec_path = self.config.animations_dir / "specs" / f"{seg_name}.scene.yaml"
-        if not spec_path.is_file():
-            return CheckResult(
-                "subject_beat_coverage",
-                True,
-                [
-                    f"No {spec_path.name} (skipped — hand-authored scenes.py "
-                    "without declarative spec)"
-                ],
             )
 
         import yaml
@@ -872,7 +877,9 @@ class Validator:
 
         Muxed recordings can still match mp3 length (compose freezes the last frame)
         while the diagram finished early. Uses scene-spec label→``wait_word`` starts
-        vs audio/transcript end. Hard fail in ``--pre-push`` (same as ``av_sync``).
+        vs audio/transcript end. A manim segment with no ``*.scene.yaml`` fails
+        (hand-authored ``scenes.py`` is not skip-PASS). Hard fail in
+        ``--pre-push`` (same as ``av_sync``).
         """
         se_cfg = self.config.story_end_config
         if not se_cfg.get("enabled", True):
@@ -887,8 +894,8 @@ class Validator:
 
         paths = list_scene_spec_paths(self.config, segment_id=seg_id)
         if not paths:
-            return CheckResult(
-                "story_end", True, ["No animations/specs/*.scene.yaml (skipped)"]
+            return _missing_manim_spec_result(
+                "story_end", "animations/specs/*.scene.yaml"
             )
 
         from docgen.timestamps import TimestampError

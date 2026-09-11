@@ -424,6 +424,36 @@ def test_narration_lint_fails_when_file_empty(tmp_path: Path) -> None:
     assert any("empty after markdown stripping" in d for d in check.details)
 
 
+def _write_paced_hand_authored_scenes(cfg: Config) -> None:
+    """Hand-authored scenes.py with paced timed_play and no declarative spec."""
+    (cfg.animations_dir / "scenes.py").write_text(
+        "class XScene:\n"
+        "    def construct(self):\n"
+        "        self.wait_until_word([], 0)\n"
+        "        self.timed_play(FadeIn(box), run_time=0.4)\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("check_name", ("story_end", "subject_beat_coverage"))
+def test_hand_authored_paced_manim_without_spec_fails(cfg, check_name: str) -> None:
+    """Manim + paced timed_play + no *.scene.yaml must fail, not skip-PASS."""
+    _write_paced_hand_authored_scenes(cfg)
+    (cfg.narration_dir / "01-x.md").write_text(
+        "The bootstrap pipeline seeds the cluster.\n",
+        encoding="utf-8",
+    )
+    v = Validator(cfg)
+    if check_name == "story_end":
+        check = v._check_story_end("01")
+    else:
+        check = v._check_subject_beat_coverage("01")
+    assert check.name == check_name
+    assert check.passed is False
+    assert not any("skipped" in d.lower() for d in check.details)
+    assert any("hand-authored" in d.lower() or "declarative spec" in d.lower() for d in check.details)
+
+
 def test_story_end_fails_when_paced_spec_has_no_timing_words(cfg) -> None:
     _write_scene_spec(cfg, labels=["Alpha"])
     check = Validator(cfg)._check_story_end("01")
