@@ -79,3 +79,17 @@ jobs:
       - run: pip install --no-cache-dir "."
       - name: Scene-timing benchmark
         run: docgen benchmark
+
+  # Required: invoke `docgen validate` on a fixture bundle. Scratch `init`
+  # (not an in-repo dogfood tree). A listed segment with no recordings must
+  # exit 1 — if that FAIL becomes a silent pass, this job goes red.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir "."
+      - name: Validate scratch init bundle
+        run: bash scripts/ci-validate-scratch-bundle.sh
