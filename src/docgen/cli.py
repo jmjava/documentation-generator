@@ -1142,6 +1142,9 @@ def image_generate_cmd(
             if res.status == "dry-run":
                 click.echo(f"[image-generate] {target.name}: would generate {res.relpath}")
                 click.echo(f"  prompt: {res.prompt}")
+                if res.effective_prompt and res.effective_prompt != res.prompt:
+                    click.echo("  aligned prompt:")
+                    click.echo(res.effective_prompt)
             elif res.status == "exists":
                 click.echo(f"[image-generate] {target.name}: {res.relpath} exists (skip; use --force)")
             else:

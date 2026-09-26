@@ -17,6 +17,7 @@ from docgen.scene_spec import (
     disk_spec_with_merged_wait_words,
     cluster_subject_beats,
     count_spec_labels,
+    image_prompt_alignment_violations,
     iter_paced_label_anchors,
     last_paced_reveal_time,
     layout_budget_violations,
@@ -567,6 +568,39 @@ def test_layout_stack_budget_decreases_with_larger_title_font() -> None:
     b_small = layout_stack_budget({"font_size": 32}, {"first_row_title_buff": 0.45})
     b_large = layout_stack_budget({"font_size": 40}, {"first_row_title_buff": 0.45})
     assert b_small > b_large
+
+
+def test_image_prompt_alignment_requires_documented_terms() -> None:
+    spec = {
+        "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+        "rows": [
+            {
+                "run_time": 1.0,
+                "boxes": [
+                    {
+                        "image": "images/arch.png",
+                        "width": 4.0,
+                        "height": 2.5,
+                        "prompt": "clean flat diagram of the bootstrap pipeline",
+                    }
+                ],
+            }
+        ],
+    }
+    narr = "The bootstrap pipeline seeds the cluster."
+    assert image_prompt_alignment_violations(spec, corpus_text=narr) == []
+
+    spec["rows"][0]["boxes"][0]["prompt"] = "a clean flat illustration"
+    issues = image_prompt_alignment_violations(spec, corpus_text=narr)
+    assert issues
+    assert any("only visual style" in msg for msg in issues)
+
+    spec["rows"][0]["boxes"][0]["prompt"] = "isometric render of the WidgetX orchestrator"
+    issues = image_prompt_alignment_violations(spec, corpus_text=narr)
+    assert issues
+    assert any("shares no documented terms" in msg for msg in issues)
+
+    assert image_prompt_alignment_violations(spec, corpus_text="") == []
 
 
 def test_subject_beat_coverage_allows_dwell_rejects_missed_topics() -> None:

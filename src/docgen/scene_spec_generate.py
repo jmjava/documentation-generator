@@ -36,6 +36,7 @@ from docgen.scene_spec import (
     sanitize_pacing_conflicts,
     compile_scene_class,
     cluster_subject_beats,
+    image_prompt_alignment_violations,
     layout_budget_violations,
     layout_density_violations,
     layout_stack_budget,
@@ -90,10 +91,14 @@ Optional **image elements** (only when project-owner hints ask for generated ima
 may instead be an image element with:
   - image: bundle-relative asset path, e.g. ``images/<short-name>.png`` (no absolute paths, no "..")
   - width / height: positive numbers (frame budget rules above apply; images count like boxes)
-  - prompt: string — a clear visual description; ``docgen image-generate`` renders it via the OpenAI Images API
-  - label: optional single word from the narration used as the timing anchor for the reveal
+  - prompt: string — a clear visual description grounded in the narration **and** SOURCE
+    DOCUMENTATION; ``docgen image-generate`` renders it and rejects prompts that invent
+    undocumented product names or share no documented terms
+  - label: optional spoken phrase from the narration used as the timing anchor for the reveal
 Image elements must NOT carry ``color`` or ``font_size``. Prefer labeled boxes for diagrams; use images
-only for illustrative artwork the hints explicitly request.
+only for illustrative artwork the hints explicitly request. Image ``prompt`` text must name
+the same concepts as the narration/source (not generic "a diagram" / invented architecture).
+Any words you expect to appear *inside* the artwork must be short ASCII copied from the docs.
 
 Optional per-box (**Whisper ``words`` only**); omit if unsure — compile fills from each box ``label`` → first transcript match:
 - wait_word: non-negative int — index into ``timing.json`` → ``words``; that box waits until that token's **start**, then fades in (**one box at a time** within each row).
@@ -250,6 +255,22 @@ def build_scene_spec_user_message(
         for h in all_hints:
             if str(h).strip():
                 parts.append(f"- {str(h).strip()}")
+
+    if source_snippets:
+        parts.append("")
+        parts.append("--- SOURCE DOCUMENTATION ---")
+        parts.append(
+            "Use these excerpts when authoring box labels **and** image prompts. "
+            "Do not invent product names, APIs, or architecture that is not in this "
+            "source or the narration."
+        )
+        for label, text in source_snippets:
+            body = str(text or "").strip()
+            if not body:
+                continue
+            parts.append("")
+            parts.append(f"### {label}")
+            parts.append(body)
 
     if reference_scenes:
         parts.append("")
@@ -449,6 +470,7 @@ def _parse_and_harden_llm_spec(
     raw: str,
     enforce_density: bool,
     density_slack: int = 0,
+    corpus_text: str = "",
 ) -> dict[str, Any]:
     """Parse YAML, auto-layout, validate schema/budget/(optional) density, compile-lint."""
     body = strip_yaml_fences(raw)
@@ -499,6 +521,17 @@ def _parse_and_harden_llm_spec(
                 f"segment {seg_id}: scene spec failed subject-beat coverage:\n  {joined}\nDraft: {draft}"
             )
 
+    if getattr(cfg, "image_prompt_alignment_enabled", True):
+        align_issues = image_prompt_alignment_violations(
+            merged_spec, corpus_text=corpus_text or narration_text
+        )
+        if align_issues:
+            draft = _save_draft(cfg, seg_id, body)
+            joined = "\n  ".join(align_issues)
+            raise SceneGenerationError(
+                f"segment {seg_id}: image prompt alignment failed:\n  {joined}\nDraft: {draft}"
+            )
+
     try:
         _, _ = linted_class_block_from_spec(cfg, merged_spec, timing_key=seg_name)
     except SceneGenerationError as exc:
@@ -536,6 +569,15 @@ def generate_scene_spec(
     existing = scenes_path.read_text(encoding="utf-8") if scenes_path.exists() else ""
     reference_scenes = extract_reference_classes(existing)
     snippets = collect_source_snippets(cfg, settings, extra_paths=extra_paths)
+    corpus_parts = [narration_text]
+    for h in list(settings.hints) + list(extra_hints):
+        if str(h).strip():
+            corpus_parts.append(str(h).strip())
+    for label, text in snippets:
+        body = str(text or "").strip()
+        if body:
+            corpus_parts.append(f"{label}\n{body}")
+    corpus_text = "\n\n".join(p for p in corpus_parts if str(p).strip())
 
     system_prompt = scene_spec_system_prompt(cfg, seg_id)
     user_message = build_scene_spec_user_message(
@@ -578,13 +620,23 @@ def generate_scene_spec(
     for attempt in range(3):
         msg = user_message
         if attempt > 0 and last_sparse is not None:
-            msg = (
-                f"{user_message}\n\n--- RETRY: SUBJECT-BEAT COVERAGE FAILED ---\n"
-                f"{last_sparse}\n"
-                f"Cover each of the {n_beats} subject beats with a spoken-phrase label. "
-                "Hold the board across sentences in the same beat; add a new label only "
-                "when the topic shifts. Do not invent unspoken diagram terms."
-            )
+            err = str(last_sparse)
+            if "image prompt alignment" in err:
+                msg = (
+                    f"{user_message}\n\n--- RETRY: IMAGE PROMPT ALIGNMENT FAILED ---\n"
+                    f"{last_sparse}\n"
+                    "Rewrite each image prompt so it uses documented terms from the "
+                    "narration and SOURCE DOCUMENTATION. Do not invent product names "
+                    "or generic 'a diagram' artwork with no subject."
+                )
+            else:
+                msg = (
+                    f"{user_message}\n\n--- RETRY: SUBJECT-BEAT COVERAGE FAILED ---\n"
+                    f"{last_sparse}\n"
+                    f"Cover each of the {n_beats} subject beats with a spoken-phrase label. "
+                    "Hold the board across sentences in the same beat; add a new label only "
+                    "when the topic shifts. Do not invent unspoken diagram terms."
+                )
         try:
             raw = invoke(
                 system_prompt=system_prompt,
@@ -612,12 +664,22 @@ def generate_scene_spec(
                 raw=raw,
                 enforce_density=True,
                 density_slack=0,
+                corpus_text=corpus_text,
             )
             last_sparse = None
             break
         except SceneGenerationError as exc:
-            if "subject-beat coverage" not in str(exc):
+            err = str(exc)
+            retryable = (
+                "subject-beat coverage" in err or "image prompt alignment" in err
+            )
+            if not retryable:
                 raise
+            if "image prompt alignment" in err:
+                if attempt >= 2:
+                    raise
+                last_sparse = exc
+                continue
             # Near-miss: accept without another LLM call when close enough.
             try:
                 merged_spec = _parse_and_harden_llm_spec(
@@ -630,6 +692,7 @@ def generate_scene_spec(
                     raw=raw,
                     enforce_density=True,
                     density_slack=near_miss_slack,
+                    corpus_text=corpus_text,
                 )
                 last_sparse = None
                 break

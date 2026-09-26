@@ -362,6 +362,7 @@ class Validator:
         if self.config.visual_map.get(seg_id, {}).get("type") == "manim":
             report.checks.append(self._check_manim_scene_lint())
             report.checks.append(self._check_subject_beat_coverage(seg_id))
+            report.checks.append(self._check_image_prompt_alignment(seg_id))
             report.checks.append(self._check_scene_assets(seg_id))
 
         return report.to_dict()
@@ -372,9 +373,9 @@ class Validator:
         Missing recordings are reported as warnings, not failures — a project
         that hasn't generated videos yet should still be pushable.  Quality
         checks on *existing* recordings — including visual-sync (``av_sync``,
-        ``subject_beat_coverage``, ``ocr_scan``, ``layout``, ``freeze_ratio``)
-        — and narration lint are hard failures so ``generate-all`` cannot
-        print ``Pipeline complete`` after a desynced mux.
+        ``subject_beat_coverage``, ``image_prompt_alignment``, ``ocr_scan``,
+        ``layout``, ``freeze_ratio``) — and narration lint are hard failures so
+        ``generate-all`` cannot print ``Pipeline complete`` after a desynced mux.
         """
         reports = self.run_all()
         hard_fail = False
@@ -644,6 +645,62 @@ class Validator:
             "subject_beat_coverage",
             True,
             ["Subject beats covered; no invented unspoken labels"],
+        )
+
+    def _check_image_prompt_alignment(self, seg_id: str) -> CheckResult:
+        """Ensure scene-spec image prompts share documented terms (not generic art)."""
+        if not self.config.image_prompt_alignment_enabled:
+            return CheckResult(
+                "image_prompt_alignment",
+                True,
+                ["validation.image_prompt_alignment disabled in config (skipped)"],
+            )
+
+        seg_name = self.config.resolve_segment_name(seg_id)
+        spec_path = self.config.animations_dir / "specs" / f"{seg_name}.scene.yaml"
+        if not spec_path.is_file():
+            return _missing_manim_spec_result("image_prompt_alignment", spec_path.name)
+
+        import yaml
+
+        from docgen.image_generate import collect_alignment_corpus
+        from docgen.scene_spec import image_prompt_alignment_violations, iter_image_elements
+
+        try:
+            raw = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            return CheckResult(
+                "image_prompt_alignment",
+                False,
+                [f"could not load {spec_path.name}: {exc}"],
+            )
+        if not isinstance(raw, dict):
+            return CheckResult(
+                "image_prompt_alignment",
+                False,
+                [f"{spec_path.name}: root must be a mapping"],
+            )
+        if not iter_image_elements(raw):
+            return CheckResult(
+                "image_prompt_alignment",
+                True,
+                ["No image elements (skipped)"],
+            )
+
+        corpus = collect_alignment_corpus(self.config, raw)
+        issues = image_prompt_alignment_violations(raw, corpus_text=corpus)
+        if issues:
+            return CheckResult("image_prompt_alignment", False, issues)
+        if not corpus.strip():
+            return CheckResult(
+                "image_prompt_alignment",
+                True,
+                ["No narration/source corpus yet — image prompts not checked"],
+            )
+        return CheckResult(
+            "image_prompt_alignment",
+            True,
+            ["Image prompts share documented terms with narration/source"],
         )
 
     def _check_scene_assets(self, seg_id: str) -> CheckResult:
