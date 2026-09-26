@@ -1397,6 +1397,34 @@ def image_prompt_alignment_violations(
     return issues
 
 
+def image_ocr_alignment_violations(
+    ocr_text: str,
+    *,
+    corpus_text: str,
+    relpath: str = "image",
+) -> list[str]:
+    """Reject OCR tokens that look like invented documented terms.
+
+    Style words and a missing corpus are ignored. A single short OCR ghost
+    (``<6`` letters) is tolerated; two confident invented tokens, or one
+    token of length ≥ 6, fail.
+    """
+    corpus = content_tokens(corpus_text)
+    if not corpus:
+        return []
+    substance = content_tokens(ocr_text) - _IMAGE_STYLE_TOKENS
+    if not substance:
+        return []
+    invented = {t for t in substance if t not in corpus}
+    confident = {t for t in invented if len(t) >= 4}
+    if len(confident) >= 2 or any(len(t) >= 6 for t in confident):
+        sample = ", ".join(repr(x) for x in sorted(confident)[:6])
+        return [
+            f"{relpath}: on-image OCR has terms not in narration/source: {sample}"
+        ]
+    return []
+
+
 def cluster_subject_beats(
     sentences: list[str],
     *,

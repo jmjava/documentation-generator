@@ -15,8 +15,11 @@ for elements whose asset is missing (or ``--force``), and writes PNG bytes to
 the segment narration plus ``manim_scene_generation`` source snippets so the
 image model sees the documentation, not only a short caption. Prompts that
 share no documented terms fail closed (same check as ``validate`` /
-``image_prompt_alignment``). ``docgen manim`` then loads the asset via the
-``_image`` helper in ``scenes.py``.
+``image_prompt_alignment``). After the PNG is written, **OCR** rejects
+invented on-image labels and a **vision review** (OpenAI / Grok / Claude)
+checks the pixels against the same corpus (``image_generation.align_review``).
+A failed review retries once with the critique, then deletes the asset.
+``docgen manim`` then loads the asset via the ``_image`` helper in ``scenes.py``.
 """
 
 from __future__ import annotations
@@ -26,8 +29,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from docgen.image_align import (
+    ImageReviewResult,
+    ocr_image_text,
+    review_image_against_docs,
+)
 from docgen.openai_retry import call_with_rate_limit_retries
 from docgen.scene_spec import (
+    image_ocr_alignment_violations,
     image_prompt_alignment_violations,
     iter_image_elements,
     load_scene_spec,
@@ -227,6 +236,8 @@ def generate_images_for_spec(
     model_override: str | None = None,
     size_override: str | None = None,
     image_fn: Callable[[str], bytes] | None = None,
+    review_fn: Callable[..., ImageReviewResult] | None = None,
+    ocr_fn: Callable[[Path], str | None] | None = None,
 ) -> list[ImageAssetResult]:
     """Generate missing image assets referenced by one ``*.scene.yaml``.
 
@@ -234,7 +245,9 @@ def generate_images_for_spec(
     missing **and** has no ``prompt`` fails loud — either commit the file or
     give the toolchain a prompt to generate it from.
 
-    ``image_fn`` is an injection point for tests (prompt → PNG bytes).
+    ``image_fn`` / ``review_fn`` / ``ocr_fn`` are injection points for tests.
+    Live vision review runs when ``align_review`` is on and ``image_fn`` is
+    not injected (or ``review_fn`` is provided).
     """
     spec = load_scene_spec(spec_path)
     elements = iter_image_elements(spec)
@@ -244,8 +257,16 @@ def generate_images_for_spec(
     quality = icfg.get("quality")
     quality = str(quality).strip() if quality else None
     align = bool(icfg.get("align_with_docs", True))
+    align_review = bool(icfg.get("align_review", True))
+    try:
+        pixel_retries = int(icfg.get("align_review_retries", 1) or 0)
+    except (TypeError, ValueError):
+        pixel_retries = 1
+    pixel_retries = max(0, pixel_retries)
+    review_model = str(icfg.get("review_model") or "").strip()
     style = str(icfg.get("style") or "").strip() or DEFAULT_IMAGE_STYLE
     corpus = collect_alignment_corpus(cfg, spec) if align else ""
+    live_review = align and align_review and (review_fn is not None or image_fn is None)
 
     if align:
         issues = image_prompt_alignment_violations(spec, corpus_text=corpus)
@@ -288,15 +309,93 @@ def generate_images_for_spec(
                 prompt=p, model=model, size=size, quality=quality, cfg=cfg
             )
         )
-        data = fn(effective)
-        if not data:
-            raise ImageGenerationError(
-                f"{spec_path}: image element {rel!r} — provider returned empty bytes"
+        critique = ""
+        kept = False
+        last_issues: list[str] = []
+        for attempt in range(1 + pixel_retries):
+            to_send = effective
+            if critique:
+                to_send = (
+                    f"{effective}\n\n--- PIXEL REVIEW FAILED ---\n{critique}\n"
+                    "Redraw so the image matches the documented subject. "
+                    "Do not invent labels or extra components."
+                )
+            data = fn(to_send)
+            if not data:
+                raise ImageGenerationError(
+                    f"{spec_path}: image element {rel!r} — provider returned empty bytes"
+                )
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(data)
+            last_issues = _pixel_alignment_issues(
+                out,
+                relpath=rel,
+                corpus=corpus,
+                authored_prompt=prompt,
+                label=label,
+                cfg=cfg,
+                align=align,
+                live_review=live_review,
+                review_model=review_model,
+                review_fn=review_fn,
+                ocr_fn=ocr_fn,
             )
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(data)
+            if not last_issues:
+                kept = True
+                break
+            critique = "\n".join(last_issues)
+        if not kept:
+            out.unlink(missing_ok=True)
+            joined = "\n  ".join(last_issues)
+            raise ImageGenerationError(
+                f"{spec_path}: image {rel!r} failed pixel alignment "
+                f"(OCR / vision review):\n  {joined}"
+            )
         results.append(ImageAssetResult(rel, out, "generated", prompt, effective))
     return results
+
+
+def _pixel_alignment_issues(
+    path: Path,
+    *,
+    relpath: str,
+    corpus: str,
+    authored_prompt: str,
+    label: str,
+    cfg: "Config",
+    align: bool,
+    live_review: bool,
+    review_model: str,
+    review_fn: Callable[..., ImageReviewResult] | None,
+    ocr_fn: Callable[[Path], str | None] | None,
+) -> list[str]:
+    if not align or not corpus.strip():
+        return []
+    issues: list[str] = []
+    scanned = (ocr_fn or ocr_image_text)(path)
+    if scanned:
+        issues.extend(
+            image_ocr_alignment_violations(
+                scanned, corpus_text=corpus, relpath=relpath
+            )
+        )
+    if live_review:
+        if review_fn is not None:
+            verdict = review_fn(
+                path, corpus_text=corpus, authored_prompt=authored_prompt, label=label
+            )
+        else:
+            verdict = review_image_against_docs(
+                path,
+                corpus_text=corpus,
+                authored_prompt=authored_prompt,
+                label=label,
+                cfg=cfg,
+                model=review_model,
+            )
+        if not verdict.passed:
+            issues.append(f"{relpath}: vision review FAIL — {verdict.reason}")
+    return issues
 
 
 def spec_files_for_bundle(cfg: "Config") -> list[Path]:
@@ -311,6 +410,8 @@ def generate_missing_images_for_bundle(
     cfg: "Config",
     *,
     image_fn: Callable[[str], bytes] | None = None,
+    review_fn: Callable[..., ImageReviewResult] | None = None,
+    ocr_fn: Callable[[Path], str | None] | None = None,
 ) -> list[str]:
     """Generate only **missing** image assets across all bundle specs.
 
@@ -319,7 +420,9 @@ def generate_missing_images_for_bundle(
     """
     msgs: list[str] = []
     for spec_path in spec_files_for_bundle(cfg):
-        for res in generate_images_for_spec(cfg, spec_path, image_fn=image_fn):
+        for res in generate_images_for_spec(
+            cfg, spec_path, image_fn=image_fn, review_fn=review_fn, ocr_fn=ocr_fn
+        ):
             if res.status == "generated":
                 msgs.append(f"{spec_path.name}: generated {res.relpath}")
     return msgs

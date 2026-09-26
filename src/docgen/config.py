@@ -332,6 +332,7 @@ class Config:
             "narration_lint",
             "subject_beat_coverage",
             "image_prompt_alignment",
+            "image_asset_alignment",
         ):
             self._sub_block(validation, nested, label=f"validation.{nested}")
         # List-valued keys: a string must not be iterated as characters.
@@ -494,6 +495,22 @@ class Config:
             )
         if ig.get("style") is not None:
             require_yaml_string(ig["style"], label="image_generation.style", source=src)
+        if ig.get("align_review") is not None:
+            require_yaml_bool(
+                ig["align_review"],
+                label="image_generation.align_review",
+                source=src,
+            )
+        if ig.get("review_model") is not None:
+            require_yaml_string(
+                ig["review_model"], label="image_generation.review_model", source=src
+            )
+        if ig.get("align_review_retries") is not None:
+            require_yaml_number(
+                ig["align_review_retries"],
+                label="image_generation.align_review_retries",
+                source=src,
+            )
         ai = self._block("ai")
         if ai.get("provider") is not None:
             require_yaml_string(ai["provider"], label="ai.provider", source=src)
@@ -786,6 +803,29 @@ class Config:
                 label="validation.image_prompt_alignment.enabled",
                 source=src,
             )
+        iaa = self._sub_block(
+            validation,
+            "image_asset_alignment",
+            label="validation.image_asset_alignment",
+        )
+        if iaa.get("enabled") is not None:
+            require_yaml_bool(
+                iaa["enabled"],
+                label="validation.image_asset_alignment.enabled",
+                source=src,
+            )
+        if iaa.get("ocr") is not None:
+            require_yaml_bool(
+                iaa["ocr"],
+                label="validation.image_asset_alignment.ocr",
+                source=src,
+            )
+        if iaa.get("review") is not None:
+            require_yaml_bool(
+                iaa["review"],
+                label="validation.image_asset_alignment.review",
+                source=src,
+            )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"
@@ -971,6 +1011,8 @@ class Config:
             "model": "gpt-image-1",
             "size": "1536x1024",
             "align_with_docs": True,
+            "align_review": True,
+            "align_review_retries": 1,
         }
         defaults.update(self._block("image_generation"))
         return defaults
@@ -997,6 +1039,19 @@ class Config:
         if "enabled" in block:
             return bool(block.get("enabled"))
         return True
+
+    @property
+    def image_asset_alignment_config(self) -> dict[str, Any]:
+        """Pixel checks on generated scene images (OCR + optional vision)."""
+        defaults: dict[str, Any] = {"enabled": True, "ocr": True, "review": False}
+        defaults.update(
+            self._sub_block(
+                self._block("validation"),
+                "image_asset_alignment",
+                label="validation.image_asset_alignment",
+            )
+        )
+        return defaults
 
     # -- Manim -----------------------------------------------------------------
 
