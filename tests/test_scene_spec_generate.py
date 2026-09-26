@@ -370,6 +370,60 @@ def test_user_message_includes_computed_layout_stack_budgets() -> None:
     assert "13.22" in msg  # horizontal safe width (FRAME_WIDTH - 1.0)
 
 
+def test_user_message_includes_source_snippets() -> None:
+    msg = build_scene_spec_user_message(
+        seg_id="01",
+        seg_name="01-x",
+        class_name="XScene",
+        narration_text="The bootstrap pipeline seeds the cluster.",
+        timing_enrichment="(no timing)",
+        hints=[],
+        extra_hints=[],
+        reference_scenes="",
+        source_snippets=[("docs/architecture.md", "The bootstrap pipeline writes a lockfile.")],
+    )
+    assert "SOURCE DOCUMENTATION" in msg
+    assert "docs/architecture.md" in msg
+    assert "writes a lockfile" in msg
+    assert "Do not invent product names" in msg
+
+
+def test_generate_rejects_unaligned_image_prompt(tmp_path: Path) -> None:
+    cfg = _bundle(tmp_path)
+
+    def fake_llm(**_kwargs: object) -> str:
+        return """```yaml
+segment_id: "08"
+class_name: ExtrasScene
+title:
+  text: "Synthetic"
+  font_size: 40
+  color: C_WHITE
+rows:
+  - run_time: 1.2
+    boxes:
+      - label: "Hello"
+        color: C_ORANGE
+        width: 4.0
+        height: 1.0
+        font_size: 20
+      - image: images/widget.png
+        width: 4.0
+        height: 2.0
+        prompt: "isometric render of the WidgetX orchestrator"
+```"""
+
+    with pytest.raises(SceneGenerationError, match="image prompt alignment"):
+        generate_scene_spec(
+            cfg,
+            "08",
+            extra_paths=[],
+            extra_hints=[],
+            dry_run=False,
+            llm=fake_llm,
+        )
+
+
 def test_scene_spec_generate_all_uses_default_when_all_missing(tmp_path: Path) -> None:
     from click.testing import CliRunner
 

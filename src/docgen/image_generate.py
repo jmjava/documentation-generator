@@ -11,7 +11,11 @@ A ``*.scene.yaml`` box may be an image element::
 
 ``docgen image-generate`` scans specs, calls the Images API (OpenAI or xAI Imagine)
 for elements whose asset is missing (or ``--force``), and writes PNG bytes to
-``<bundle>/<image path>``. ``docgen manim`` then loads the asset via the
+``<bundle>/<image path>``. By default the authored ``prompt`` is **grounded** in
+the segment narration plus ``manim_scene_generation`` source snippets so the
+image model sees the documentation, not only a short caption. Prompts that
+share no documented terms fail closed (same check as ``validate`` /
+``image_prompt_alignment``). ``docgen manim`` then loads the asset via the
 ``_image`` helper in ``scenes.py``.
 """
 
@@ -20,16 +24,28 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from docgen.openai_retry import call_with_rate_limit_retries
-from docgen.scene_spec import iter_image_elements, load_scene_spec
+from docgen.scene_spec import (
+    image_prompt_alignment_violations,
+    iter_image_elements,
+    load_scene_spec,
+)
 
 if TYPE_CHECKING:
     from docgen.config import Config
 
 DEFAULT_IMAGE_MODEL = "gpt-image-1"
 DEFAULT_IMAGE_SIZE = "1536x1024"
+DEFAULT_IMAGE_STYLE = (
+    "Clean educational diagram for a documentation video. Flat vector "
+    "illustration, high contrast, no watermark, no signature, no decorative "
+    "fake UI or invented product logos. Any readable text must be short ASCII "
+    "copied from the documented subject. Do not add components that are not "
+    "named in the documentation."
+)
+_ALIGN_CORPUS_EXCERPT = 2200
 
 
 class ImageGenerationError(RuntimeError):
@@ -42,6 +58,7 @@ class ImageAssetResult:
     path: Path
     status: str  # "generated" | "exists" | "dry-run"
     prompt: str
+    effective_prompt: str = ""
 
 
 def generate_image_bytes(
@@ -128,6 +145,69 @@ def generate_image_bytes(
     )
 
 
+def _excerpt(text: str, limit: int = _ALIGN_CORPUS_EXCERPT) -> str:
+    collapsed = " ".join((text or "").split())
+    if len(collapsed) <= limit:
+        return collapsed
+    cut = collapsed[: limit - 1]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut + "…"
+
+
+def build_aligned_image_prompt(
+    authored: str,
+    *,
+    corpus_text: str = "",
+    label: str = "",
+    style: str = DEFAULT_IMAGE_STYLE,
+) -> str:
+    """Wrap an authored scene-spec prompt with documentation + style constraints."""
+    parts: list[str] = [(style or "").strip() or DEFAULT_IMAGE_STYLE, ""]
+    corpus = (corpus_text or "").strip()
+    if corpus:
+        parts.append(
+            "Documented subject (use these terms; do not invent names, logos, "
+            "or extra components):"
+        )
+        parts.append(_excerpt(corpus))
+        parts.append("")
+    lab = (label or "").strip()
+    if lab:
+        parts.append(f"On-screen timing label (must remain accurate): {lab}")
+        parts.append("")
+    parts.append("Illustration request:")
+    parts.append((authored or "").strip())
+    return "\n".join(parts).strip() + "\n"
+
+
+def collect_alignment_corpus(cfg: "Config", spec: dict[str, Any]) -> str:
+    """Narration + scene-generation hints + source snippets for one spec."""
+    parts: list[str] = []
+    seg_id = str(spec.get("segment_id") or "").strip()
+    if seg_id:
+        found = cfg.find_segment_asset(cfg.narration_dir, seg_id, ".md")
+        if found is not None and found.is_file():
+            try:
+                parts.append(found.read_text(encoding="utf-8"))
+            except OSError:
+                pass
+        from docgen.manim_scene_support import (
+            collect_source_snippets,
+            merged_scene_generation_settings,
+        )
+
+        settings = merged_scene_generation_settings(cfg, seg_id)
+        for h in settings.hints:
+            if str(h).strip():
+                parts.append(str(h).strip())
+        for label, text in collect_source_snippets(cfg, settings, extra_paths=[]):
+            body = str(text or "").strip()
+            if body:
+                parts.append(f"{label}\n{body}")
+    return "\n\n".join(p for p in parts if str(p).strip())
+
+
 def _resolve_asset_path(cfg: "Config", relpath: str) -> Path:
     p = Path(relpath)
     if p.is_absolute() or ".." in p.parts:
@@ -163,15 +243,36 @@ def generate_images_for_spec(
     size = (size_override or "").strip() or str(icfg.get("size") or DEFAULT_IMAGE_SIZE)
     quality = icfg.get("quality")
     quality = str(quality).strip() if quality else None
+    align = bool(icfg.get("align_with_docs", True))
+    style = str(icfg.get("style") or "").strip() or DEFAULT_IMAGE_STYLE
+    corpus = collect_alignment_corpus(cfg, spec) if align else ""
+
+    if align:
+        issues = image_prompt_alignment_violations(spec, corpus_text=corpus)
+        if issues:
+            joined = "\n  ".join(issues)
+            raise ImageGenerationError(
+                f"{spec_path}: image prompt alignment failed — rewrite each "
+                f"`prompt` so it uses documented terms from narration/source "
+                f"(or set image_generation.align_with_docs: false):\n  {joined}"
+            )
 
     results: list[ImageAssetResult] = []
     for el in elements:
         rel = str(el["image"]).strip()
         prompt = str(el.get("prompt") or "").strip()
         out = _resolve_asset_path(cfg, rel)
+        label = str(el.get("label") or "").strip()
+        effective = (
+            build_aligned_image_prompt(
+                prompt, corpus_text=corpus, label=label, style=style
+            )
+            if align and prompt
+            else prompt
+        )
 
         if out.is_file() and not force:
-            results.append(ImageAssetResult(rel, out, "exists", prompt))
+            results.append(ImageAssetResult(rel, out, "exists", prompt, effective))
             continue
         if not prompt:
             raise ImageGenerationError(
@@ -179,7 +280,7 @@ def generate_images_for_spec(
                 f"({out}); add the file to the bundle or set a prompt in the spec."
             )
         if dry_run:
-            results.append(ImageAssetResult(rel, out, "dry-run", prompt))
+            results.append(ImageAssetResult(rel, out, "dry-run", prompt, effective))
             continue
 
         fn = image_fn or (
@@ -187,14 +288,14 @@ def generate_images_for_spec(
                 prompt=p, model=model, size=size, quality=quality, cfg=cfg
             )
         )
-        data = fn(prompt)
+        data = fn(effective)
         if not data:
             raise ImageGenerationError(
                 f"{spec_path}: image element {rel!r} — provider returned empty bytes"
             )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(data)
-        results.append(ImageAssetResult(rel, out, "generated", prompt))
+        results.append(ImageAssetResult(rel, out, "generated", prompt, effective))
     return results
 
 

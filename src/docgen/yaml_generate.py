@@ -220,6 +220,7 @@ def merge_defaults(
         raw["image_generation"] = {
             "model": "gpt-image-1",
             "size": "1536x1024",
+            "align_with_docs": True,
         }
         changes.append(
             "image_generation: added model gpt-image-1 (Cursor/OpenAI Images; override with --model)"

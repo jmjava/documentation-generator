@@ -331,6 +331,7 @@ class Config:
             "story_end",
             "narration_lint",
             "subject_beat_coverage",
+            "image_prompt_alignment",
         ):
             self._sub_block(validation, nested, label=f"validation.{nested}")
         # List-valued keys: a string must not be iterated as characters.
@@ -485,6 +486,14 @@ class Config:
             require_yaml_string(ig["size"], label="image_generation.size", source=src)
         if ig.get("quality") is not None:
             require_yaml_string(ig["quality"], label="image_generation.quality", source=src)
+        if ig.get("align_with_docs") is not None:
+            require_yaml_bool(
+                ig["align_with_docs"],
+                label="image_generation.align_with_docs",
+                source=src,
+            )
+        if ig.get("style") is not None:
+            require_yaml_string(ig["style"], label="image_generation.style", source=src)
         ai = self._block("ai")
         if ai.get("provider") is not None:
             require_yaml_string(ai["provider"], label="ai.provider", source=src)
@@ -766,6 +775,17 @@ class Config:
                 label="validation.subject_beat_coverage.enabled",
                 source=src,
             )
+        ipa = self._sub_block(
+            validation,
+            "image_prompt_alignment",
+            label="validation.image_prompt_alignment",
+        )
+        if ipa.get("enabled") is not None:
+            require_yaml_bool(
+                ipa["enabled"],
+                label="validation.image_prompt_alignment.enabled",
+                source=src,
+            )
 
     def _source_label(self) -> str:
         return self.yaml_path.name if self.yaml_path else "docgen.yaml"
@@ -950,9 +970,33 @@ class Config:
         defaults: dict[str, Any] = {
             "model": "gpt-image-1",
             "size": "1536x1024",
+            "align_with_docs": True,
         }
         defaults.update(self._block("image_generation"))
         return defaults
+
+    @property
+    def image_align_with_docs(self) -> bool:
+        """When true (default), ground image prompts in narration/source and fail unaligned ones."""
+        block = self._block("image_generation")
+        if "align_with_docs" in block:
+            return bool(block.get("align_with_docs"))
+        return True
+
+    @property
+    def image_prompt_alignment_enabled(self) -> bool:
+        """When true (default), validate + scene-spec-generate enforce image-prompt grounding.
+
+        Config: ``validation.image_prompt_alignment.enabled`` (bool).
+        """
+        block = self._sub_block(
+            self._block("validation"),
+            "image_prompt_alignment",
+            label="validation.image_prompt_alignment",
+        )
+        if "enabled" in block:
+            return bool(block.get("enabled"))
+        return True
 
     # -- Manim -----------------------------------------------------------------
 
