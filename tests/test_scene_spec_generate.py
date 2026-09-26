@@ -407,9 +407,10 @@ rows:
         width: 4.0
         height: 1.0
         font_size: 20
-      - image: images/widget.png
+      - image: images/hello.png
         width: 4.0
         height: 2.0
+        label: "Hello"
         prompt: "isometric render of the WidgetX orchestrator"
 ```"""
 
