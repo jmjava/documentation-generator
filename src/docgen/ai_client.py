@@ -9,7 +9,8 @@ The CLI is **not** tied to Cursor. The same commands run in:
 
 Chat + images for OpenAI/Grok go through the ``openai`` SDK. xAI is
 ``base_url=https://api.x.ai/v1`` plus model aliases. Anthropic chat uses
-``POST https://api.anthropic.com/v1/messages`` (no TTS/images there).
+``POST https://api.anthropic.com/v1/messages`` (no image *generation* there;
+Claude can still *review* a PNG via ``chat_completion_with_image``).
 
 TTS/STT: OpenAI ``/v1/audio/speech`` + ``whisper-1``, or xAI ``/v1/tts``
 and ``/v1/stt``.
@@ -393,6 +394,89 @@ def chat_completion(
     return text
 
 
+def chat_completion_with_image(
+    *,
+    system_prompt: str,
+    user_message: str,
+    image_bytes: bytes,
+    media_type: str = "image/png",
+    model: str,
+    temperature: float,
+    cfg: "Config | None" = None,
+) -> str:
+    """Vision chat: attach one image plus text (OpenAI, Grok, or Anthropic)."""
+    import base64
+
+    settings = resolve_ai_settings(cfg)
+    resolved = resolve_chat_model(model, settings)
+    if not image_bytes:
+        raise AIError("vision chat needs non-empty image bytes")
+    mime = (media_type or "image/png").strip() or "image/png"
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    if settings.is_anthropic:
+        return _anthropic_chat(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            model=resolved,
+            temperature=temperature,
+            settings=settings,
+            image_b64=b64,
+            image_media_type=mime,
+        )
+
+    import openai
+
+    from docgen.openai_retry import call_with_rate_limit_retries
+
+    client = openai_client(cfg)
+
+    def _create() -> Any:
+        return client.chat.completions.create(
+            model=resolved,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_message},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64}"},
+                        },
+                    ],
+                },
+            ],
+            temperature=float(temperature),
+        )
+
+    try:
+        response = call_with_rate_limit_retries(_create)
+    except openai.AuthenticationError as exc:
+        raise AIError(
+            f"{_vendor(settings)} rejected {settings.api_key_env} (authentication failed): {exc}. "
+            f"{settings.auth_help()}"
+        ) from exc
+    except openai.PermissionDeniedError as exc:
+        raise AIError(
+            f"{_vendor(settings)} permission denied for model {resolved!r}: {exc}."
+        ) from exc
+    except openai.RateLimitError as exc:
+        raise AIError(
+            f"{_vendor(settings)} rate-limited for model {resolved!r}: {exc}."
+        ) from exc
+    except openai.APIConnectionError as exc:
+        raise AIError(
+            f"{_vendor(settings)} connection error: {exc} — re-run when connectivity is restored."
+        ) from exc
+    try:
+        text = (response.choices[0].message.content or "").strip()
+    except (IndexError, AttributeError):
+        text = ""
+    if not text:
+        raise AIError(f"{_vendor(settings)} vision chat returned no text content.")
+    return text
+
+
 def synthesize_speech(
     *,
     text: str,
@@ -556,15 +640,31 @@ def _anthropic_chat(
     model: str,
     temperature: float,
     settings: AISettings,
+    image_b64: str | None = None,
+    image_media_type: str = "image/png",
 ) -> str:
     if not settings.api_key:
         raise AIError(f"Anthropic chat needs ANTHROPIC_API_KEY. {settings.auth_help()}")
+    if image_b64:
+        user_content: Any = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": image_media_type or "image/png",
+                    "data": image_b64,
+                },
+            },
+            {"type": "text", "text": user_message},
+        ]
+    else:
+        user_content = user_message
     payload = {
         "model": model,
         "max_tokens": ANTHROPIC_MAX_TOKENS,
         "temperature": float(temperature),
         "system": system_prompt,
-        "messages": [{"role": "user", "content": user_message}],
+        "messages": [{"role": "user", "content": user_content}],
     }
     raw = _http_json(
         _anthropic_messages_url(settings),

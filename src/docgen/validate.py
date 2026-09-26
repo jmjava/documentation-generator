@@ -363,6 +363,7 @@ class Validator:
             report.checks.append(self._check_manim_scene_lint())
             report.checks.append(self._check_subject_beat_coverage(seg_id))
             report.checks.append(self._check_image_prompt_alignment(seg_id))
+            report.checks.append(self._check_image_asset_alignment(seg_id))
             report.checks.append(self._check_scene_assets(seg_id))
 
         return report.to_dict()
@@ -373,8 +374,9 @@ class Validator:
         Missing recordings are reported as warnings, not failures — a project
         that hasn't generated videos yet should still be pushable.  Quality
         checks on *existing* recordings — including visual-sync (``av_sync``,
-        ``subject_beat_coverage``, ``image_prompt_alignment``, ``ocr_scan``,
-        ``layout``, ``freeze_ratio``) — and narration lint are hard failures so
+        ``subject_beat_coverage``, ``image_prompt_alignment``,
+        ``image_asset_alignment``, ``ocr_scan``, ``layout``, ``freeze_ratio``)
+        — and narration lint are hard failures so
         ``generate-all`` cannot print ``Pipeline complete`` after a desynced mux.
         """
         reports = self.run_all()
@@ -701,6 +703,105 @@ class Validator:
             "image_prompt_alignment",
             True,
             ["Image prompts share documented terms with narration/source"],
+        )
+
+    def _check_image_asset_alignment(self, seg_id: str) -> CheckResult:
+        """OCR (and optional vision) of generated scene-spec PNGs vs documentation."""
+        iaa = self.config.image_asset_alignment_config
+        if not iaa.get("enabled", True):
+            return CheckResult(
+                "image_asset_alignment",
+                True,
+                ["validation.image_asset_alignment disabled in config (skipped)"],
+            )
+
+        seg_name = self.config.resolve_segment_name(seg_id)
+        spec_path = self.config.animations_dir / "specs" / f"{seg_name}.scene.yaml"
+        if not spec_path.is_file():
+            return _missing_manim_spec_result("image_asset_alignment", spec_path.name)
+
+        import yaml
+
+        from docgen.image_align import ocr_image_text, review_image_against_docs
+        from docgen.image_generate import collect_alignment_corpus
+        from docgen.scene_spec import image_ocr_alignment_violations, iter_image_elements
+
+        try:
+            raw = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            return CheckResult(
+                "image_asset_alignment",
+                False,
+                [f"could not load {spec_path.name}: {exc}"],
+            )
+        if not isinstance(raw, dict):
+            return CheckResult(
+                "image_asset_alignment",
+                False,
+                [f"{spec_path.name}: root must be a mapping"],
+            )
+        elements = iter_image_elements(raw)
+        if not elements:
+            return CheckResult(
+                "image_asset_alignment",
+                True,
+                ["No image elements (skipped)"],
+            )
+
+        corpus = collect_alignment_corpus(self.config, raw)
+        if not corpus.strip():
+            return CheckResult(
+                "image_asset_alignment",
+                True,
+                ["No narration/source corpus yet — image pixels not checked"],
+            )
+
+        issues: list[str] = []
+        scanned_any = False
+        for el in elements:
+            rel = str(el.get("image") or "").strip()
+            if not rel:
+                continue
+            asset = self.config.base_dir / rel
+            if not asset.is_file():
+                continue
+            scanned_any = True
+            if iaa.get("ocr", True):
+                unavail = _tesseract_unavailable_detail()
+                if unavail:
+                    return CheckResult("image_asset_alignment", False, [unavail])
+                ocr_text = ocr_image_text(asset)
+                if ocr_text is None:
+                    issues.append(f"{rel}: could not OCR image (unreadable file)")
+                elif ocr_text:
+                    issues.extend(
+                        image_ocr_alignment_violations(
+                            ocr_text, corpus_text=corpus, relpath=rel
+                        )
+                    )
+            if iaa.get("review"):
+                verdict = review_image_against_docs(
+                    asset,
+                    corpus_text=corpus,
+                    authored_prompt=str(el.get("prompt") or ""),
+                    label=str(el.get("label") or ""),
+                    cfg=self.config,
+                )
+                if not verdict.passed:
+                    issues.append(f"{rel}: vision review FAIL — {verdict.reason}")
+
+        if issues:
+            return CheckResult("image_asset_alignment", False, issues)
+        if not scanned_any:
+            return CheckResult(
+                "image_asset_alignment",
+                True,
+                ["Image assets not on disk yet (skipped) — run `docgen image-generate`"],
+            )
+        return CheckResult(
+            "image_asset_alignment",
+            True,
+            ["Generated image pixels match documented terms"],
         )
 
     def _check_scene_assets(self, seg_id: str) -> CheckResult:

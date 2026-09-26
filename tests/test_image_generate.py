@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from docgen.config import Config
+from docgen.image_align import ImageReviewResult
 from docgen.image_generate import (
     DEFAULT_IMAGE_STYLE,
     ImageGenerationError,
@@ -214,6 +215,77 @@ def test_source_docs_ground_prompt_without_narration(tmp_path: Path) -> None:
     assert seen
     assert "checkout service" in seen[0]
     assert "cart lock" in seen[0]
+
+
+def test_ocr_invented_text_deletes_asset(cfg: Config) -> None:
+    spec = _write_spec(
+        cfg.animations_dir / "specs" / "01-x.scene.yaml",
+        prompt="clean diagram of the bootstrap pipeline",
+    )
+    cfg.narration_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.narration_dir / "1.md").write_text(
+        "The bootstrap pipeline seeds the cluster.\n", encoding="utf-8"
+    )
+    with pytest.raises(ImageGenerationError, match="pixel alignment"):
+        generate_images_for_spec(
+            cfg,
+            spec,
+            image_fn=lambda p: _PNG_BYTES,
+            ocr_fn=lambda _path: "WidgetX Orchestrator console",
+        )
+    assert not (cfg.base_dir / "images" / "arch.png").exists()
+
+
+def test_vision_fail_retries_then_keeps_pass(cfg: Config) -> None:
+    spec = _write_spec(
+        cfg.animations_dir / "specs" / "01-x.scene.yaml",
+        prompt="clean diagram of the bootstrap pipeline",
+    )
+    cfg.narration_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.narration_dir / "1.md").write_text(
+        "The bootstrap pipeline seeds the cluster.\n", encoding="utf-8"
+    )
+    seen: list[str] = []
+    reviews = iter(
+        [
+            ImageReviewResult(False, "shows a generic city skyline"),
+            ImageReviewResult(True, "now shows the bootstrap pipeline"),
+        ]
+    )
+
+    def _review(*_a: object, **_k: object) -> ImageReviewResult:
+        return next(reviews)
+
+    generate_images_for_spec(
+        cfg,
+        spec,
+        image_fn=lambda p: seen.append(p) or _PNG_BYTES,
+        review_fn=_review,
+        ocr_fn=lambda _path: "",
+    )
+    assert len(seen) == 2
+    assert "PIXEL REVIEW FAILED" in seen[1]
+    assert (cfg.base_dir / "images" / "arch.png").read_bytes() == _PNG_BYTES
+
+
+def test_vision_fail_exhausted_deletes_asset(cfg: Config) -> None:
+    spec = _write_spec(
+        cfg.animations_dir / "specs" / "01-x.scene.yaml",
+        prompt="clean diagram of the bootstrap pipeline",
+    )
+    cfg.narration_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.narration_dir / "1.md").write_text(
+        "The bootstrap pipeline seeds the cluster.\n", encoding="utf-8"
+    )
+    with pytest.raises(ImageGenerationError, match="vision review FAIL"):
+        generate_images_for_spec(
+            cfg,
+            spec,
+            image_fn=lambda p: _PNG_BYTES,
+            review_fn=lambda *_a, **_k: ImageReviewResult(False, "wrong subject"),
+            ocr_fn=lambda _path: "",
+        )
+    assert not (cfg.base_dir / "images" / "arch.png").exists()
 
 
 def test_build_aligned_image_prompt_includes_corpus_and_label() -> None:

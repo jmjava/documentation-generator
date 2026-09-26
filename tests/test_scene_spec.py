@@ -17,6 +17,7 @@ from docgen.scene_spec import (
     disk_spec_with_merged_wait_words,
     cluster_subject_beats,
     count_spec_labels,
+    image_ocr_alignment_violations,
     image_prompt_alignment_violations,
     iter_paced_label_anchors,
     last_paced_reveal_time,
@@ -601,6 +602,21 @@ def test_image_prompt_alignment_requires_documented_terms() -> None:
     assert any("shares no documented terms" in msg for msg in issues)
 
     assert image_prompt_alignment_violations(spec, corpus_text="") == []
+
+
+def test_image_ocr_alignment_flags_invented_on_image_text() -> None:
+    narr = "The bootstrap pipeline seeds the cluster."
+    assert image_ocr_alignment_violations(
+        "bootstrap pipeline", corpus_text=narr, relpath="images/arch.png"
+    ) == []
+    assert image_ocr_alignment_violations("", corpus_text=narr) == []
+    issues = image_ocr_alignment_violations(
+        "WidgetX Orchestrator console",
+        corpus_text=narr,
+        relpath="images/arch.png",
+    )
+    assert issues
+    assert any("OCR" in msg for msg in issues)
 
 
 def test_subject_beat_coverage_allows_dwell_rejects_missed_topics() -> None:
