@@ -503,3 +503,38 @@ def test_list_scene_spec_paths(tmp_path: Path) -> None:
     path = _write_spec(tmp_path)
     assert list_scene_spec_paths(cfg) == [path]
     assert list_scene_spec_paths(cfg, segment_id="01") == [path]
+
+
+def test_cli_scene_compile_spec_and_all_exits_1(tmp_path: Path) -> None:
+    """docgen scene-compile SPEC --all exits 1 and does not rewrite scenes.py."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    animations = tmp_path / "animations"
+    animations.mkdir()
+    scenes = animations / "scenes.py"
+    scenes.write_text("# keep\n", encoding="utf-8")
+    spec = animations / "specs" / "01-demo.scene.yaml"
+    spec.parent.mkdir()
+    spec.write_text("segment_id: '01'\n", encoding="utf-8")
+    original_scenes = scenes.read_text(encoding="utf-8")
+    original_spec = spec.read_text(encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(p), "scene-compile", str(spec), "--all"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "Pass SPEC_PATH or --all, not both." in combined
+    assert "Traceback" not in combined
+    assert scenes.read_text(encoding="utf-8") == original_scenes
+    assert spec.read_text(encoding="utf-8") == original_spec
