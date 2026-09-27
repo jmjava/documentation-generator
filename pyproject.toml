@@ -66,3 +66,28 @@ target-version = "py310"
 # selection that fails the existing codebase; keep CI on the historical E/F gate.
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
+
+# One module. validate.py's generated mutant module is about 4.6MB and the
+# runner was OOM-killed above 12G, so that file is not the CI target.
+# path_filters.py is the module that can finish. source_paths copies the
+# package so imports resolve; only_mutate keeps the run off the rest of src.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/docgen/path_filters.py"]
+also_copy = [
+    ".github",
+    ".cursor",
+    "scripts",
+    "AGENTS.md",
+    "README.md",
+    "NOTICE",
+    "SESSION_NOTES.md",
+    "packaging",
+    "docs",
+    "milestones",
+    "third_party",
+    "issues",
+    "specs-on-hold",
+    "session-notes",
+    "config",
+]

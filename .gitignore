@@ -32,3 +32,4 @@ tests/.bin-cache/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+mutants/

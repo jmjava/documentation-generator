@@ -1,0 +1,12 @@
+{
+  "module": "src/docgen/path_filters.py",
+  "killed": 11,
+  "survived": 0,
+  "total": 11,
+  "no_tests": 0,
+  "skipped": 0,
+  "suspicious": 0,
+  "timeout": 0,
+  "check_was_interrupted_by_user": 0,
+  "segfault": 0
+}
