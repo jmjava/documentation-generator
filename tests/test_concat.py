@@ -114,3 +114,34 @@ def test_concat_ffmpeg_failure_removes_incomplete_output(
     with pytest.raises(ConcatError, match="ffmpeg failed"):
         ConcatBuilder(cfg).build(name="full")
     assert not out.exists()
+
+
+def test_cli_concat_ffmpeg_missing_exits_1_and_removes_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """docgen concat exits 1 when ffmpeg is missing and deletes a partial output."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    _seed_recordings(tmp_path)
+    out = tmp_path / "recordings" / "full.mp4"
+    out.write_bytes(b"partial-concat")
+    sources = [
+        tmp_path / "recordings" / "01-a.mp4",
+        tmp_path / "recordings" / "02-b.mp4",
+    ]
+
+    def fake_run(cmd, **_kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "ffmpeg")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = CliRunner().invoke(main, ["--config", str(cfg.yaml_path), "concat", "full"])
+    combined = result.output + (result.stderr or "")
+    assert result.exit_code == 1, combined
+    assert "ffmpeg not found" in combined
+    assert "Traceback" not in combined
+    assert not out.exists()
+    assert not list((tmp_path / "recordings").glob(".concat-*.txt"))
+    assert all(path.is_file() for path in sources)
