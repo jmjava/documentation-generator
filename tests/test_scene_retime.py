@@ -503,3 +503,21 @@ def test_list_scene_spec_paths(tmp_path: Path) -> None:
     path = _write_spec(tmp_path)
     assert list_scene_spec_paths(cfg) == [path]
     assert list_scene_spec_paths(cfg, segment_id="01") == [path]
+
+
+def test_cli_scene_compile_requires_spec_or_all(tmp_path: Path) -> None:
+    """scene-compile with neither SPEC_PATH nor --all exits 1 and leaves scenes.py alone."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path)
+    scenes = tmp_path / "animations" / "scenes.py"
+    original = scenes.read_text(encoding="utf-8")
+    result = CliRunner().invoke(
+        main, ["--config", str(cfg.yaml_path), "scene-compile"]
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1
+    assert "Pass SPEC_PATH or --all." in combined
+    assert scenes.read_text(encoding="utf-8") == original
