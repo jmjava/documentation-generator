@@ -1495,9 +1495,7 @@ def benchmark(
             raise click.ClickException("--update-baseline requires the full corpus (omit --case)")
         written = write_baseline(scores, base_path)
         click.echo(f"wrote baseline {written}")
-    baseline = load_baseline(base_path)
-    if case_id:
-        baseline = baseline_scoped_to_case(baseline, case_id)
+    baseline = baseline_scoped_to_case(load_baseline(base_path), case_id)
     regressions = compare_to_baseline(scores, baseline)
     report = scores_as_json(scores, regressions=regressions)
     if output_path:

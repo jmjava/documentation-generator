@@ -391,12 +391,24 @@ def write_baseline(scores: list[CaseScore], path: Path | None = None) -> Path:
     return p
 
 
-def baseline_scoped_to_case(baseline: dict[str, Any], case_id: str) -> dict[str, Any]:
+def baseline_scoped_to_case(baseline: dict[str, Any], case_id: str | None) -> dict[str, Any]:
     """Limit a baseline to one case so a filtered run is not a deleted-corpus failure."""
+    if not case_id:
+        return baseline
     stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
     scoped = dict(baseline)
     scoped["cases"] = {key: value for key, value in stored.items() if key == case_id}
     return scoped
+
+
+def missing_baseline_case_notes(scores: list[CaseScore], stored: dict[str, Any]) -> list[str]:
+    """Baseline ids that this run did not score. Deleting a case must fail."""
+    scored_ids = {score.case_id for score in scores}
+    return [
+        f"{case_id}: missing from current scores"
+        for case_id in stored
+        if case_id not in scored_ids
+    ]
 
 
 def compare_to_baseline(
@@ -408,12 +420,8 @@ def compare_to_baseline(
     A baseline case id absent from ``scores`` is a failure. Deleting a corpus
     case must not leave that committed id unchecked.
     """
-    notes: list[str] = []
     stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
-    scored_ids = {score.case_id for score in scores}
-    for case_id in stored:
-        if case_id not in scored_ids:
-            notes.append(f"{case_id}: missing from current scores")
+    notes: list[str] = missing_baseline_case_notes(scores, stored)
     for score in scores:
         prev = stored.get(score.case_id)
         if not isinstance(prev, dict):
@@ -497,9 +505,7 @@ def build_benchmark_report(
     """JSON payload for the CLI, wizard Vue view, and desktop GUI."""
     scores = run_benchmark(case_id=case_id)
     path = baseline_path or default_baseline_path()
-    baseline = load_baseline(path)
-    if case_id:
-        baseline = baseline_scoped_to_case(baseline, case_id)
+    baseline = baseline_scoped_to_case(load_baseline(path), case_id)
     regressions = compare_to_baseline(scores, baseline)
     report = scores_as_json(scores, regressions=regressions)
     stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
