@@ -265,6 +265,30 @@ def test_build_defaults_plan_segments_file_overrides_narration_scan(
     ]
 
 
+def test_cli_init_segments_file_requires_defaults(tmp_path: Path) -> None:
+    """`--segments-file` without `--defaults` exits 1 and does not scaffold."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    target = tmp_path / "bundle"
+    target.mkdir()
+    seg_file = tmp_path / "segments.txt"
+    original = "01-overview\n"
+    seg_file.write_text(original, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        ["init", str(target), "--segments-file", str(seg_file)],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "--segments-file requires --defaults" in combined
+    assert not (target / "docgen.yaml").exists()
+    assert list(target.iterdir()) == []
+    assert seg_file.read_text(encoding="utf-8") == original
+
+
 def test_build_defaults_plan_segments_file_empty_falls_back_to_starter(
     tmp_path: Path, monkeypatch
 ) -> None:
