@@ -81,6 +81,25 @@ def _seed_recordings(tmp_path: Path) -> None:
     (rec / "02-b.mp4").write_bytes(b"seg-b")
 
 
+def test_cli_concat_missing_recordings_dir_exits_1(tmp_path: Path) -> None:
+    """docgen concat exits 1 when the recordings directory is missing and does not create it."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    recordings = tmp_path / "recordings"
+    assert not recordings.exists()
+
+    result = CliRunner().invoke(main, ["--config", str(cfg.yaml_path), "concat", "full"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "recordings dir not found" in combined
+    assert str(recordings) in combined
+    assert "Traceback" not in combined
+    assert not recordings.exists()
+
+
 def test_concat_ffmpeg_timeout_removes_incomplete_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
