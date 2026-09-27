@@ -283,6 +283,58 @@ def test_narration_generate_cli_revise(tmp_path: Path) -> None:
     assert (narr / "01-demo.md").read_text(encoding="utf-8").startswith("New script.")
 
 
+def test_cli_narration_generate_revise_blank_notes_exits_1(tmp_path: Path) -> None:
+    """--revise with blank notes exits 1 and does not rewrite narration."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / ".git").mkdir()
+    yaml_path = tmp_path / "docgen.yaml"
+    yaml_path.write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {"context": {"paths": ["x.md"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "x.md").write_text("# src\nbody", encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    script = narr / "01-demo.md"
+    original = "Old script stays.\n"
+    script.write_text(original, encoding="utf-8")
+    before_yaml = yaml_path.read_text(encoding="utf-8")
+
+    with patch("docgen.wizard.generate_narration_via_llm") as m:
+        m.return_value = "Rewritten script.\n"
+        result = CliRunner().invoke(
+            main,
+            [
+                "--config",
+                str(yaml_path),
+                "narration-generate",
+                "--segment",
+                "01",
+                "--revise",
+                "--revision-notes",
+                "   ",
+            ],
+        )
+
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "--revise requires --revision-notes" in combined
+    assert "segment 01:" not in combined
+    assert m.call_count == 0
+    assert script.read_text(encoding="utf-8") == original
+    assert yaml_path.read_text(encoding="utf-8") == before_yaml
+
+
 def test_narration_generate_cli_dry_run(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
