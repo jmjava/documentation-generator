@@ -168,6 +168,36 @@ def test_cli_benchmark_text_and_json(tmp_path: Path) -> None:
     assert payload["cases"][0]["case_id"] == "early_title"
 
 
+def test_cli_benchmark_score_regression_exits_1(tmp_path: Path) -> None:
+    """Consumers and CI depend on exit 1 when a quality case falls below baseline."""
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "cases": {
+                    "early_title": {
+                        "role": "quality",
+                        "wait_skips": 0,
+                        "defect_points": 0,
+                        "quality_points": 16,
+                        "mid_hold_pulses": 4,
+                        "score": 101,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = CliRunner().invoke(
+        main,
+        ["benchmark", "--case", "early_title", "--baseline", str(baseline)],
+    )
+    assert result.exit_code == 1, result.output
+    assert "regressions vs baseline:" in result.output
+    assert "early_title: score 101 → 100" in result.output
+
+
 def test_packaged_baseline_exists() -> None:
     path = default_baseline_path()
     assert path.is_file()
