@@ -142,3 +142,23 @@ def test_cli_image_generate_all_fails_when_manim_has_no_specs(tmp_path: Path) ->
     result = runner.invoke(main, ["--config", str(p), "image-generate", "--all"])
     assert result.exit_code != 0
     assert "scene-spec-generate" in result.output or "no *.scene.yaml" in result.output
+
+
+def test_cli_image_generate_requires_exactly_one_selector(tmp_path: Path) -> None:
+    """image-generate exits 1 unless exactly one of --segment, --all, or --spec is set."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump({"segments": {"all": ["01"]}}), encoding="utf-8")
+    runner = CliRunner()
+    missing = runner.invoke(main, ["--config", str(p), "image-generate"])
+    assert missing.exit_code == 1
+    assert "provide exactly one of --segment, --all, or --spec" in missing.output
+
+    both = runner.invoke(
+        main, ["--config", str(p), "image-generate", "--all", "--segment", "01"]
+    )
+    assert both.exit_code == 1
+    assert "provide exactly one of --segment, --all, or --spec" in both.output
