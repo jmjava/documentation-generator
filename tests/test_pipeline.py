@@ -403,3 +403,38 @@ def test_pipeline_av_sync_fail_stops_complete(tmp_path, monkeypatch, capsys) -> 
     assert "compose" in calls
     assert "concat" not in calls
     assert not any(str(c).startswith("pages:") for c in calls)
+
+
+def test_cli_generate_all_anthropic_exits_1_before_timestamps(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+) -> None:
+    """generate-all exits 1 when the provider has no TTS and leaves timing.json."""
+    import yaml
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    raw = {
+        "ai": {"provider": "anthropic"},
+        "segments": {"all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+    }
+    cfg_path = tmp_path / "docgen.yaml"
+    cfg_path.write_text(yaml.dump(raw), encoding="utf-8")
+    timing = tmp_path / "animations" / "timing.json"
+    timing.parent.mkdir(parents=True)
+    stale = '{"keep": true}\n'
+    timing.write_text(stale, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(cfg_path), "generate-all"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "generate-all needs TTS" in combined
+    assert "anthropic" in combined
+    assert "Pipeline complete" not in combined
+    assert "Traceback" not in combined
+    assert timing.read_text(encoding="utf-8") == stale
