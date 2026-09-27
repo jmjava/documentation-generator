@@ -403,3 +403,31 @@ class TestExtractLocal:
         out.write_text(json.dumps(payload), encoding="utf-8")
         assert load_bundle_timing(cfg) == payload
 
+
+def test_cli_timestamps_missing_audio_exits_1(tmp_path) -> None:
+    """A listed segment with no mp3 must fail closed and leave timing.json."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "segments": {"all": ["01"]},
+        "segment_names": {"01": "01-x"},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    timing = tmp_path / "animations" / "timing.json"
+    timing.parent.mkdir(parents=True)
+    stale = '{"keep": true}\n'
+    timing.write_text(stale, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(tmp_path / "docgen.yaml"), "timestamps"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "missing audio" in combined
+    assert "01-x.mp3" in combined
+    assert "Traceback" not in combined
+    assert timing.read_text(encoding="utf-8") == stale
+
