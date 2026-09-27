@@ -503,3 +503,22 @@ def test_list_scene_spec_paths(tmp_path: Path) -> None:
     path = _write_spec(tmp_path)
     assert list_scene_spec_paths(cfg) == [path]
     assert list_scene_spec_paths(cfg, segment_id="01") == [path]
+
+
+def test_cli_scene_compile_all_without_specs_exits_1(tmp_path: Path) -> None:
+    """scene-compile --all must fail closed when the bundle has no scene specs."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path)
+    scenes = tmp_path / "animations" / "scenes.py"
+    before = scenes.read_bytes()
+    result = CliRunner().invoke(
+        main, ["--config", str(cfg.yaml_path), "scene-compile", "--all"]
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "No animations/specs/*.scene.yaml files found." in combined
+    assert scenes.read_bytes() == before
+    assert not (tmp_path / "animations" / "specs").exists()
