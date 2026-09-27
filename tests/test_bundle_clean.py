@@ -71,6 +71,32 @@ def test_clean_bundle_removes_narration_by_default(tmp_path: Path) -> None:
     assert (cfg.narration_dir / "README.md").is_file()
 
 
+def test_cli_clean_bundle_without_yes_leaves_outputs(tmp_path: Path) -> None:
+    """clean-bundle without -y aborts and does not delete outputs or docgen.yaml."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _minimal_bundle(tmp_path)
+    narr = cfg.narration_dir / "01-a.md"
+    audio = cfg.audio_dir / "a.mp3"
+    scenes = cfg.animations_dir / "scenes.py"
+    yaml_path = cfg.yaml_path
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(yaml_path), "clean-bundle", "--delete-config"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "Aborted" in combined
+    assert narr.read_text(encoding="utf-8") == "n1"
+    assert audio.read_text(encoding="utf-8") == "m"
+    assert scenes.read_text(encoding="utf-8") == "#x"
+    assert yaml_path.is_file()
+    assert (cfg.recordings_dir / "a.mp4").read_text(encoding="utf-8") == "v"
+
+
 def test_clean_bundle_preserves_repo_fixtures(tmp_path: Path) -> None:
     """Repo-root fixtures survive clean-bundle (Category B per `.cursor/rules/no-asset-edits.mdc`)."""
     cfg = _minimal_bundle(tmp_path)
