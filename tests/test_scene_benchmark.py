@@ -168,6 +168,29 @@ def test_cli_benchmark_text_and_json(tmp_path: Path) -> None:
     assert payload["cases"][0]["case_id"] == "early_title"
 
 
+def test_cli_benchmark_unknown_case_exits_1(tmp_path: Path) -> None:
+    """Unknown --case exits 1 and does not write a scorecard."""
+    out = tmp_path / "report.json"
+    baseline = default_baseline_path()
+    before = baseline.read_bytes()
+    result = CliRunner().invoke(
+        main,
+        [
+            "benchmark",
+            "--case",
+            "not-a-corpus-case",
+            "--output",
+            str(out),
+        ],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "unknown benchmark case" in combined
+    assert "not-a-corpus-case" in combined
+    assert not out.exists()
+    assert baseline.read_bytes() == before
+
+
 def test_packaged_baseline_exists() -> None:
     path = default_baseline_path()
     assert path.is_file()
