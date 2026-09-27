@@ -295,6 +295,26 @@ def test_api_timestamps_rejects_corrupt_timing_json(
     assert (cfg.animations_dir / "timing.json").read_text(encoding="utf-8") == "{not-json"
 
 
+def test_api_timestamps_missing_audio_leaves_timing_json(tmp_path: Path) -> None:
+    """Wizard timestamps must fail closed before TTS audio exists.
+
+    A missing mp3 is an error, and an existing timing.json is left unchanged.
+    """
+    cfg = _bundle(tmp_path)
+    timing = cfg.animations_dir / "timing.json"
+    timing.write_text('{"keep": true}\n', encoding="utf-8")
+    client = create_app(cfg).test_client()
+
+    res = client.post("/api/run/timestamps/01")
+
+    assert res.status_code == 500
+    body = res.get_json()
+    assert body["step"] == "timestamps"
+    assert body["segment"] == "01"
+    assert "no audio for segment 01" in body["error"]
+    assert timing.read_text(encoding="utf-8") == '{"keep": true}\n'
+
+
 def test_revise_mode_includes_current_narration(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
