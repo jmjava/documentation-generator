@@ -38,6 +38,31 @@ def test_concat_missing_recording_raises_before_ffmpeg(tmp_path: Path) -> None:
         ConcatBuilder(cfg).build(name="full")
 
 
+def test_cli_concat_missing_recording_exits_1(tmp_path: Path) -> None:
+    """A named concat target with a missing segment recording exits 1.
+
+    The stitched file is not created, and the segment that is present stays
+    byte-for-byte unchanged.
+    """
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    present = recordings / "01-a.mp4"
+    present.write_bytes(b"segment-a")
+    stitched = recordings / "full.mp4"
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(cfg.yaml_path), "concat", "full"])
+    assert result.exit_code == 1
+    assert "missing recording" in result.output
+    assert "02" in result.output
+    assert not stitched.exists()
+    assert present.read_bytes() == b"segment-a"
+
+
 def test_concat_empty_map_is_noop(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, {})
     ConcatBuilder(cfg).build()
