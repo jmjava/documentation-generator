@@ -184,6 +184,48 @@ def test_generate_narration_markdown_rejects_unknown_mode(tmp_path: Path) -> Non
         generate_narration_markdown(cfg, "01", extra_paths=[], extra_hints=[], mode="delete")
 
 
+def test_cli_narration_generate_refuses_overwrite_without_force(tmp_path: Path) -> None:
+    """Existing narration stays put when narration-generate omits --force."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    target = narr / "01-demo.md"
+    original = "Keep this script.\n"
+    target.write_text(original, encoding="utf-8")
+
+    with patch(
+        "docgen.narrate_from_source.generate_narration_markdown",
+        return_value="Replacement script.\n",
+    ):
+        result = CliRunner().invoke(
+            main,
+            [
+                "--config",
+                str(tmp_path / "docgen.yaml"),
+                "narration-generate",
+                "--segment",
+                "01",
+            ],
+        )
+    combined = result.output + result.stderr
+    assert result.exit_code != 0, combined
+    assert "use --force" in combined
+    assert target.read_text(encoding="utf-8") == original
+
+
 def test_write_narration_markdown_creates_file(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / "docgen.yaml").write_text(
