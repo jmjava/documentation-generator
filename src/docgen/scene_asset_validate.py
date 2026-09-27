@@ -250,8 +250,63 @@ def extract_class_source(scenes_text: str, class_name: str) -> str | None:
     return None
 
 
+_CANONICAL_HELPERS = ("_box", "_arrow", "_TimedScene", "_load_timing", "_load_timing_words")
+_TIMED_SCENE_METHODS = frozenset({"timed_play", "wait_until_word"})
+
+
+def _unique(names: list[str]) -> list[str]:
+    return list(dict.fromkeys(names))
+
+
+def _inlined_or_renamed_helper_issue(tree: ast.AST) -> str | None:
+    """Fail closed when canonical helpers are not top-level defs.
+
+    Nested ``_box`` / ``_TimedScene`` bodies, calls or bases that name them, and
+    classes that carry ``timed_play`` / ``wait_until_word`` under another name
+    used to skip :func:`helper_needs_refresh` entirely.
+    """
+    inlined: list[str] = []
+    referenced: list[str] = []
+    renamed: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name in _CANONICAL_HELPERS:
+                inlined.append(node.name)
+            if isinstance(node, ast.ClassDef) and node.name != "_TimedScene":
+                methods = {
+                    child.name
+                    for child in node.body
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                if _TIMED_SCENE_METHODS.intersection(methods):
+                    renamed.append(node.name)
+        elif isinstance(node, ast.Name) and node.id in _CANONICAL_HELPERS:
+            referenced.append(node.id)
+    if not inlined and not referenced and not renamed:
+        return None
+    parts: list[str] = []
+    if inlined:
+        parts.append("inlined " + ", ".join(_unique(inlined)))
+    if renamed:
+        parts.append("renamed _TimedScene-style " + ", ".join(_unique(renamed)))
+    missing = [name for name in _unique(referenced) if name not in inlined]
+    if missing:
+        parts.append("referenced but not top-level " + ", ".join(missing))
+    detail = "; ".join(parts)
+    return (
+        "helpers: canonical _box / _arrow / _TimedScene / _load_timing / "
+        "_load_timing_words are missing or inlined "
+        f"({detail}) — stale-helper check cannot pass silently; "
+        "run `docgen scene-compile` to restore top-level helper bodies"
+    )
+
+
 def helper_api_violations(scenes_text: str) -> list[str]:
-    """Stale ``_box`` / ``_arrow`` / ``_TimedScene`` that will mis-render new specs."""
+    """Stale ``_box`` / ``_arrow`` / ``_TimedScene`` that will mis-render new specs.
+
+    Helpers must be top-level. Inlined or renamed ``_TimedScene``-style helpers
+    fail closed with an explicit missing/inlined message.
+    """
     from docgen.manim_scene_support import helper_needs_refresh
 
     try:
@@ -262,8 +317,9 @@ def helper_api_violations(scenes_text: str) -> list[str]:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             defined.add(node.name)
-    if not defined.intersection({"_box", "_arrow", "_TimedScene", "_load_timing", "_load_timing_words"}):
-        return []
+    if not defined.intersection(set(_CANONICAL_HELPERS)):
+        issue = _inlined_or_renamed_helper_issue(tree)
+        return [issue] if issue else []
     issues: list[str] = []
     if "MANIM_FONT" not in scenes_text:
         issues.append(
