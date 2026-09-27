@@ -1339,6 +1339,92 @@ def content_tokens(text: str) -> set[str]:
     return {w for w in words if len(w) > 2 and w not in _CONTENT_STOPWORDS}
 
 
+# Visual-style words an image prompt may use without being documented terms.
+_IMAGE_STYLE_TOKENS = frozenset(
+    """
+    diagram diagrams illustration illustrations icon icons flat clean vector
+    isometric cartoon watercolor sketch photo photographic realistic abstract
+    artwork image images picture pictures visual background foreground style
+    colored colour color palette high contrast simple minimal educational
+    documentary video watermark signature logo logos chrome banner poster
+    scene board rounded pill diamond arrow arrows flow flowchart infographic
+    thumbnail render rendering drawing draw depict showing shows show
+    depicting depicts labeled labelled label labels text white black blue
+    green orange red gray grey dark light bright soft hard wide tall small
+    large tiny big thin thick line lines box boxes node nodes panel panels
+    layout grid row rows column columns
+    """.split()
+)
+
+
+def image_prompt_alignment_violations(
+    spec: dict[str, Any],
+    *,
+    corpus_text: str,
+) -> list[str]:
+    """Reject image prompts that share no documented terms with narration/source.
+
+    Style adjectives (``flat``, ``diagram``, ``illustration``, …) are ignored.
+    A missing corpus (no narration and no source) is a no-op — there is nothing
+    to align against. Specs with no image elements, or image elements that omit
+    ``prompt`` (committed assets), also pass.
+    """
+    elements = iter_image_elements(spec)
+    if not elements:
+        return []
+    corpus = content_tokens(corpus_text)
+    if not corpus:
+        return []
+    issues: list[str] = []
+    for el in elements:
+        rel = str(el.get("image") or "").strip() or "(unnamed image)"
+        prompt = str(el.get("prompt") or "").strip()
+        if not prompt:
+            continue
+        toks = content_tokens(prompt)
+        substance = toks - _IMAGE_STYLE_TOKENS
+        if not substance:
+            issues.append(
+                f"{rel}: image prompt is only visual style (no documented subject terms)"
+            )
+            continue
+        if not (substance & corpus):
+            preview = prompt if len(prompt) <= 80 else prompt[:77] + "..."
+            issues.append(
+                f"{rel}: image prompt shares no documented terms with "
+                f"narration/source: {preview!r}"
+            )
+    return issues
+
+
+def image_ocr_alignment_violations(
+    ocr_text: str,
+    *,
+    corpus_text: str,
+    relpath: str = "image",
+) -> list[str]:
+    """Reject OCR tokens that look like invented documented terms.
+
+    Style words and a missing corpus are ignored. A single short OCR ghost
+    (``<6`` letters) is tolerated; two confident invented tokens, or one
+    token of length ≥ 6, fail.
+    """
+    corpus = content_tokens(corpus_text)
+    if not corpus:
+        return []
+    substance = content_tokens(ocr_text) - _IMAGE_STYLE_TOKENS
+    if not substance:
+        return []
+    invented = {t for t in substance if t not in corpus}
+    confident = {t for t in invented if len(t) >= 4}
+    if len(confident) >= 2 or any(len(t) >= 6 for t in confident):
+        sample = ", ".join(repr(x) for x in sorted(confident)[:6])
+        return [
+            f"{relpath}: on-image OCR has terms not in narration/source: {sample}"
+        ]
+    return []
+
+
 def cluster_subject_beats(
     sentences: list[str],
     *,

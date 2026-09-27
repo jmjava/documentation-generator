@@ -435,7 +435,10 @@ def _write_paced_hand_authored_scenes(cfg: Config) -> None:
     )
 
 
-@pytest.mark.parametrize("check_name", ("story_end", "subject_beat_coverage"))
+@pytest.mark.parametrize(
+    "check_name",
+    ("story_end", "subject_beat_coverage", "image_prompt_alignment", "image_asset_alignment"),
+)
 def test_hand_authored_paced_manim_without_spec_fails(cfg, check_name: str) -> None:
     """Manim + paced timed_play + no *.scene.yaml must fail, not skip-PASS."""
     _write_paced_hand_authored_scenes(cfg)
@@ -446,6 +449,10 @@ def test_hand_authored_paced_manim_without_spec_fails(cfg, check_name: str) -> N
     v = Validator(cfg)
     if check_name == "story_end":
         check = v._check_story_end("01")
+    elif check_name == "image_prompt_alignment":
+        check = v._check_image_prompt_alignment("01")
+    elif check_name == "image_asset_alignment":
+        check = v._check_image_asset_alignment("01")
     else:
         check = v._check_subject_beat_coverage("01")
     assert check.name == check_name

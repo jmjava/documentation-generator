@@ -55,21 +55,30 @@ If you still need the legacy behaviour, pin a pre-removal commit
 - **Image assets in Manim scenes** — a scene-spec box may be an **image
   element** (`image: images/<name>.png` + `prompt:`); `docgen image-generate`
   renders the prompt via OpenAI Images (default `gpt-image-1`) or xAI Imagine
-  (`grok-imagine-image-2.0` when `ai.provider` is `grok`). The compiled scene
-  shows it with the `_image` helper. `generate-all` fills in missing assets
-  automatically.
+  (`grok-imagine-image-2.0` when `ai.provider` is `grok`). By default the
+  authored prompt is **grounded** in the segment narration plus
+  `manim_scene_generation` source snippets, and prompts that share no
+  documented terms fail closed (`image_prompt_alignment`). After the PNG is
+  written, OCR rejects invented on-image labels and a vision model reviews
+  the pixels against the same docs (`image_asset_alignment` /
+  `image_generation.align_review`). The compiled scene shows the asset with
+  the `_image` helper. `generate-all` fills in missing assets automatically.
 - **ffmpeg composition** — combine narration audio and Manim video into final
   segments, with a freeze-tail guard.
 - **Validation** — A/V drift, freeze ratio, OCR error scan, layout, narration lint,
   Manim scene lint, **timing_sync** (stale `timing.json` vs regenerated mp3 —
   hard fail), **story_end** (paced visual story finishes long before narration —
-  hard fail), and **av_sync** (OCR check that scene-spec label anchors appear on
-  screen near their spoken time — hard fail on `--pre-push` / `generate-all`).
+  hard fail), **image_prompt_alignment** (image-element `prompt:` must share
+  documented terms with narration/source — hard fail), **image_asset_alignment**
+  (OCR of generated PNGs vs docs; optional vision review — hard fail), and **av_sync** (OCR
+  check that scene-spec label anchors appear on screen near their spoken time
+  — hard fail on `--pre-push` / `generate-all`).
   Missing tesseract fails `ocr_scan` / `av_sync` / `layout` instead of skip-PASS.
   Missing audio or an LFS pointer fails `timing_sync` and recording media gates
   (`stream_presence`, `av_drift`, `ocr_scan`, `av_sync`) instead of skip-PASS.
-  Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` for
-  `type: manim` instead of skip-PASS. A hand-edited generated-region label
+  Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` /
+  `image_prompt_alignment` / `image_asset_alignment` for `type: manim`
+  instead of skip-PASS. A hand-edited generated-region label
   or `run_time` in `scenes.py` fails `scene_assets` compile_sync (clock /
   benchmark still execute a fresh `compile_scene_class`, not the on-disk file).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,
@@ -128,7 +137,11 @@ using the Cursor key:
 image_generation:
   model: gpt-image-1      # or dall-e-3, gpt-image-1-mini, …
   size: 1536x1024
+  align_with_docs: true   # wrap prompts with narration/source; fail invented terms
+  align_review: true      # vision-review the PNG; retry once on FAIL
+  # review_model: gpt-4o
   # quality: high
+  # style: "…"            # optional override of the educational-diagram prefix
 ```
 
 ```bash
@@ -241,7 +254,7 @@ docgen --repo /path/to/your-project generate-all
 | `docgen freeze [--dist DIR] [--smoke]` | PyInstaller onedir for **`docgen-gui` only** (`pip install 'docgen[packaging]'`). Not the full Manim CLI |
 | `docgen tts [--segment 01] [--dry-run]` | Generate TTS audio |
 | `docgen timestamps [--engine local\|whisper]` | Extract word/segment timestamps from TTS audio → `timing.json` (default `local`: offline narration-text alignment; `whisper`: OpenAI transcription). Empty `segments.all` is `TimestampError` (stale `timing.json` is not success) |
-| `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API into the bundle |
+| `docgen image-generate [--segment 01 \| --all \| --spec PATH] [--force] [--dry-run] [--model …] [--size …]` | Generate scene-spec image assets (`image:` + `prompt:` boxes) via the OpenAI Images API; grounds prompts in narration/source, then OCR + vision-reviews the PNG unless `align_with_docs` / `align_review` is false |
 | `docgen manim [--scene StackDAGScene]` | Render Manim animations |
 | `docgen compose [01 02 03] [--ffmpeg-timeout 900]` | Compose segments (audio + video). Omit ids to walk `segments.all` (same as `generate-all`); a mapped segment with missing audio/visuals is a hard fail |
 | `docgen validate [--max-drift 2.75] [--pre-push]` | Run all validation checks |
@@ -344,7 +357,11 @@ timestamps:
 image_generation:            # scene-spec image elements (docgen image-generate)
   model: gpt-image-1         # Cursor/OpenAI Images; Grok remaps gpt-image-* to Imagine
   size: 1536x1024
+  align_with_docs: true      # ground prompts in narration/source (default)
+  align_review: true         # vision-review generated PNGs (default)
+  # review_model: gpt-4o
   # quality: high            # optional, model-specific
+  # style: "…"               # optional Images-API prefix override
 
 manim:
   quality: 1080p30           # supports 480p15, 720p30, 1080p30, 1080p60, 1440p30, 1440p60, 2160p60
@@ -355,6 +372,12 @@ manim:
 validation:
   subject_beat_coverage:
     enabled: true            # scene-spec-generate + validate: cover narration topic beats
+  image_prompt_alignment:
+    enabled: true            # image-element prompts must use documented terms
+  image_asset_alignment:
+    enabled: true            # OCR generated PNGs vs narration/source
+    ocr: true
+    review: false            # set true to vision-review existing assets in validate
 
 compose:
   ffmpeg_timeout_sec: 300    # can also be overridden with: docgen compose --ffmpeg-timeout N
