@@ -139,6 +139,32 @@ def test_render_raises_when_scenes_py_missing(tmp_path: Path) -> None:
         runner.render(scene="Scene01")
 
 
+def test_cli_manim_missing_scenes_py_exits_1(tmp_path: Path) -> None:
+    """docgen manim must fail closed when animations/scenes.py is absent."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations"},
+        "manim": {"quality": "720p30", "scenes": ["Scene01"]},
+        "segments": {"default": ["01"], "all": ["01"]},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    animations = tmp_path / "animations"
+    animations.mkdir()
+    media = animations / "media"
+
+    result = CliRunner().invoke(main, ["--config", str(p), "manim"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "scenes.py not found" in combined
+    assert "Traceback" not in combined
+    assert not (animations / "scenes.py").exists()
+    assert not media.exists()
+
+
 def test_render_uses_visual_map_when_manim_scenes_empty(tmp_path: Path) -> None:
     cfg_raw = {
         "dirs": {"animations": "animations"},
