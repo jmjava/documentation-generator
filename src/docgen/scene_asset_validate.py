@@ -258,6 +258,39 @@ def _unique(names: list[str]) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _note_renamed_timed_scene(node: ast.AST, renamed: list[str]) -> None:
+    if not isinstance(node, ast.ClassDef) or node.name == "_TimedScene":
+        return
+    methods = {
+        child.name
+        for child in node.body
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    if _TIMED_SCENE_METHODS.intersection(methods):
+        renamed.append(node.name)
+
+
+def _note_helper_node(node: ast.AST, inlined: list[str], referenced: list[str], renamed: list[str]) -> None:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if node.name in _CANONICAL_HELPERS:
+            inlined.append(node.name)
+        _note_renamed_timed_scene(node, renamed)
+    elif isinstance(node, ast.Name) and node.id in _CANONICAL_HELPERS:
+        referenced.append(node.id)
+
+
+def _helper_issue_parts(inlined: list[str], referenced: list[str], renamed: list[str]) -> list[str]:
+    parts: list[str] = []
+    if inlined:
+        parts.append("inlined " + ", ".join(_unique(inlined)))
+    if renamed:
+        parts.append("renamed _TimedScene-style " + ", ".join(_unique(renamed)))
+    missing = [name for name in _unique(referenced) if name not in inlined]
+    if missing:
+        parts.append("referenced but not top-level " + ", ".join(missing))
+    return parts
+
+
 def _inlined_or_renamed_helper_issue(tree: ast.AST) -> str | None:
     """Fail closed when canonical helpers are not top-level defs.
 
@@ -269,36 +302,23 @@ def _inlined_or_renamed_helper_issue(tree: ast.AST) -> str | None:
     referenced: list[str] = []
     renamed: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            if node.name in _CANONICAL_HELPERS:
-                inlined.append(node.name)
-            if isinstance(node, ast.ClassDef) and node.name != "_TimedScene":
-                methods = {
-                    child.name
-                    for child in node.body
-                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                if _TIMED_SCENE_METHODS.intersection(methods):
-                    renamed.append(node.name)
-        elif isinstance(node, ast.Name) and node.id in _CANONICAL_HELPERS:
-            referenced.append(node.id)
+        _note_helper_node(node, inlined, referenced, renamed)
     if not inlined and not referenced and not renamed:
         return None
-    parts: list[str] = []
-    if inlined:
-        parts.append("inlined " + ", ".join(_unique(inlined)))
-    if renamed:
-        parts.append("renamed _TimedScene-style " + ", ".join(_unique(renamed)))
-    missing = [name for name in _unique(referenced) if name not in inlined]
-    if missing:
-        parts.append("referenced but not top-level " + ", ".join(missing))
-    detail = "; ".join(parts)
+    detail = "; ".join(_helper_issue_parts(inlined, referenced, renamed))
     return (
         "helpers: canonical _box / _arrow / _TimedScene / _load_timing / "
         "_load_timing_words are missing or inlined "
         f"({detail}) — stale-helper check cannot pass silently; "
         "run `docgen scene-compile` to restore top-level helper bodies"
     )
+
+
+def _missing_top_level_helper_issues(tree: ast.AST) -> list[str]:
+    issue = _inlined_or_renamed_helper_issue(tree)
+    if issue:
+        return [issue]
+    return []
 
 
 def helper_api_violations(scenes_text: str) -> list[str]:
@@ -318,8 +338,7 @@ def helper_api_violations(scenes_text: str) -> list[str]:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             defined.add(node.name)
     if not defined.intersection(set(_CANONICAL_HELPERS)):
-        issue = _inlined_or_renamed_helper_issue(tree)
-        return [issue] if issue else []
+        return _missing_top_level_helper_issues(tree)
     issues: list[str] = []
     if "MANIM_FONT" not in scenes_text:
         issues.append(
