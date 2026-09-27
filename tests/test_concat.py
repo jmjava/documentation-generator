@@ -114,3 +114,28 @@ def test_concat_ffmpeg_failure_removes_incomplete_output(
     with pytest.raises(ConcatError, match="ffmpeg failed"):
         ConcatBuilder(cfg).build(name="full")
     assert not out.exists()
+
+
+def test_cli_concat_missing_recording_exits_1(tmp_path: Path) -> None:
+    """docgen concat exits 1 when a listed recording is missing and writes nothing."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    present = recordings / "01-a.mp4"
+    present.write_bytes(b"keep-me")
+    partial = recordings / "full.mp4"
+    partial.write_bytes(b"not-a-film")
+
+    result = CliRunner().invoke(main, ["--config", str(cfg.yaml_path), "concat", "full"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "missing recording" in combined
+    assert "02" in combined
+    assert "Traceback" not in combined
+    assert present.read_bytes() == b"keep-me"
+    assert partial.read_bytes() == b"not-a-film"
+    assert not list(recordings.glob(".concat-*.txt"))
