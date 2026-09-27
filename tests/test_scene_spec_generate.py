@@ -419,3 +419,34 @@ def test_scene_spec_generate_all_empty_all_raises_even_with_default(
     )
     assert result.exit_code != 0
     assert "segments.all is empty" in (result.output + result.stderr)
+
+
+def test_scene_spec_generate_output_cannot_combine_with_all(tmp_path: Path) -> None:
+    """--output with --all exits 1 and does not write the shared spec path."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    p = tmp_path / "docgen.yaml"
+    p.write_text(
+        yaml.dump({"segments": {"all": ["01"]}, "segment_names": {"01": "01-demo"}}),
+        encoding="utf-8",
+    )
+    out = tmp_path / "shared.scene.yaml"
+    original = "segment: keep\n"
+    out.write_text(original, encoding="utf-8")
+    result = CliRunner().invoke(
+        main,
+        [
+            "--config",
+            str(p),
+            "scene-spec-generate",
+            "--all",
+            "--output",
+            str(out),
+        ],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "--output cannot be combined with --all" in combined
+    assert out.read_text(encoding="utf-8") == original
