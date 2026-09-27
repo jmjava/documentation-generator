@@ -503,3 +503,37 @@ def test_list_scene_spec_paths(tmp_path: Path) -> None:
     path = _write_spec(tmp_path)
     assert list_scene_spec_paths(cfg) == [path]
     assert list_scene_spec_paths(cfg, segment_id="01") == [path]
+
+
+def test_cli_scene_compile_all_exits_1_when_one_spec_fails(tmp_path: Path) -> None:
+    """scene-compile --all exits 1 after a bad spec and still writes a later good spec."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = _cfg(tmp_path)
+    _write_spec(tmp_path, label="Hello")
+    _write_timing(
+        tmp_path,
+        [
+            {"word": "noise", "start": 0.0, "end": 0.2},
+            {"word": "Hello", "start": 1.0, "end": 1.3},
+        ],
+    )
+    bad = tmp_path / "animations" / "specs" / "00-bad.scene.yaml"
+    bad.write_text("- not a mapping\n", encoding="utf-8")
+    scenes = tmp_path / "animations" / "scenes.py"
+    before = scenes.read_text(encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main, ["--config", str(cfg.yaml_path), "scene-compile", "--all"]
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "scene-compile --all: 1 failed: 00-bad.scene.yaml" in combined
+    assert "[scene-compile] FAIL 00-bad.scene.yaml:" in combined
+    assert "Traceback" not in combined
+    written = scenes.read_text(encoding="utf-8")
+    assert written != before
+    assert "class DemoScene" in written
+    assert bad.read_text(encoding="utf-8") == "- not a mapping\n"
