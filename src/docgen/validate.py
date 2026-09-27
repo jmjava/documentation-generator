@@ -24,6 +24,38 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+def _unusable_duration(duration: object) -> bool:
+    if duration is None or isinstance(duration, bool) or not isinstance(duration, (int, float)):
+        return True
+    value = float(duration)
+    return not math.isfinite(value) or value <= 0
+
+
+def _ffprobe_launch_error(path: Path, exc: BaseException) -> str:
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return f"ffprobe timed out on {path.name}"
+    return "ffprobe not found in PATH"
+
+
+def _positive_ffprobe_duration(out: subprocess.CompletedProcess[str]) -> float:
+    if out.returncode != 0:
+        extra = (out.stderr or "").strip()
+        msg = f"ffprobe failed (exit {out.returncode})"
+        if extra:
+            msg = f"{msg}: {extra[:200]}"
+        raise RuntimeError(msg)
+    raw = (out.stdout or "").strip()
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"ffprobe duration is not a number: {raw[:80]!r}") from exc
+    if not math.isfinite(duration) or duration <= 0:
+        raise RuntimeError(
+            f"ffprobe duration is not a finite positive number: {raw[:80]!r}"
+        )
+    return duration
+
+
 @dataclass
 class CheckResult:
     name: str
@@ -834,15 +866,8 @@ class Validator:
             return CheckResult("timing_sync", True, ["Empty timing entry (skipped, non-manim)"])
 
         audio_dur, probe_fail = self._duration_or_fail(audio, "timing_sync")
-        if probe_fail is not None or audio_dur is None:
-            return probe_fail if probe_fail is not None else CheckResult(
-                "timing_sync",
-                False,
-                [
-                    f"cannot probe audio duration for {audio.name} — "
-                    "ffprobe failed; timing_sync cannot compare the mp3 to timing.json"
-                ],
-            )
+        if probe_fail is not None:
+            return probe_fail
 
         max_tail = float(ts_cfg.get("max_tail_gap_sec", 3.0))
         max_overrun = float(ts_cfg.get("max_end_overrun_sec", 1.0))
@@ -948,15 +973,8 @@ class Validator:
         audio = self._find_audio(seg_id)
         if audio and not _is_lfs_pointer(audio):
             audio_end, probe_fail = self._duration_or_fail(audio, "story_end")
-            if probe_fail is not None or audio_end is None:
-                return probe_fail if probe_fail is not None else CheckResult(
-                    "story_end",
-                    False,
-                    [
-                        f"cannot probe audio duration for {audio.name} — "
-                        "story_end cannot compare last paced reveal to the mp3"
-                    ],
-                )
+            if probe_fail is not None:
+                return probe_fail
             end_t = audio_end
         else:
             # No local mp3 (or LFS pointer): compare against transcript end only.
@@ -1087,12 +1105,7 @@ class Validator:
                 False,
                 [f"cannot probe audio duration for {path.name} — {exc}"],
             )
-        if (
-            isinstance(duration, bool)
-            or not isinstance(duration, (int, float))
-            or not math.isfinite(float(duration))
-            or float(duration) <= 0
-        ):
+        if _unusable_duration(duration):
             return None, CheckResult(
                 check_name,
                 False,
@@ -1117,26 +1130,9 @@ class Validator:
                  "-of", "csv=p=0", str(path)],
                 capture_output=True, text=True, timeout=30,
             )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"ffprobe timed out on {path.name}") from exc
-        except FileNotFoundError as exc:
-            raise RuntimeError("ffprobe not found in PATH") from exc
-        if out.returncode != 0:
-            extra = (out.stderr or "").strip()
-            msg = f"ffprobe failed (exit {out.returncode})"
-            if extra:
-                msg = f"{msg}: {extra[:200]}"
-            raise RuntimeError(msg)
-        raw = (out.stdout or "").strip()
-        try:
-            duration = float(raw)
-        except (TypeError, ValueError) as exc:
-            raise RuntimeError(f"ffprobe duration is not a number: {raw[:80]!r}") from exc
-        if not math.isfinite(duration) or duration <= 0:
-            raise RuntimeError(
-                f"ffprobe duration is not a finite positive number: {raw[:80]!r}"
-            )
-        return duration
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            raise RuntimeError(_ffprobe_launch_error(path, exc)) from exc
+        return _positive_ffprobe_duration(out)
 
     # ── Helpers ────────────────────────────────────────────────────────
 
