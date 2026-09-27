@@ -149,6 +149,41 @@ def test_cli_generate_all_empty_segments_is_click_error(tmp_path: Path) -> None:
     assert not isinstance(result.exception, RuntimeError)
 
 
+def test_cli_rebuild_after_audio_empty_segments_exits_1(tmp_path: Path) -> None:
+    """rebuild-after-audio stops before timestamps when segments.all is empty."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {
+            "narration": "narration",
+            "audio": "audio",
+            "animations": "animations",
+            "recordings": "recordings",
+        },
+        "segments": {"default": ["01"], "all": []},
+        "visual_map": {"01": {"type": "manim", "scene": "Intro"}},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    timing = tmp_path / "animations" / "timing.json"
+    timing.parent.mkdir(parents=True)
+    stale = '{"keep": true}\n'
+    timing.write_text(stale, encoding="utf-8")
+    recording = tmp_path / "recordings" / "01.mp4"
+    recording.parent.mkdir()
+    recording.write_bytes(b"keep-recording")
+
+    result = CliRunner().invoke(main, ["--config", str(p), "rebuild-after-audio"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "segments.all is empty" in combined
+    assert "Traceback" not in combined
+    assert timing.read_text(encoding="utf-8") == stale
+    assert recording.read_bytes() == b"keep-recording"
+
+
 def test_cli_generate_all_does_not_swallow_systemexit(
     tmp_path: Path, monkeypatch
 ) -> None:
