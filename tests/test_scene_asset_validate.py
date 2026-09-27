@@ -263,6 +263,40 @@ def test_helper_api_clean_for_current_bootstrap() -> None:
     assert helper_api_violations(BOOTSTRAP_HEADER) == []
 
 
+def test_helper_api_flags_inlined_or_renamed_helpers() -> None:
+    inlined = """
+class OverviewScene:
+    class _TimedScene:
+        def timed_play(self, *a, run_time=1.0):
+            pass
+        def wait_until_word(self, words, index):
+            return
+    def construct(self):
+        _box("Alpha", "#fff")
+"""
+    inlined_issues = helper_api_violations(inlined)
+    assert any(
+        "missing or inlined" in issue and "inlined _TimedScene" in issue
+        for issue in inlined_issues
+    )
+    assert any("_box" in issue for issue in inlined_issues)
+
+    renamed = """
+class SceneClock:
+    def timed_play(self, *a, run_time=1.0):
+        pass
+    def wait_until_word(self, words, index):
+        return
+"""
+    renamed_issues = helper_api_violations(renamed)
+    assert any(
+        "missing or inlined" in issue and "renamed _TimedScene-style SceneClock" in issue
+        for issue in renamed_issues
+    )
+
+    assert helper_api_violations("def render():\n    return 1\n") == []
+
+
 def test_compiled_sync_passes_when_scenes_match_compile() -> None:
     spec = _spec([_box("Alpha", wait_word=0), _box("Beta", wait_word=1)])
     words = _wide_words()
