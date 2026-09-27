@@ -142,3 +142,41 @@ def test_cli_image_generate_all_fails_when_manim_has_no_specs(tmp_path: Path) ->
     result = runner.invoke(main, ["--config", str(p), "image-generate", "--all"])
     assert result.exit_code != 0
     assert "scene-spec-generate" in result.output or "no *.scene.yaml" in result.output
+
+
+def test_cli_image_generate_segment_missing_spec_exits_1(tmp_path: Path) -> None:
+    """image-generate --segment exits 1 when that spec is missing and writes nothing."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {"animations": "animations"},
+        "segments": {"all": ["01", "02"], "default": ["01"]},
+        "segment_names": {"01": "01-intro", "02": "02-other"},
+        "visual_map": {
+            "01": {"type": "manim", "scene": "IntroScene"},
+            "02": {"type": "manim", "scene": "OtherScene"},
+        },
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(raw), encoding="utf-8")
+    specs = tmp_path / "animations" / "specs"
+    sibling = _write_spec(specs / "02-other.scene.yaml", image="images/other.png")
+    sibling_text = sibling.read_text(encoding="utf-8")
+    kept = tmp_path / "images" / "keep.png"
+    kept.parent.mkdir()
+    kept.write_bytes(b"committed")
+
+    result = CliRunner().invoke(
+        main, ["--config", str(p), "image-generate", "--segment", "01"]
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1
+    assert "spec not found" in combined
+    assert "01-intro.scene.yaml" in combined
+    assert not (specs / "01-intro.scene.yaml").exists()
+    assert sibling.read_text(encoding="utf-8") == sibling_text
+    assert kept.read_bytes() == b"committed"
+    assert not (tmp_path / "images" / "arch.png").exists()
+    assert not (tmp_path / "images" / "other.png").exists()
