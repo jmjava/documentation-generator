@@ -377,3 +377,46 @@ def test_narration_generate_all_empty_all_raises_even_with_default(tmp_path: Pat
     )
     assert r.exit_code != 0
     assert "segments.all is empty" in (r.output + r.stderr)
+
+
+def test_narration_generate_revise_without_script_exits_1(tmp_path: Path) -> None:
+    """--revise with no narration file exits 1 and does not call the model or create one."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    (tmp_path / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+                "narration_from_source": {"context": {"paths": ["x.md"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "x.md").write_text("# src\nbody", encoding="utf-8")
+    narr = tmp_path / "narration"
+    narr.mkdir()
+    runner = CliRunner()
+    with patch("docgen.wizard.generate_narration_via_llm") as llm:
+        result = runner.invoke(
+            main,
+            [
+                "--config",
+                str(tmp_path / "docgen.yaml"),
+                "narration-generate",
+                "--segment",
+                "01",
+                "--revise",
+                "--revision-notes",
+                "Tighten the intro",
+            ],
+        )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "no existing narration" in combined
+    assert "01" in combined
+    assert not llm.called
+    assert not list(narr.glob("*.md"))
