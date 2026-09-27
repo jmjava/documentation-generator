@@ -426,3 +426,40 @@ def test_probe_duration_ignores_stdout_when_ffprobe_fails(tmp_path: Path, monkey
 
     monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: _Proc())
     assert composer._probe_duration(tmp_path / "missing.mp3") is None
+
+
+def test_cli_compose_ffmpeg_missing_exits_1_and_keeps_recording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """docgen compose exits 1 when ffmpeg is missing and leaves the prior recording."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations", "audio": "audio", "recordings": "recordings"},
+        "segments": {"default": ["01"], "all": ["01"]},
+        "segment_names": {"01": "01-demo"},
+        "visual_map": {"01": {"type": "still", "source": "112233"}},
+    }
+    c = _write_cfg(tmp_path, cfg)
+    audio = tmp_path / "audio" / "01-demo.mp3"
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    audio.write_bytes(b"fake-mp3")
+    out = tmp_path / "recordings" / "01-demo.mp4"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    prior = b"prior-mux"
+    out.write_bytes(prior)
+
+    def fake_run(cmd, **_kwargs):
+        binary = cmd[0] if cmd else "ffmpeg"
+        raise FileNotFoundError(2, "No such file or directory", binary)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = CliRunner().invoke(main, ["--config", str(c.yaml_path), "compose"])
+    combined = result.output + (result.stderr or "")
+    assert result.exit_code == 1, combined
+    assert "ffmpeg not found" in combined
+    assert "Traceback" not in combined
+    assert out.read_bytes() == prior
+    assert audio.read_bytes() == b"fake-mp3"
