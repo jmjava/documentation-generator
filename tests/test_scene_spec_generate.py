@@ -419,3 +419,14 @@ def test_scene_spec_generate_all_empty_all_raises_even_with_default(
     )
     assert result.exit_code != 0
     assert "segments.all is empty" in (result.output + result.stderr)
+
+
+def test_scene_spec_generate_requires_segment_or_all() -> None:
+    """scene-spec-generate exits 1 when neither --segment nor --all is set."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    result = CliRunner().invoke(main, ["scene-spec-generate"])
+    assert result.exit_code == 1
+    assert "provide --segment <id> or --all" in result.output
