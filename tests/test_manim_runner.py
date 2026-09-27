@@ -139,6 +139,49 @@ def test_render_raises_when_scenes_py_missing(tmp_path: Path) -> None:
         runner.render(scene="Scene01")
 
 
+def test_cli_manim_missing_binary_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """docgen manim exits 1 when no manim executable resolves, and does not render."""
+    import shutil
+    import sys
+
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    cfg = {
+        "dirs": {"animations": "animations"},
+        "manim": {
+            "quality": "720p30",
+            "scenes": ["Scene01"],
+            "manim_path": str(tmp_path / "missing-manim"),
+        },
+        "segments": {"default": ["01"], "all": ["01"]},
+    }
+    p = tmp_path / "docgen.yaml"
+    p.write_text(yaml.dump(cfg), encoding="utf-8")
+    animations = tmp_path / "animations"
+    animations.mkdir()
+    scenes = animations / "scenes.py"
+    scenes.write_text("# keep\n", encoding="utf-8")
+    original = scenes.read_text(encoding="utf-8")
+
+    fake_python = tmp_path / "bin" / "python"
+    fake_python.parent.mkdir()
+    fake_python.write_text("", encoding="utf-8")
+    monkeypatch.setattr(sys, "executable", str(fake_python))
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+
+    result = CliRunner().invoke(main, ["--config", str(p), "manim"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "manim executable not found" in combined
+    assert "Traceback" not in combined
+    assert scenes.read_text(encoding="utf-8") == original
+    assert not (animations / "media").exists()
+
+
 def test_render_uses_visual_map_when_manim_scenes_empty(tmp_path: Path) -> None:
     cfg_raw = {
         "dirs": {"animations": "animations"},
