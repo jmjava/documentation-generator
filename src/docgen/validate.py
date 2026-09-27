@@ -833,9 +833,9 @@ class Validator:
                 )
             return CheckResult("timing_sync", True, ["Empty timing entry (skipped, non-manim)"])
 
-        audio_dur = self._probe_media_duration(audio)
-        if audio_dur is None:
-            return CheckResult(
+        audio_dur, probe_fail = self._duration_or_fail(audio, "timing_sync")
+        if probe_fail is not None or audio_dur is None:
+            return probe_fail if probe_fail is not None else CheckResult(
                 "timing_sync",
                 False,
                 [
@@ -947,9 +947,9 @@ class Validator:
 
         audio = self._find_audio(seg_id)
         if audio and not _is_lfs_pointer(audio):
-            audio_end = self._probe_media_duration(audio)
-            if audio_end is None or audio_end <= 0:
-                return CheckResult(
+            audio_end, probe_fail = self._duration_or_fail(audio, "story_end")
+            if probe_fail is not None or audio_end is None:
+                return probe_fail if probe_fail is not None else CheckResult(
                     "story_end",
                     False,
                     [
@@ -1073,22 +1073,70 @@ class Validator:
                     return max(ends)
         return None
 
+    def _duration_or_fail(self, path: Path, check_name: str) -> tuple[float, None] | tuple[None, CheckResult]:
+        """Duration for *check_name*, or a failed check when the probe cannot be used.
+
+        A non-zero ffprobe exit, timeout, missing binary, or unusable duration
+        fails the check that asked (``passed=False``). ``None`` is not a skip.
+        """
+        try:
+            duration = self._probe_media_duration(path)
+        except RuntimeError as exc:
+            return None, CheckResult(
+                check_name,
+                False,
+                [f"cannot probe audio duration for {path.name} — {exc}"],
+            )
+        if (
+            isinstance(duration, bool)
+            or not isinstance(duration, (int, float))
+            or not math.isfinite(float(duration))
+            or float(duration) <= 0
+        ):
+            return None, CheckResult(
+                check_name,
+                False,
+                [
+                    f"cannot probe audio duration for {path.name} — "
+                    f"ffprobe duration is not a finite positive number: {duration!r}"
+                ],
+            )
+        return float(duration), None
+
     @staticmethod
-    def _probe_media_duration(path: Path) -> float | None:
+    def _probe_media_duration(path: Path) -> float:
+        """Finite positive duration from ffprobe.
+
+        Raises ``RuntimeError`` on a non-zero exit, timeout, missing ffprobe,
+        or a duration that is not a finite positive number. Does not return
+        ``None`` for those failures (callers must fail the check).
+        """
         try:
             out = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "csv=p=0", str(path)],
                 capture_output=True, text=True, timeout=30,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"ffprobe timed out on {path.name}") from exc
+        except FileNotFoundError as exc:
+            raise RuntimeError("ffprobe not found in PATH") from exc
         if out.returncode != 0:
-            return None
+            extra = (out.stderr or "").strip()
+            msg = f"ffprobe failed (exit {out.returncode})"
+            if extra:
+                msg = f"{msg}: {extra[:200]}"
+            raise RuntimeError(msg)
+        raw = (out.stdout or "").strip()
         try:
-            return float(out.stdout.strip())
-        except ValueError:
-            return None
+            duration = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"ffprobe duration is not a number: {raw[:80]!r}") from exc
+        if not math.isfinite(duration) or duration <= 0:
+            raise RuntimeError(
+                f"ffprobe duration is not a finite positive number: {raw[:80]!r}"
+            )
+        return duration
 
     # ── Helpers ────────────────────────────────────────────────────────
 
