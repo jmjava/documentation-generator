@@ -99,6 +99,30 @@ def test_ai_status_exits_zero_when_cursor_key_present(
     assert "CURSOR_API_KEY=present" in result.output
 
 
+def test_ai_status_exits_1_when_no_api_key(tmp_path: Path, monkeypatch) -> None:
+    """Missing keys fail closed so scripts stop before TTS or image calls."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    for name in (
+        "CURSOR_API_KEY",
+        "OPENAI_API_KEY",
+        "XAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "DOCGEN_AI_PROVIDER",
+        "DOCGEN_AI_API_KEY_ENV",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    cfg = _minimal_cfg(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(main, ["--config", str(cfg.yaml_path), "ai-status"])
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "OPENAI_API_KEY=missing" in combined
+    assert "CURSOR_API_KEY" in combined
+
+
 def test_tts_without_bundle_is_click_error(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
