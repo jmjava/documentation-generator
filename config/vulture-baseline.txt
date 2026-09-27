@@ -1,0 +1,8 @@
+# High-confidence vulture findings (vulture 2.16, min-confidence 80).
+# Each line is: <count> <path> <message>
+# check-vulture.py fails when a count rises or a new key appears.
+# CI reads this file and must not rewrite it.
+1 src/docgen/cli.py unused variable 'param'
+2 src/docgen/scene_clock_harness.py unused variable 'other'
+1 src/docgen/scene_spec_generate.py unused variable 'source_snippets'
+20 tests/test_ai_client.py unused variable 'clear_ai_env'
