@@ -24,6 +24,38 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+def _unusable_duration(duration: object) -> bool:
+    if duration is None or isinstance(duration, bool) or not isinstance(duration, (int, float)):
+        return True
+    value = float(duration)
+    return not math.isfinite(value) or value <= 0
+
+
+def _ffprobe_launch_error(path: Path, exc: BaseException) -> str:
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return f"ffprobe timed out on {path.name}"
+    return "ffprobe not found in PATH"
+
+
+def _positive_ffprobe_duration(out: subprocess.CompletedProcess[str]) -> float:
+    if out.returncode != 0:
+        extra = (out.stderr or "").strip()
+        msg = f"ffprobe failed (exit {out.returncode})"
+        if extra:
+            msg = f"{msg}: {extra[:200]}"
+        raise RuntimeError(msg)
+    raw = (out.stdout or "").strip()
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"ffprobe duration is not a number: {raw[:80]!r}") from exc
+    if not math.isfinite(duration) or duration <= 0:
+        raise RuntimeError(
+            f"ffprobe duration is not a finite positive number: {raw[:80]!r}"
+        )
+    return duration
+
+
 @dataclass
 class CheckResult:
     name: str
@@ -833,16 +865,9 @@ class Validator:
                 )
             return CheckResult("timing_sync", True, ["Empty timing entry (skipped, non-manim)"])
 
-        audio_dur = self._probe_media_duration(audio)
-        if audio_dur is None:
-            return CheckResult(
-                "timing_sync",
-                False,
-                [
-                    f"cannot probe audio duration for {audio.name} — "
-                    "ffprobe failed; timing_sync cannot compare the mp3 to timing.json"
-                ],
-            )
+        audio_dur, probe_fail = self._duration_or_fail(audio, "timing_sync")
+        if probe_fail is not None:
+            return probe_fail
 
         max_tail = float(ts_cfg.get("max_tail_gap_sec", 3.0))
         max_overrun = float(ts_cfg.get("max_end_overrun_sec", 1.0))
@@ -947,16 +972,9 @@ class Validator:
 
         audio = self._find_audio(seg_id)
         if audio and not _is_lfs_pointer(audio):
-            audio_end = self._probe_media_duration(audio)
-            if audio_end is None or audio_end <= 0:
-                return CheckResult(
-                    "story_end",
-                    False,
-                    [
-                        f"cannot probe audio duration for {audio.name} — "
-                        "story_end cannot compare last paced reveal to the mp3"
-                    ],
-                )
+            audio_end, probe_fail = self._duration_or_fail(audio, "story_end")
+            if probe_fail is not None:
+                return probe_fail
             end_t = audio_end
         else:
             # No local mp3 (or LFS pointer): compare against transcript end only.
@@ -1073,22 +1091,48 @@ class Validator:
                     return max(ends)
         return None
 
+    def _duration_or_fail(self, path: Path, check_name: str) -> tuple[float, None] | tuple[None, CheckResult]:
+        """Duration for *check_name*, or a failed check when the probe cannot be used.
+
+        A non-zero ffprobe exit, timeout, missing binary, or unusable duration
+        fails the check that asked (``passed=False``). ``None`` is not a skip.
+        """
+        try:
+            duration = self._probe_media_duration(path)
+        except RuntimeError as exc:
+            return None, CheckResult(
+                check_name,
+                False,
+                [f"cannot probe audio duration for {path.name} — {exc}"],
+            )
+        if _unusable_duration(duration):
+            return None, CheckResult(
+                check_name,
+                False,
+                [
+                    f"cannot probe audio duration for {path.name} — "
+                    f"ffprobe duration is not a finite positive number: {duration!r}"
+                ],
+            )
+        return float(duration), None
+
     @staticmethod
-    def _probe_media_duration(path: Path) -> float | None:
+    def _probe_media_duration(path: Path) -> float:
+        """Finite positive duration from ffprobe.
+
+        Raises ``RuntimeError`` on a non-zero exit, timeout, missing ffprobe,
+        or a duration that is not a finite positive number. Does not return
+        ``None`` for those failures (callers must fail the check).
+        """
         try:
             out = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "csv=p=0", str(path)],
                 capture_output=True, text=True, timeout=30,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None
-        if out.returncode != 0:
-            return None
-        try:
-            return float(out.stdout.strip())
-        except ValueError:
-            return None
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            raise RuntimeError(_ffprobe_launch_error(path, exc)) from exc
+        return _positive_ffprobe_duration(out)
 
     # ── Helpers ────────────────────────────────────────────────────────
 
