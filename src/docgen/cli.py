@@ -1465,7 +1465,6 @@ def benchmark(
     holds, title skip, page transitions).
     """
     from docgen.scene_benchmark import (
-        baseline_scoped_to_case,
         compare_to_baseline,
         default_baseline_path,
         format_table,
@@ -1495,7 +1494,7 @@ def benchmark(
             raise click.ClickException("--update-baseline requires the full corpus (omit --case)")
         written = write_baseline(scores, base_path)
         click.echo(f"wrote baseline {written}")
-    baseline = baseline_scoped_to_case(load_baseline(base_path), case_id)
+    baseline = load_baseline(base_path)
     regressions = compare_to_baseline(scores, baseline)
     report = scores_as_json(scores, regressions=regressions)
     if output_path:

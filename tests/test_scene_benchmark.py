@@ -162,6 +162,9 @@ def test_compare_flags_baseline_id_missing_from_current_scores() -> None:
     reduced = [score for score in scores if score.case_id != "beta"]
     notes = compare_to_baseline(reduced, baseline)
     assert notes == ["beta: missing from current scores"]
+    kept = next(score for score in scores if score.case_id == "alpha")
+    kept.filtered_case_id = "alpha"
+    assert compare_to_baseline([kept], baseline) == []
 
 
 def test_compare_flags_skip_regression() -> None:

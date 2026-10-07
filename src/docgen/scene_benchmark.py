@@ -367,7 +367,38 @@ def run_benchmark(
         if not cases:
             known = ", ".join(c.id for c in standard_cases())
             raise ValueError(f"unknown benchmark case {case_id!r}; known: {known}")
-    return [score_case(c) for c in cases]
+    return _mark_case_filter([score_case(c) for c in cases], case_id)
+
+
+def _mark_case_filter(scores: list[CaseScore], case_id: str | None) -> list[CaseScore]:
+    """Remember an explicit ``--case`` filter so other baseline ids are not deletions."""
+    if not case_id:
+        return scores
+    for score in scores:
+        score.filtered_case_id = case_id
+    return scores
+
+
+def _filtered_case_id(scores: list[CaseScore]) -> str | None:
+    if not scores:
+        return None
+    marked = [getattr(score, "filtered_case_id", None) for score in scores]
+    if any(item is None for item in marked):
+        return None
+    if len(set(marked)) != 1:
+        return None
+    return marked[0]
+
+
+def _stored_cases_for_scores(
+    baseline: dict[str, Any],
+    scores: list[CaseScore],
+) -> dict[str, Any]:
+    stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
+    case_id = _filtered_case_id(scores)
+    if not case_id:
+        return stored
+    return {key: value for key, value in stored.items() if key == case_id}
 
 
 def load_baseline(path: Path | None = None) -> dict[str, Any]:
@@ -418,9 +449,10 @@ def compare_to_baseline(
     """Return regression notes. Empty means the run meets or beats the baseline.
 
     A baseline case id absent from ``scores`` is a failure. Deleting a corpus
-    case must not leave that committed id unchecked.
+    case must not leave that committed id unchecked. Scores from
+    ``run_benchmark(case_id=...)`` only check that one id.
     """
-    stored = baseline.get("cases") if isinstance(baseline.get("cases"), dict) else {}
+    stored = _stored_cases_for_scores(baseline, scores)
     notes: list[str] = missing_baseline_case_notes(scores, stored)
     for score in scores:
         prev = stored.get(score.case_id)
