@@ -791,6 +791,251 @@ def scene_compile(
         )
 
 
+def _reject_scene_spec_selector(
+    *,
+    dry_run: bool,
+    print_only: bool,
+    all_segments: bool,
+    segment: str | None,
+) -> None:
+    if dry_run and print_only:
+        raise click.ClickException("--dry-run and --print-only are mutually exclusive")
+    if all_segments and segment:
+        raise click.ClickException("--all and --segment are mutually exclusive")
+    if not all_segments and not segment:
+        raise click.ClickException("provide --segment <id> or --all")
+
+
+def _reject_scene_spec_all_options(
+    *,
+    all_segments: bool,
+    class_name_override: str | None,
+    output_path: Path | None,
+) -> None:
+    if all_segments and class_name_override:
+        raise click.ClickException("--class-name cannot be combined with --all")
+    if all_segments and output_path:
+        raise click.ClickException(
+            "--output cannot be combined with --all (per-segment paths are used)"
+        )
+
+
+def _call_generate_scene_spec(
+    cfg: Config,
+    sid: str,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    class_name_override: str | None,
+    dry_run: bool,
+    model: str | None,
+    error_prefix: str,
+):
+    from docgen.manim_scene_support import SceneGenerationError
+    from docgen.scene_spec_generate import generate_scene_spec
+
+    try:
+        return generate_scene_spec(
+            cfg,
+            sid,
+            extra_paths=list(extra_paths),
+            extra_hints=list(extra_hints),
+            class_name_override=class_name_override,
+            dry_run=dry_run,
+            model_override=model,
+        )
+    except SceneGenerationError as exc:
+        detail = f"{error_prefix}{exc}" if error_prefix else str(exc)
+        raise click.ClickException(detail) from exc
+
+
+def _compile_generated_scene_spec(cfg: Config, result) -> None:
+    from docgen.manim_scene_support import SceneGenerationError
+    from docgen.scene_spec_generate import (
+        inject_class_block_into_scenes_py,
+        linted_class_block_from_spec,
+    )
+
+    try:
+        class_block, merged = linted_class_block_from_spec(
+            cfg, result.spec, timing_key=result.seg_name
+        )
+        inject_class_block_into_scenes_py(
+            cfg,
+            seg_id=merged["segment_id"],
+            class_name=merged["class_name"],
+            class_block=class_block,
+        )
+    except SceneGenerationError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
+        f"({result.class_name}, timing_key {result.seg_name!r})"
+    )
+
+
+def _write_default_scene_spec(cfg: Config, result) -> None:
+    specs_dir = cfg.animations_dir / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    wpath = specs_dir / f"{result.seg_name}.scene.yaml"
+    wpath.write_text(result.yaml_text, encoding="utf-8")
+    click.echo(f"[scene-spec-generate] wrote {wpath}")
+
+
+def _emit_all_segment_scene_spec(
+    cfg: Config,
+    sid: str,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    class_name_override: str | None,
+    dry_run: bool,
+    print_only: bool,
+    do_compile: bool,
+    model: str | None,
+) -> None:
+    res = _call_generate_scene_spec(
+        cfg,
+        sid,
+        extra_paths=extra_paths,
+        extra_hints=extra_hints,
+        class_name_override=class_name_override,
+        dry_run=dry_run,
+        model=model,
+        error_prefix=f"segment {sid}: ",
+    )
+    if dry_run:
+        click.echo(res.prompt)
+        return
+    if print_only:
+        click.echo(res.yaml_text, nl=False)
+    else:
+        _write_default_scene_spec(cfg, res)
+    if do_compile:
+        _compile_generated_scene_spec(cfg, res)
+
+
+def _single_scene_spec_write_path(
+    cfg: Config,
+    result,
+    *,
+    print_only: bool,
+    output_path: Path | None,
+) -> Path | None:
+    if not print_only:
+        specs_dir = cfg.animations_dir / "specs"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        return output_path or (specs_dir / f"{result.seg_name}.scene.yaml")
+    if output_path is not None:
+        return output_path
+    return None
+
+
+def _emit_single_scene_spec(
+    cfg: Config,
+    segment: str,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    class_name_override: str | None,
+    dry_run: bool,
+    print_only: bool,
+    output_path: Path | None,
+    do_compile: bool,
+    model: str | None,
+) -> None:
+    result = _call_generate_scene_spec(
+        cfg,
+        segment,
+        extra_paths=extra_paths,
+        extra_hints=extra_hints,
+        class_name_override=class_name_override,
+        dry_run=dry_run,
+        model=model,
+        error_prefix="",
+    )
+    if dry_run:
+        click.echo(result.prompt)
+        return
+    if print_only:
+        click.echo(result.yaml_text, nl=False)
+    write_path = _single_scene_spec_write_path(
+        cfg, result, print_only=print_only, output_path=output_path
+    )
+    if write_path is not None:
+        write_path.parent.mkdir(parents=True, exist_ok=True)
+        write_path.write_text(result.yaml_text, encoding="utf-8")
+        click.echo(f"[scene-spec-generate] wrote {write_path}")
+    if do_compile:
+        _compile_generated_scene_spec(cfg, result)
+
+
+def _scene_spec_all_skip_reason(cfg: Config, sid: str) -> str | None:
+    script_path = cfg.find_segment_asset(cfg.base_dir / "scripts", sid, ".py")
+    if script_path:
+        return "existing capture script"
+    vm_row = cfg.visual_map.get(sid)
+    if isinstance(vm_row, dict):
+        vtype = str(vm_row.get("type", "")).strip().lower()
+        if vtype and vtype != "manim":
+            return f"visual_map type is {vtype!r} (not manim)"
+    return None
+
+
+def _segment_label(names: dict[str, str], seg_id: str, sid: str) -> str:
+    return names.get(sid) or names.get(seg_id) or sid
+
+
+def _fail_scene_spec_all(failures: list[str]) -> None:
+    if failures:
+        raise click.ClickException(
+            f"scene-spec-generate --all: {len(failures)} segment(s) failed: "
+            + ", ".join(failures)
+        )
+
+
+def _scene_spec_generate_all(
+    cfg: Config,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    class_name_override: str | None,
+    dry_run: bool,
+    print_only: bool,
+    do_compile: bool,
+    model: str | None,
+) -> None:
+    ids = list(cfg.segments_all)
+    if not ids:
+        raise click.ClickException("segments.all is empty in docgen.yaml")
+    names = cfg.segment_names
+    failures: list[str] = []
+    for seg_id in ids:
+        sid = str(seg_id)
+        name = _segment_label(names, seg_id, sid)
+        reason = _scene_spec_all_skip_reason(cfg, sid)
+        if reason:
+            click.echo(f"[scene-spec-generate --all] skip {sid} ({name}): {reason}")
+            continue
+        click.echo(f"=== scene-spec-generate --segment {sid} ===")
+        try:
+            _emit_all_segment_scene_spec(
+                cfg,
+                sid,
+                extra_paths=extra_paths,
+                extra_hints=extra_hints,
+                class_name_override=class_name_override,
+                dry_run=dry_run,
+                print_only=print_only,
+                do_compile=do_compile,
+                model=model,
+            )
+        except click.ClickException as exc:
+            click.echo(f"[scene-spec-generate --all] FAIL {sid}: {exc}", err=True)
+            failures.append(sid)
+    _fail_scene_spec_all(failures)
+
+
 @main.command("scene-spec-generate")
 @click.option(
     "--segment",
@@ -873,157 +1118,45 @@ def scene_spec_generate_cmd(
     The model outputs YAML only (see :mod:`docgen.scene_spec`); layout is
     deterministic in :func:`docgen.scene_spec.compile_scene_class`.
     """
-    if dry_run and print_only:
-        raise click.ClickException("--dry-run and --print-only are mutually exclusive")
-    if all_segments and segment:
-        raise click.ClickException("--all and --segment are mutually exclusive")
-    if not all_segments and not segment:
-        raise click.ClickException("provide --segment <id> or --all")
-    if all_segments and class_name_override:
-        raise click.ClickException("--class-name cannot be combined with --all")
-    if all_segments and output_path:
-        raise click.ClickException("--output cannot be combined with --all (per-segment paths are used)")
-
-    from docgen.manim_scene_support import SceneGenerationError
-    from docgen.scene_spec_generate import (
-        generate_scene_spec,
-        inject_class_block_into_scenes_py,
-        linted_class_block_from_spec,
+    _reject_scene_spec_selector(
+        dry_run=dry_run,
+        print_only=print_only,
+        all_segments=all_segments,
+        segment=segment,
     )
-
+    _reject_scene_spec_all_options(
+        all_segments=all_segments,
+        class_name_override=class_name_override,
+        output_path=output_path,
+    )
     cfg = _require_config(ctx)
     if not dry_run:
         _echo_ai_status(cfg)
-
-    def _one_sid(sid: str) -> None:
-        try:
-            res = generate_scene_spec(
-                cfg,
-                sid,
-                extra_paths=list(extra_paths),
-                extra_hints=list(extra_hints),
-                class_name_override=class_name_override,
-                dry_run=dry_run,
-                model_override=model,
-            )
-        except SceneGenerationError as exc:
-            raise click.ClickException(f"segment {sid}: {exc}") from exc
-        if dry_run:
-            click.echo(res.prompt)
-            return
-        if print_only:
-            click.echo(res.yaml_text, nl=False)
-        else:
-            specs_dir = cfg.animations_dir / "specs"
-            specs_dir.mkdir(parents=True, exist_ok=True)
-            wpath = specs_dir / f"{res.seg_name}.scene.yaml"
-            wpath.write_text(res.yaml_text, encoding="utf-8")
-            click.echo(f"[scene-spec-generate] wrote {wpath}")
-        if do_compile:
-            try:
-                class_block, merged = linted_class_block_from_spec(
-                    cfg, res.spec, timing_key=res.seg_name
-                )
-                inject_class_block_into_scenes_py(
-                    cfg,
-                    seg_id=merged["segment_id"],
-                    class_name=merged["class_name"],
-                    class_block=class_block,
-                )
-            except SceneGenerationError as exc:
-                raise click.ClickException(str(exc)) from exc
-            click.echo(
-                f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
-                f"({res.class_name}, timing_key {res.seg_name!r})"
-            )
-
     if all_segments:
-        ids = list(cfg.segments_all)
-        if not ids:
-            raise click.ClickException("segments.all is empty in docgen.yaml")
-        names = cfg.segment_names
-        scripts_dir = cfg.base_dir / "scripts"
-        failures: list[str] = []
-        for seg_id in ids:
-            sid = str(seg_id)
-            name = names.get(sid) or names.get(seg_id) or sid
-            script_path = cfg.find_segment_asset(scripts_dir, sid, ".py")
-            if script_path:
-                click.echo(
-                    f"[scene-spec-generate --all] skip {sid} ({name}): existing capture script"
-                )
-                continue
-            vm_row = cfg.visual_map.get(sid)
-            if isinstance(vm_row, dict):
-                vtype = str(vm_row.get("type", "")).strip().lower()
-                if vtype and vtype != "manim":
-                    click.echo(
-                        f"[scene-spec-generate --all] skip {sid} ({name}): "
-                        f"visual_map type is {vtype!r} (not manim)"
-                    )
-                    continue
-            click.echo(f"=== scene-spec-generate --segment {sid} ===")
-            try:
-                _one_sid(sid)
-            except click.ClickException as exc:
-                click.echo(f"[scene-spec-generate --all] FAIL {sid}: {exc}", err=True)
-                failures.append(sid)
-        if failures:
-            raise click.ClickException(
-                f"scene-spec-generate --all: {len(failures)} segment(s) failed: "
-                + ", ".join(failures)
-            )
-        return
-
-    assert segment is not None  # type-checker
-    try:
-        result = generate_scene_spec(
+        _scene_spec_generate_all(
             cfg,
-            segment,
-            extra_paths=list(extra_paths),
-            extra_hints=list(extra_hints),
+            extra_paths=extra_paths,
+            extra_hints=extra_hints,
             class_name_override=class_name_override,
             dry_run=dry_run,
-            model_override=model,
+            print_only=print_only,
+            do_compile=do_compile,
+            model=model,
         )
-    except SceneGenerationError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    if dry_run:
-        click.echo(result.prompt)
         return
-
-    if print_only:
-        click.echo(result.yaml_text, nl=False)
-
-    write_path: Path | None = None
-    if not print_only:
-        specs_dir = cfg.animations_dir / "specs"
-        specs_dir.mkdir(parents=True, exist_ok=True)
-        write_path = output_path or (specs_dir / f"{result.seg_name}.scene.yaml")
-    elif output_path:
-        write_path = output_path
-
-    if write_path is not None:
-        write_path.parent.mkdir(parents=True, exist_ok=True)
-        write_path.write_text(result.yaml_text, encoding="utf-8")
-        click.echo(f"[scene-spec-generate] wrote {write_path}")
-
-    if do_compile:
-        try:
-            class_block, merged = linted_class_block_from_spec(cfg, result.spec, timing_key=result.seg_name)
-            inject_class_block_into_scenes_py(
-                cfg,
-                seg_id=merged["segment_id"],
-                class_name=merged["class_name"],
-                class_block=class_block,
-            )
-        except SceneGenerationError as exc:
-            raise click.ClickException(str(exc)) from exc
-        click.echo(
-            f"[scene-spec-generate] compiled → {cfg.animations_dir / 'scenes.py'} "
-            f"({result.class_name}, timing_key {result.seg_name!r})"
-        )
+    assert segment is not None  # type-checker
+    _emit_single_scene_spec(
+        cfg,
+        segment,
+        extra_paths=extra_paths,
+        extra_hints=extra_hints,
+        class_name_override=class_name_override,
+        dry_run=dry_run,
+        print_only=print_only,
+        output_path=output_path,
+        do_compile=do_compile,
+        model=model,
+    )
 
 
 @main.command("image-generate")
