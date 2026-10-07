@@ -46,6 +46,37 @@ def _echo_ai_status(cfg: Config | None) -> None:
     echo_ai_status(cfg)
 
 
+def _apply_all_env_pairs(pairs: list[tuple[str, str]]) -> None:
+    for key, value in pairs:
+        os.environ[key] = value
+
+
+def _warn_ignored_env_key(key: str, value: str, warn_keys: set[str]) -> None:
+    if key not in warn_keys or not value or not os.environ.get(key):
+        return
+    click.echo(
+        f"[docgen] {key} already set in the process environment; "
+        "env_file value is ignored for this key (shell wins). "
+        f"Unset {key} or set DOCGEN_ENV_OVERRIDES=1 to load all keys "
+        f"from env_file, or DOCGEN_ENV_OVERRIDES={key} to override just "
+        "this key.",
+        err=True,
+    )
+
+
+def _apply_selective_env_pairs(
+    pairs: list[tuple[str, str]],
+    override_keys: set[str],
+    warn_keys: set[str],
+) -> None:
+    for key, value in pairs:
+        if key in override_keys:
+            os.environ[key] = value
+            continue
+        _warn_ignored_env_key(key, value, warn_keys)
+        os.environ.setdefault(key, value)
+
+
 def _load_env(cfg: Config | None) -> None:
     """Load .env file from config if specified, so OPENAI_API_KEY / XAI_API_KEY etc. are available.
 
@@ -59,27 +90,12 @@ def _load_env(cfg: Config | None) -> None:
     pairs = _parse_env_file_pairs(cfg.env_file)
     mode = _docgen_env_override_mode()
     if mode == "all":
-        for k, v in pairs:
-            os.environ[k] = v
+        _apply_all_env_pairs(pairs)
         return
     override_keys = mode if isinstance(mode, set) else set()
     from docgen.ai_client import conflicting_api_key_envs
 
-    warn_keys = set(conflicting_api_key_envs())
-    for k, v in pairs:
-        if k in override_keys:
-            os.environ[k] = v
-            continue
-        if k in warn_keys and v and os.environ.get(k):
-            click.echo(
-                f"[docgen] {k} already set in the process environment; "
-                "env_file value is ignored for this key (shell wins). "
-                f"Unset {k} or set DOCGEN_ENV_OVERRIDES=1 to load all keys "
-                f"from env_file, or DOCGEN_ENV_OVERRIDES={k} to override just "
-                "this key.",
-                err=True,
-            )
-        os.environ.setdefault(k, v)
+    _apply_selective_env_pairs(pairs, override_keys, set(conflicting_api_key_envs()))
 
 
 def _require_config(ctx: click.Context) -> Config:
@@ -110,6 +126,69 @@ def _cli_version_string(ctx: click.Context, param: click.Parameter, value: bool)
     click.echo(f"docgen {package_version()}")
     click.echo(f"install: pip install '{DOCGEN_PIP_SPEC}'")
     ctx.exit()
+
+
+def _resolve_cli_repo(repo_spec: str | None) -> Path | None:
+    if not repo_spec:
+        return None
+    from docgen.target_repo import TargetRepoError, resolve_repo
+
+    try:
+        repo_root = resolve_repo(repo_spec)
+    except TargetRepoError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"[docgen] target repo: {repo_root}", err=True)
+    return repo_root
+
+
+def _config_path_under_repo(config_path: str, repo_root: Path | None) -> Path:
+    cfg_path = Path(config_path)
+    if cfg_path.is_absolute() or repo_root is None:
+        return cfg_path
+    nested = repo_root / cfg_path
+    if nested.exists():
+        return nested
+    return cfg_path
+
+
+def _config_from_repo(ctx: click.Context, repo_root: Path) -> Config | None:
+    from docgen.target_repo import find_bundle_yaml
+
+    found = find_bundle_yaml(repo_root)
+    if found is not None:
+        click.echo(f"[docgen] bundle: {found}", err=True)
+        return Config.from_yaml(found)
+    if ctx.invoked_subcommand != "init":
+        click.echo(
+            f"[docgen] No docgen.yaml under {repo_root}; "
+            "run `docgen --repo … init --defaults` to scaffold "
+            "docs/demos (docgen is not copied into the consumer src/).",
+            err=True,
+        )
+    return None
+
+
+def _load_cli_config(
+    ctx: click.Context,
+    config_path: str | None,
+    repo_root: Path | None,
+) -> Config | None:
+    try:
+        if config_path:
+            return Config.from_yaml(_config_path_under_repo(config_path, repo_root))
+        if repo_root is not None:
+            return _config_from_repo(ctx, repo_root)
+        return Config.discover()
+    except FileNotFoundError:
+        click.echo(
+            "[docgen] No docgen.yaml found in this directory tree; pass "
+            "`--config PATH/to/docgen.yaml`, `--repo PATH_OR_URL`, or `cd` "
+            "to your demos bundle directory.",
+            err=True,
+        )
+        return None
+    except ConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @click.group()
@@ -158,52 +237,9 @@ def main(
     plus ``XAI_API_KEY`` uses xAI. Run ``docgen ai-status`` to see the resolved key.
     """
     ctx.ensure_object(dict)
-    repo_root = None
-    if repo_spec:
-        from docgen.target_repo import TargetRepoError, resolve_repo
-
-        try:
-            repo_root = resolve_repo(repo_spec)
-        except TargetRepoError as exc:
-            raise click.ClickException(str(exc)) from exc
-        click.echo(f"[docgen] target repo: {repo_root}", err=True)
+    repo_root = _resolve_cli_repo(repo_spec)
     ctx.obj["repo_root"] = repo_root
-
-    cfg = None
-    try:
-        if config_path:
-            cfg_path = Path(config_path)
-            if not cfg_path.is_absolute() and repo_root is not None:
-                nested = repo_root / cfg_path
-                if nested.exists():
-                    cfg_path = nested
-            cfg = Config.from_yaml(cfg_path)
-        elif repo_root is not None:
-            from docgen.target_repo import find_bundle_yaml
-
-            found = find_bundle_yaml(repo_root)
-            if found is not None:
-                click.echo(f"[docgen] bundle: {found}", err=True)
-                cfg = Config.from_yaml(found)
-            elif ctx.invoked_subcommand != "init":
-                click.echo(
-                    f"[docgen] No docgen.yaml under {repo_root}; "
-                    "run `docgen --repo … init --defaults` to scaffold "
-                    "docs/demos (docgen is not copied into the consumer src/).",
-                    err=True,
-                )
-        else:
-            cfg = Config.discover()
-    except FileNotFoundError:
-        cfg = None
-        click.echo(
-            "[docgen] No docgen.yaml found in this directory tree; pass "
-            "`--config PATH/to/docgen.yaml`, `--repo PATH_OR_URL`, or `cd` "
-            "to your demos bundle directory.",
-            err=True,
-        )
-    except ConfigError as exc:
-        raise click.ClickException(str(exc)) from exc
+    cfg = _load_cli_config(ctx, config_path, repo_root)
     ctx.obj["config"] = cfg
     _load_env(cfg)
 
@@ -459,6 +495,50 @@ def manim(ctx: click.Context, scene: str | None) -> None:
         raise click.ClickException(str(exc)) from exc
 
 
+def _compose_target_ids(
+    cfg: Config,
+    segments: tuple[str, ...],
+    only_visual_types: tuple[str, ...],
+) -> list[str]:
+    from docgen.compose import filter_segments_by_visual_types
+
+    target = list(segments) if segments else list(cfg.segments_all)
+    target = filter_segments_by_visual_types(cfg, target, only_visual_types)
+    if only_visual_types and not target:
+        raise click.ClickException(
+            "[compose] No segments left after --only-visual-type filter "
+            f"({', '.join(only_visual_types)})."
+        )
+    if not target:
+        raise click.ClickException(
+            "[compose] no segments to compose — set segments.all, or pass segment ids"
+        )
+    return target
+
+
+def _segment_has_visual_type(cfg: Config, sid: str) -> bool:
+    row = cfg.visual_map.get(sid)
+    if not isinstance(row, dict):
+        return False
+    return bool(str(row.get("type", "")).strip())
+
+
+def _expected_compose_count(cfg: Config, target: list[str]) -> int:
+    mapped = [sid for sid in target if _segment_has_visual_type(cfg, sid)]
+    if mapped:
+        return len(mapped)
+    return len(target)
+
+
+def _require_composed_count(cfg: Config, target: list[str], composed: int) -> None:
+    expected = _expected_compose_count(cfg, target)
+    if expected and composed < expected:
+        raise click.ClickException(
+            f"[compose] produced {composed}/{expected} segment videos "
+            "(missing audio or visuals)."
+        )
+
+
 @main.command()
 @click.argument("segments", nargs=-1)
 @click.option(
@@ -489,38 +569,17 @@ def compose(
     Pass segment IDs to compose specific ones, or omit for ``segments.all``
     (same set as ``generate-all``).
     """
-    from docgen.compose import ComposeError, Composer, filter_segments_by_visual_types
+    from docgen.compose import ComposeError, Composer
 
     cfg = _require_config(ctx)
     comp = Composer(cfg, ffmpeg_timeout_sec=ffmpeg_timeout)
-    target = list(segments) if segments else list(cfg.segments_all)
-    target = filter_segments_by_visual_types(cfg, target, only_visual_types)
-    if only_visual_types and not target:
-        raise click.ClickException(
-            "[compose] No segments left after --only-visual-type filter "
-            f"({', '.join(only_visual_types)})."
-        )
-    if not target:
-        raise click.ClickException(
-            "[compose] no segments to compose — set segments.all, or pass segment ids"
-        )
+    target = _compose_target_ids(cfg, segments, only_visual_types)
     click.echo(f"=== Composing {len(target)} segments ===")
     try:
         composed = comp.compose_segments(target)
     except ComposeError as exc:
         raise click.ClickException(str(exc)) from exc
-    mapped = [
-        sid
-        for sid in target
-        if isinstance(cfg.visual_map.get(sid), dict)
-        and str(cfg.visual_map[sid].get("type", "")).strip()
-    ]
-    expected = len(mapped) if mapped else len(target)
-    if expected and composed < expected:
-        raise click.ClickException(
-            f"[compose] produced {composed}/{expected} segment videos "
-            "(missing audio or visuals)."
-        )
+    _require_composed_count(cfg, target, composed)
 
 
 @main.command()
@@ -577,6 +636,89 @@ def lint(ctx: click.Context, segment: str | None) -> None:
 
     if issues_total or missing:
         raise SystemExit(1)
+
+
+def _reject_narration_selector(
+    *,
+    all_segments: bool,
+    segment: str | None,
+    revise: bool,
+    revision_notes: str,
+) -> None:
+    if all_segments and segment:
+        raise click.ClickException("--all and --segment are mutually exclusive")
+    if not all_segments and not segment:
+        raise click.ClickException("provide --segment <id> or --all")
+    notes = revision_notes if revision_notes is not None else ""
+    if revise and not str(notes).strip():
+        raise click.ClickException("--revise requires --revision-notes")
+
+
+def _generate_one_narration(
+    cfg: Config,
+    seg_str: str,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    revision_notes: str,
+    mode: str,
+    dry_run: bool,
+    write_force: bool,
+    all_segments: bool,
+) -> None:
+    from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
+
+    try:
+        body = generate_narration_markdown(
+            cfg,
+            seg_str,
+            extra_paths=list(extra_paths),
+            extra_hints=list(extra_hints),
+            revision_notes=revision_notes,
+            mode=mode,
+        )
+    except ValueError as exc:
+        raise click.ClickException(f"segment {seg_str}: {exc}") from exc
+    if dry_run:
+        click.echo(body)
+        return
+    try:
+        out = write_narration_markdown(cfg, seg_str, body, force=write_force)
+    except FileExistsError as exc:
+        raise click.ClickException(f"segment {seg_str}: {exc} (use --force)") from exc
+    if all_segments:
+        click.echo(f"  -> {out}")
+        return
+    click.echo(f"[narration-generate] wrote {out}")
+
+
+def _narration_generate_all(
+    cfg: Config,
+    *,
+    extra_paths: tuple[str, ...],
+    extra_hints: tuple[str, ...],
+    revision_notes: str,
+    mode: str,
+    dry_run: bool,
+    write_force: bool,
+) -> None:
+    ids = list(cfg.segments_all)
+    if not ids:
+        raise click.ClickException("segments.all is empty in docgen.yaml")
+    for seg_id in ids:
+        seg_str = str(seg_id)
+        click.echo(f"=== narration-generate --segment {seg_str} ===")
+        _generate_one_narration(
+            cfg,
+            seg_str,
+            extra_paths=extra_paths,
+            extra_hints=extra_hints,
+            revision_notes=revision_notes,
+            mode=mode,
+            dry_run=dry_run,
+            write_force=write_force,
+            all_segments=True,
+        )
 
 
 @main.command("narration-generate")
@@ -651,54 +793,105 @@ def narration_generate(
     ``--revise`` reads the current narration file and applies ``--revision-notes``
     with minimal edits (same contract as the wizard Revise button).
     """
-    if all_segments and segment:
-        raise click.ClickException("--all and --segment are mutually exclusive")
-    if not all_segments and not segment:
-        raise click.ClickException("provide --segment <id> or --all")
-    if revise and not str(revision_notes or "").strip():
-        raise click.ClickException("--revise requires --revision-notes")
-
-    from docgen.narrate_from_source import generate_narration_markdown, write_narration_markdown
+    _reject_narration_selector(
+        all_segments=all_segments,
+        segment=segment,
+        revise=revise,
+        revision_notes=revision_notes,
+    )
 
     cfg = _require_config(ctx)
     _echo_ai_status(cfg)
     mode = "revise" if revise else "generate"
     # Revising always overwrites the existing script.
-    write_force = force or revise
-
-    def _one(seg_str: str) -> None:
-        try:
-            body = generate_narration_markdown(
-                cfg,
-                seg_str,
-                extra_paths=list(extra_paths),
-                extra_hints=list(extra_hints),
-                revision_notes=revision_notes,
-                mode=mode,
-            )
-        except ValueError as exc:
-            raise click.ClickException(f"segment {seg_str}: {exc}") from exc
-        if dry_run:
-            click.echo(body)
-            return
-        try:
-            out = write_narration_markdown(cfg, seg_str, body, force=write_force)
-        except FileExistsError as exc:
-            raise click.ClickException(f"segment {seg_str}: {exc} (use --force)") from exc
-        click.echo(f"  -> {out}" if all_segments else f"[narration-generate] wrote {out}")
-
+    write_force = True if revise else force
     if all_segments:
-        ids = list(cfg.segments_all)
-        if not ids:
-            raise click.ClickException("segments.all is empty in docgen.yaml")
-        for seg_id in ids:
-            seg_str = str(seg_id)
-            click.echo(f"=== narration-generate --segment {seg_str} ===")
-            _one(seg_str)
+        _narration_generate_all(
+            cfg,
+            extra_paths=extra_paths,
+            extra_hints=extra_hints,
+            revision_notes=revision_notes,
+            mode=mode,
+            dry_run=dry_run,
+            write_force=write_force,
+        )
         return
 
     assert segment is not None  # for type-checker
-    _one(segment)
+    _generate_one_narration(
+        cfg,
+        segment,
+        extra_paths=extra_paths,
+        extra_hints=extra_hints,
+        revision_notes=revision_notes,
+        mode=mode,
+        dry_run=dry_run,
+        write_force=write_force,
+        all_segments=False,
+    )
+
+
+def _reject_scene_compile_selector(all_specs: bool, spec_path: Path | None) -> None:
+    if all_specs and spec_path is not None:
+        raise click.ClickException("Pass SPEC_PATH or --all, not both.")
+    if not all_specs and spec_path is None:
+        raise click.ClickException("Pass SPEC_PATH or --all.")
+
+
+def _scene_compile_paths(
+    cfg: Config,
+    all_specs: bool,
+    spec_path: Path | None,
+) -> list[Path]:
+    from docgen.scene_retime import list_scene_spec_paths
+
+    paths = list_scene_spec_paths(cfg) if all_specs else [spec_path]
+    if not paths:
+        raise click.ClickException("No animations/specs/*.scene.yaml files found.")
+    return [path for path in paths if path is not None]
+
+
+def _compile_one_scene_spec(
+    cfg: Config,
+    path: Path,
+    *,
+    all_specs: bool,
+    retime: bool,
+    dry_run: bool,
+) -> str | None:
+    """Compile one spec. Return the file name when ``--all`` records a failure."""
+    from docgen.manim_scene_support import SceneGenerationError
+    from docgen.scene_retime import retime_compile_spec
+    from docgen.scene_spec import SceneSpecError
+
+    try:
+        result = retime_compile_spec(cfg, path, dry_run=dry_run)
+    except (SceneGenerationError, SceneSpecError) as exc:
+        if not all_specs:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"[scene-compile] FAIL {path.name}: {exc}", err=True)
+        return path.name
+    if dry_run:
+        click.echo(result["class_block"], nl=False)
+        if all_specs:
+            click.echo(f"\n--- end {path.name} ---\n")
+        return None
+    suffix = ""
+    if retime or all_specs:
+        suffix = ", retime"
+    click.echo(
+        f"[scene-compile] wrote {result['class_name']} to {result['scenes_path']} "
+        f"(segment {result['segment_id']} → timing_key {result['timing_key']!r}"
+        f"{suffix})"
+    )
+    return None
+
+
+def _fail_scene_compile_all(failures: list[str]) -> None:
+    if failures:
+        raise click.ClickException(
+            f"scene-compile --all: {len(failures)} failed: " + ", ".join(failures)
+        )
 
 
 @main.command("scene-compile")
@@ -746,49 +939,23 @@ def scene_compile(
     ``generate-all``, which retimes existing specs automatically) so beat sync
     uses fresh ``timing.json`` without calling OpenAI.
     """
-    if all_specs and spec_path is not None:
-        raise click.ClickException("Pass SPEC_PATH or --all, not both.")
-    if not all_specs and spec_path is None:
-        raise click.ClickException("Pass SPEC_PATH or --all.")
-
-    from docgen.manim_scene_support import SceneGenerationError
-    from docgen.scene_retime import list_scene_spec_paths, retime_compile_spec
-    from docgen.scene_spec import SceneSpecError
-
+    _reject_scene_compile_selector(all_specs, spec_path)
     cfg = _require_config(ctx)
     # --retime is the same compile path (label sync + pacing gate); the flag
     # documents intent and is the recommended post-timestamps invocation.
-    _ = retime
-
-    paths = list_scene_spec_paths(cfg) if all_specs else [spec_path]
-    if not paths:
-        raise click.ClickException("No animations/specs/*.scene.yaml files found.")
-
+    paths = _scene_compile_paths(cfg, all_specs, spec_path)
     failures: list[str] = []
     for path in paths:
-        assert path is not None
-        try:
-            result = retime_compile_spec(cfg, path, dry_run=dry_run)
-        except (SceneGenerationError, SceneSpecError) as exc:
-            if all_specs:
-                click.echo(f"[scene-compile] FAIL {path.name}: {exc}", err=True)
-                failures.append(path.name)
-                continue
-            raise click.ClickException(str(exc)) from exc
-        if dry_run:
-            click.echo(result["class_block"], nl=False)
-            if all_specs:
-                click.echo(f"\n--- end {path.name} ---\n")
-            continue
-        click.echo(
-            f"[scene-compile] wrote {result['class_name']} to {result['scenes_path']} "
-            f"(segment {result['segment_id']} → timing_key {result['timing_key']!r}"
-            f"{', retime' if retime or all_specs else ''})"
+        failed = _compile_one_scene_spec(
+            cfg,
+            path,
+            all_specs=all_specs,
+            retime=retime,
+            dry_run=dry_run,
         )
-    if failures:
-        raise click.ClickException(
-            f"scene-compile --all: {len(failures)} failed: " + ", ".join(failures)
-        )
+        if failed:
+            failures.append(failed)
+    _fail_scene_compile_all(failures)
 
 
 def _reject_scene_spec_selector(
@@ -1159,6 +1326,118 @@ def scene_spec_generate_cmd(
     )
 
 
+def _reject_image_selector(
+    segment: str | None,
+    all_segments: bool,
+    spec_path: Path | None,
+) -> None:
+    chosen = [bool(segment), all_segments, spec_path is not None]
+    if sum(chosen) != 1:
+        raise click.ClickException("provide exactly one of --segment, --all, or --spec")
+
+
+def _manim_segment_ids(cfg: Config) -> list[str]:
+    ids: list[str] = []
+    for sid in cfg.segments_all:
+        row = cfg.visual_map.get(sid)
+        if not isinstance(row, dict):
+            continue
+        vtype = str(row.get("type", "")).strip().lower()
+        if vtype == "manim":
+            ids.append(str(sid))
+    return ids
+
+
+def _image_specs_for_all(cfg: Config) -> list[Path] | None:
+    from docgen.image_generate import spec_files_for_bundle
+
+    targets = spec_files_for_bundle(cfg)
+    if targets:
+        return targets
+    manim_ids = _manim_segment_ids(cfg)
+    if manim_ids:
+        raise click.ClickException(
+            "[image-generate] no *.scene.yaml specs in animations/specs/ "
+            f"but manim segments exist ({', '.join(manim_ids)}) — "
+            "run `docgen scene-spec-generate` first"
+        )
+    click.echo("[image-generate] no *.scene.yaml specs found in animations/specs/")
+    return None
+
+
+def _image_spec_for_segment(cfg: Config, segment: str) -> list[Path]:
+    stem = cfg.resolve_segment_name(segment)
+    candidate = cfg.animations_dir / "specs" / f"{stem}.scene.yaml"
+    if not candidate.is_file():
+        raise click.ClickException(
+            f"spec not found: {candidate} — run `docgen scene-spec-generate --segment {segment}` "
+            "or author the spec by hand."
+        )
+    return [candidate]
+
+
+def _image_spec_targets(
+    cfg: Config,
+    segment: str | None,
+    all_segments: bool,
+    spec_path: Path | None,
+) -> list[Path] | None:
+    if spec_path is not None:
+        return [spec_path]
+    if all_segments:
+        return _image_specs_for_all(cfg)
+    assert segment is not None
+    return _image_spec_for_segment(cfg, segment)
+
+
+def _echo_image_results(target_name: str, results: list) -> int:
+    if not results:
+        click.echo(f"[image-generate] {target_name}: no image elements")
+        return 0
+    written = 0
+    for res in results:
+        if res.status == "dry-run":
+            click.echo(f"[image-generate] {target_name}: would generate {res.relpath}")
+            click.echo(f"  prompt: {res.prompt}")
+        elif res.status == "exists":
+            click.echo(
+                f"[image-generate] {target_name}: {res.relpath} exists (skip; use --force)"
+            )
+        else:
+            click.echo(f"[image-generate] {target_name}: wrote {res.path}")
+            written += 1
+    return written
+
+
+def _generate_images_for_targets(
+    cfg: Config,
+    targets: list[Path],
+    *,
+    force: bool,
+    dry_run: bool,
+    model: str | None,
+    size: str | None,
+) -> int:
+    from docgen.image_generate import ImageGenerationError, generate_images_for_spec
+    from docgen.scene_spec import SceneSpecError
+
+    total = 0
+    for target in targets:
+        try:
+            results = generate_images_for_spec(
+                cfg,
+                target,
+                force=force,
+                dry_run=dry_run,
+                model_override=model,
+                size_override=size,
+            )
+        except (ImageGenerationError, SceneSpecError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        total += _echo_image_results(target.name, results)
+    return total
+
+
 @main.command("image-generate")
 @click.option(
     "--segment",
@@ -1211,77 +1490,84 @@ def image_generate_cmd(
     box). This command writes the referenced PNG under the bundle directory so
     ``docgen manim`` can render them. Existing assets are kept unless --force.
     """
-    chosen = [bool(segment), all_segments, spec_path is not None]
-    if sum(chosen) != 1:
-        raise click.ClickException("provide exactly one of --segment, --all, or --spec")
-
-    from docgen.image_generate import (
-        ImageGenerationError,
-        generate_images_for_spec,
-        spec_files_for_bundle,
-    )
-    from docgen.scene_spec import SceneSpecError
-
+    _reject_image_selector(segment, all_segments, spec_path)
     cfg = _require_config(ctx)
     if not dry_run:
         _echo_ai_status(cfg)
-
-    if spec_path is not None:
-        targets = [spec_path]
-    elif all_segments:
-        targets = spec_files_for_bundle(cfg)
-        if not targets:
-            manim_ids = [
-                sid
-                for sid in cfg.segments_all
-                if isinstance(cfg.visual_map.get(sid), dict)
-                and str(cfg.visual_map[sid].get("type", "")).strip().lower() == "manim"
-            ]
-            if manim_ids:
-                raise click.ClickException(
-                    "[image-generate] no *.scene.yaml specs in animations/specs/ "
-                    f"but manim segments exist ({', '.join(manim_ids)}) — "
-                    "run `docgen scene-spec-generate` first"
-                )
-            click.echo("[image-generate] no *.scene.yaml specs found in animations/specs/")
-            return
-    else:
-        stem = cfg.resolve_segment_name(str(segment))
-        candidate = cfg.animations_dir / "specs" / f"{stem}.scene.yaml"
-        if not candidate.is_file():
-            raise click.ClickException(
-                f"spec not found: {candidate} — run `docgen scene-spec-generate --segment {segment}` "
-                "or author the spec by hand."
-            )
-        targets = [candidate]
-
-    total = 0
-    for target in targets:
-        try:
-            results = generate_images_for_spec(
-                cfg,
-                target,
-                force=force,
-                dry_run=dry_run,
-                model_override=model,
-                size_override=size,
-            )
-        except (ImageGenerationError, SceneSpecError) as exc:
-            raise click.ClickException(str(exc)) from exc
-        if not results:
-            click.echo(f"[image-generate] {target.name}: no image elements")
-            continue
-        for res in results:
-            if res.status == "dry-run":
-                click.echo(f"[image-generate] {target.name}: would generate {res.relpath}")
-                click.echo(f"  prompt: {res.prompt}")
-            elif res.status == "exists":
-                click.echo(f"[image-generate] {target.name}: {res.relpath} exists (skip; use --force)")
-            else:
-                click.echo(f"[image-generate] {target.name}: wrote {res.path}")
-                total += 1
+    targets = _image_spec_targets(cfg, segment, all_segments, spec_path)
+    if targets is None:
+        return
+    total = _generate_images_for_targets(
+        cfg,
+        targets,
+        force=force,
+        dry_run=dry_run,
+        model=model,
+        size=size,
+    )
     if not dry_run:
         click.echo(f"[image-generate] generated {total} asset(s)")
+
+
+def _print_yaml_gaps(cfg: Config, raw: dict) -> None:
+    from docgen import yaml_generate as yg
+
+    gaps = yg.narration_not_in_segments(raw, cfg.narration_dir)
+    if not gaps:
+        click.echo("[yaml-generate] no narration segments missing from segments.all")
+        return
+    for seg_id, stem in gaps:
+        click.echo(f"gap: {seg_id} ({stem}.md) not in segments.all")
+    raise SystemExit(1)
+
+
+def _merge_yaml_defaults(raw: dict, cfg: Config, merge_hint_segments: bool) -> list[str]:
+    from docgen import yaml_generate as yg
+
+    try:
+        return list(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _apply_yaml_llm(raw: dict, cfg: Config, model: str | None) -> str:
+    from docgen import yaml_generate as yg
+
+    _echo_ai_status(cfg)
+    try:
+        hints = yg.generate_llm_hints(cfg, model=model)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    yg.apply_llm_hints(raw, hints)
+    return "tts.instructions + wizard.system_prompt: refreshed via chat"
+
+
+def _echo_merged_yaml(raw: dict) -> None:
+    click.echo("--- merged yaml ---")
+    click.echo(
+        yaml.safe_dump(
+            raw, default_flow_style=False, sort_keys=False, allow_unicode=True, width=120
+        ),
+        nl=False,
+    )
+
+
+def _finish_yaml_generate(path: Path, raw: dict, changes: list[str], dry_run: bool) -> None:
+    from docgen import yaml_generate as yg
+
+    if not changes and not dry_run:
+        click.echo("[yaml-generate] nothing to do (already up to date)")
+        return
+    for line in changes:
+        click.echo(f"[yaml-generate] {line}")
+    if dry_run:
+        _echo_merged_yaml(raw)
+        return
+    header = yg.default_header(path) if changes else None
+    yg.write_docgen_yaml(path, raw, header=header)
+    click.echo(f"[yaml-generate] wrote {path}")
 
 
 @main.command("yaml-generate")
@@ -1330,7 +1616,6 @@ def yaml_generate_cmd(
 
     Rewrites the config file with PyYAML (comments are not preserved). Use Git to review.
     """
-    from docgen import yaml_generate as yg
     from docgen.config import load_yaml_mapping
 
     cfg = _require_config(ctx)
@@ -1341,51 +1626,15 @@ def yaml_generate_cmd(
         raise click.ClickException(str(exc)) from exc
 
     if list_gaps:
-        gaps = yg.narration_not_in_segments(raw, cfg.narration_dir)
-        if not gaps:
-            click.echo("[yaml-generate] no narration segments missing from segments.all")
-            return
-        for seg_id, stem in gaps:
-            click.echo(f"gap: {seg_id} ({stem}.md) not in segments.all")
-        raise SystemExit(1)
+        _print_yaml_gaps(cfg, raw)
+        return
 
     changes: list[str] = []
     if merge_defaults:
-        try:
-            changes.extend(yg.merge_defaults(raw, cfg, merge_hint_segments=merge_hint_segments))
-        except ValueError as exc:
-            raise click.ClickException(str(exc)) from exc
+        changes.extend(_merge_yaml_defaults(raw, cfg, merge_hint_segments))
     if llm:
-        _echo_ai_status(cfg)
-        try:
-            hints = yg.generate_llm_hints(cfg, model=model)
-        except ValueError as exc:
-            raise click.ClickException(str(exc)) from exc
-        except RuntimeError as exc:
-            raise click.ClickException(str(exc)) from exc
-        yg.apply_llm_hints(raw, hints)
-        changes.append("tts.instructions + wizard.system_prompt: refreshed via chat")
-
-    if not changes and not dry_run:
-        click.echo("[yaml-generate] nothing to do (already up to date)")
-        return
-
-    for line in changes:
-        click.echo(f"[yaml-generate] {line}")
-
-    if dry_run:
-        click.echo("--- merged yaml ---")
-        click.echo(
-            yaml.safe_dump(
-                raw, default_flow_style=False, sort_keys=False, allow_unicode=True, width=120
-            ),
-            nl=False,
-        )
-        return
-
-    header = yg.default_header(path) if changes else None
-    yg.write_docgen_yaml(path, raw, header=header)
-    click.echo(f"[yaml-generate] wrote {path}")
+        changes.append(_apply_yaml_llm(raw, cfg, model))
+    _finish_yaml_generate(path, raw, changes, dry_run)
 
 
 @main.command("clean-bundle")
@@ -1543,6 +1792,60 @@ def rebuild_after_audio(ctx: click.Context, regen_scene_specs: bool) -> None:
     _run_pipeline(Pipeline(cfg), skip_tts=True, regen_scene_specs=regen_scene_specs)
 
 
+def _launch_benchmark_gui(ctx: click.Context, case_id: str | None) -> None:
+    from docgen.gui.desktop import launch_desktop
+
+    path = "/?view=benchmark"
+    if case_id:
+        path += "&case=" + case_id
+    cfg = ctx.obj.get("config") if ctx.obj else None
+    launch_desktop(cfg, path=path)
+
+
+def _maybe_update_benchmark_baseline(
+    scores,
+    case_id: str | None,
+    update_baseline: bool,
+    base_path: Path,
+) -> None:
+    from docgen.scene_benchmark import write_baseline
+
+    if not update_baseline:
+        return
+    if case_id:
+        raise click.ClickException("--update-baseline requires the full corpus (omit --case)")
+    written = write_baseline(scores, base_path)
+    click.echo(f"wrote baseline {written}")
+
+
+def _echo_benchmark_text(scores, regressions: list[str], base_path: Path) -> None:
+    from docgen.scene_benchmark import format_table
+
+    click.echo(format_table(scores))
+    if regressions:
+        click.echo("")
+        click.echo("regressions vs baseline:")
+        for note in regressions:
+            click.echo(f"  - {note}")
+        return
+    if base_path.is_file():
+        click.echo("")
+        click.echo(f"meets baseline {base_path}")
+
+
+def _echo_benchmark_report(
+    scores,
+    regressions: list[str],
+    report: dict,
+    fmt: str,
+    base_path: Path,
+) -> None:
+    if fmt == "json":
+        click.echo(json.dumps(report, indent=2))
+        return
+    _echo_benchmark_text(scores, regressions, base_path)
+
+
 @main.command("benchmark")
 @click.option(
     "--case",
@@ -1600,21 +1903,13 @@ def benchmark(
     from docgen.scene_benchmark import (
         compare_to_baseline,
         default_baseline_path,
-        format_table,
         load_baseline,
         run_benchmark,
         scores_as_json,
-        write_baseline,
     )
 
     if gui:
-        from docgen.gui.desktop import launch_desktop
-
-        path = "/?view=benchmark"
-        if case_id:
-            path += "&case=" + case_id
-        cfg = ctx.obj.get("config") if ctx.obj else None
-        launch_desktop(cfg, path=path)
+        _launch_benchmark_gui(ctx, case_id)
         return
 
     try:
@@ -1622,28 +1917,13 @@ def benchmark(
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     base_path = baseline_path or default_baseline_path()
-    if update_baseline:
-        if case_id:
-            raise click.ClickException("--update-baseline requires the full corpus (omit --case)")
-        written = write_baseline(scores, base_path)
-        click.echo(f"wrote baseline {written}")
+    _maybe_update_benchmark_baseline(scores, case_id, update_baseline, base_path)
     baseline = load_baseline(base_path)
     regressions = compare_to_baseline(scores, baseline)
     report = scores_as_json(scores, regressions=regressions)
     if output_path:
         output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    if fmt == "json":
-        click.echo(json.dumps(report, indent=2))
-    else:
-        click.echo(format_table(scores))
-        if regressions:
-            click.echo("")
-            click.echo("regressions vs baseline:")
-            for note in regressions:
-                click.echo(f"  - {note}")
-        elif base_path.is_file():
-            click.echo("")
-            click.echo(f"meets baseline {base_path}")
+    _echo_benchmark_report(scores, regressions, report, fmt, base_path)
     if regressions and not update_baseline:
         raise SystemExit(1)
 
