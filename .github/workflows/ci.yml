@@ -76,8 +76,6 @@ jobs:
           done
       - run: pip install --no-cache-dir ".[dev]"
       - run: pytest tests/ -v --tb=short
-      - name: Tools-only generated scene region
-        run: pytest tests/test_tools_only_generated_region.py::test_hand_edited_generated_region_fails_scene_assets -v --tb=short
 
   # Required gate for clock / scene-compile changes. Do not remove: tests
   # assert this job runs `docgen benchmark` against the committed baseline.

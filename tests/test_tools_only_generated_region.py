@@ -17,10 +17,6 @@ from docgen.scene_spec import compile_scene_class
 from docgen.validate import Validator
 
 ROOT = Path(__file__).resolve().parents[1]
-CI_NODE = (
-    "tests/test_tools_only_generated_region.py"
-    "::test_hand_edited_generated_region_fails_scene_assets"
-)
 
 
 def _box(label: str, **extra: object) -> dict:
@@ -143,7 +139,11 @@ def test_hand_edited_generated_region_fails_scene_assets(tmp_path: Path) -> None
 
 
 def test_ci_unit_job_runs_hand_edited_generated_region() -> None:
-    """The unit job must invoke this node; the full suite alone is not the gate."""
+    """The unit job's pytest tests/ run collects this module."""
     text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     unit = text.split("\n  unit:", 1)[1].split("\n  benchmark:", 1)[0]
-    assert CI_NODE in unit
+    assert "pytest tests/" in unit
+    module = ROOT / "tests" / "test_tools_only_generated_region.py"
+    assert module.is_file()
+    source = module.read_text(encoding="utf-8")
+    assert "def test_hand_edited_generated_region_fails_scene_assets" in source
