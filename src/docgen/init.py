@@ -338,8 +338,6 @@ def _write_config(plan: InitPlan) -> str:
         "image_generation": {
             "model": "gpt-image-1",  # Cursor/OpenAI Images; override with --model
             "size": "1536x1024",
-            "align_with_docs": True,  # ground prompts in narration/source; fail invented terms
-            "align_review": True,  # vision-review the PNG against the same docs
         },
         "compose": {
             "ffmpeg_timeout_sec": 300,

@@ -68,17 +68,15 @@ If you still need the legacy behaviour, pin a pre-removal commit
 - **Validation** — A/V drift, freeze ratio, OCR error scan, layout, narration lint,
   Manim scene lint, **timing_sync** (stale `timing.json` vs regenerated mp3 —
   hard fail), **story_end** (paced visual story finishes long before narration —
-  hard fail), **image_prompt_alignment** (image-element `prompt:` must share
-  documented terms with narration/source — hard fail), **image_asset_alignment**
-  (OCR of generated PNGs vs docs; optional vision review — hard fail), and **av_sync** (OCR
+  hard fail), **scene_assets** (also fails image prompts or PNG OCR/vision
+  that do not match narration/source), and **av_sync** (OCR
   check that scene-spec label anchors appear on screen near their spoken time
   — hard fail on `--pre-push` / `generate-all`).
   Missing tesseract fails `ocr_scan` / `av_sync` / `layout` instead of skip-PASS.
   Missing audio or an LFS pointer fails `timing_sync` and recording media gates
   (`stream_presence`, `av_drift`, `ocr_scan`, `av_sync`) instead of skip-PASS.
-  Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` /
-  `image_prompt_alignment` / `image_asset_alignment` for `type: manim`
-  instead of skip-PASS. A hand-edited generated-region label
+  Missing `*.scene.yaml` fails `story_end` / `subject_beat_coverage` for
+  `type: manim` instead of skip-PASS. A hand-edited generated-region label
   or `run_time` in `scenes.py` fails `scene_assets` compile_sync (clock /
   benchmark still execute a fresh `compile_scene_class`, not the on-disk file).
 - **GitHub Pages** — auto-generate `index.html`, deploy workflow, LFS rules,

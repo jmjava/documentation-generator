@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from docgen.image_align import (
+    image_ocr_alignment_violations,
+    image_prompt_alignment_violations,
+)
 from docgen.scene_spec import (
     MIN_REVEAL_RUN_TIME,
     TITLE_WRITE_RUN_TIME,
@@ -17,8 +21,6 @@ from docgen.scene_spec import (
     disk_spec_with_merged_wait_words,
     cluster_subject_beats,
     count_spec_labels,
-    image_ocr_alignment_violations,
-    image_prompt_alignment_violations,
     iter_paced_label_anchors,
     last_paced_reveal_time,
     layout_budget_violations,

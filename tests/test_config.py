@@ -1149,54 +1149,72 @@ def test_from_yaml_validation_enable_bools_allowed(tmp_path: Path) -> None:
     assert c.scene_assets_config["enabled"] is True
     assert c.story_end_config["enabled"] is False
     assert c.layout_config["check_overlap"] is False
+    from docgen.image_align import (
+        image_asset_alignment_settings,
+        image_prompt_alignment_enabled,
+    )
+
     assert c.subject_beat_coverage_enabled is False
-    assert c.image_prompt_alignment_enabled is False
-    assert c.image_asset_alignment_config["enabled"] is False
-    assert c.image_asset_alignment_config["ocr"] is True
-    assert c.image_asset_alignment_config["review"] is False
+    assert image_prompt_alignment_enabled(c) is False
+    asset = image_asset_alignment_settings(c)
+    assert asset["enabled"] is False
+    assert asset["ocr"] is True
+    assert asset["review"] is False
 
 
 def test_from_yaml_int_image_prompt_alignment_enabled_raises(tmp_path: Path) -> None:
+    from docgen.image_align import image_prompt_alignment_enabled
+
     p = tmp_path / "docgen.yaml"
     p.write_text(
         "validation:\n  image_prompt_alignment:\n    enabled: 0\n",
         encoding="utf-8",
     )
+    cfg = Config.from_yaml(p)
     with pytest.raises(
         ConfigError,
         match="validation.image_prompt_alignment.enabled must be a YAML boolean",
     ):
-        Config.from_yaml(p)
+        image_prompt_alignment_enabled(cfg)
 
 
 def test_from_yaml_int_image_asset_alignment_enabled_raises(tmp_path: Path) -> None:
+    from docgen.image_align import image_asset_alignment_settings
+
     p = tmp_path / "docgen.yaml"
     p.write_text(
         "validation:\n  image_asset_alignment:\n    enabled: 0\n",
         encoding="utf-8",
     )
+    cfg = Config.from_yaml(p)
     with pytest.raises(
         ConfigError,
         match="validation.image_asset_alignment.enabled must be a YAML boolean",
     ):
-        Config.from_yaml(p)
+        image_asset_alignment_settings(cfg)
 
 
 def test_from_yaml_int_image_align_review_raises(tmp_path: Path) -> None:
+    from docgen.image_align import align_review_enabled
+
     p = tmp_path / "docgen.yaml"
     p.write_text("image_generation:\n  align_review: 1\n", encoding="utf-8")
+    cfg = Config.from_yaml(p)
     with pytest.raises(
         ConfigError,
         match="image_generation.align_review must be a YAML boolean",
     ):
-        Config.from_yaml(p)
+        align_review_enabled(cfg)
 
 
 def test_from_yaml_int_image_align_with_docs_raises(tmp_path: Path) -> None:
+    from docgen.image_align import align_with_docs
+
     p = tmp_path / "docgen.yaml"
     p.write_text("image_generation:\n  align_with_docs: 1\n", encoding="utf-8")
+    cfg = Config.from_yaml(p)
     with pytest.raises(
         ConfigError,
         match="image_generation.align_with_docs must be a YAML boolean",
     ):
-        Config.from_yaml(p)
+        align_with_docs(cfg)

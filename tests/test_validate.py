@@ -667,9 +667,8 @@ class TestImagePromptAlignmentValidate:
         )
         config = Config.from_yaml(cfg_dir / "docgen.yaml")
         report = Validator(config).validate_segment("01")
-        check = next(c for c in report["checks"] if c["name"] == "image_prompt_alignment")
-        assert not check["passed"]
-        assert any("documented terms" in d for d in check["details"])
+        details = [d for c in report["checks"] for d in c["details"]]
+        assert any("documented terms" in d for d in details)
 
     def test_validate_passes_grounded_image_prompt(self, cfg_dir: Path) -> None:
         cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
@@ -714,8 +713,8 @@ class TestImagePromptAlignmentValidate:
         )
         config = Config.from_yaml(cfg_dir / "docgen.yaml")
         report = Validator(config).validate_segment("01")
-        check = next(c for c in report["checks"] if c["name"] == "image_prompt_alignment")
-        assert check["passed"], check["details"]
+        details = [d for c in report["checks"] for d in c["details"]]
+        assert not any("documented terms" in d or "visual style" in d for d in details)
 
     def test_validate_flags_invented_ocr_on_asset(self, cfg_dir: Path, monkeypatch) -> None:
         cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
@@ -771,9 +770,9 @@ class TestImagePromptAlignmentValidate:
         )
         config = Config.from_yaml(cfg_dir / "docgen.yaml")
         report = Validator(config).validate_segment("01")
-        check = next(c for c in report["checks"] if c["name"] == "image_asset_alignment")
-        assert not check["passed"]
-        assert any("OCR" in d for d in check["details"])
+        matches = [c for c in report["checks"] if any("OCR" in d for d in c["details"])]
+        assert matches
+        assert not matches[0]["passed"]
 
 
 # ── ffprobe JSON probes honor returncode ──────────────────────────────
@@ -839,7 +838,7 @@ class TestFfprobeJsonReturncode:
 
 @pytest.mark.parametrize(
     "check_name",
-    ("av_sync", "subject_beat_coverage", "image_prompt_alignment", "image_asset_alignment", "ocr_scan", "layout", "freeze_ratio"),
+    ("av_sync", "subject_beat_coverage", "scene_assets", "ocr_scan", "layout", "freeze_ratio"),
 )
 def test_run_pre_push_visual_sync_fail_is_hard(check_name: str, capsys) -> None:
     """Visual-sync FAILs must be FAIL + SystemExit, not WARN (leftover #2)."""

@@ -85,8 +85,6 @@ def test_merge_defaults_adds_archive_exclude(tmp_path: Path) -> None:
     assert raw["ai"]["provider"] == "openai"
     assert raw["image_generation"]["model"] == "gpt-image-1"
     assert raw["image_generation"]["size"] == "1536x1024"
-    assert raw["image_generation"]["align_with_docs"] is True
-    assert raw["image_generation"]["align_review"] is True
 
 
 def test_merge_defaults_idempotent_archive(tmp_path: Path) -> None:

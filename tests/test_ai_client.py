@@ -619,8 +619,9 @@ def test_anthropic_chat_posts_messages(
     assert captured["payload"]["model"] == DEFAULT_ANTHROPIC_CHAT_MODEL
 
 
+@pytest.mark.usefixtures("clear_ai_env")
 def test_anthropic_vision_chat_posts_image_block(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     cfg = _cfg(tmp_path, {"ai": {"provider": "anthropic"}})

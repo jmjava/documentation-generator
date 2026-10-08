@@ -31,13 +31,13 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from docgen.image_align import (
     ImageReviewResult,
+    image_ocr_alignment_violations,
+    image_prompt_alignment_violations,
     ocr_image_text,
     review_image_against_docs,
 )
 from docgen.openai_retry import call_with_rate_limit_retries
 from docgen.scene_spec import (
-    image_ocr_alignment_violations,
-    image_prompt_alignment_violations,
     iter_image_elements,
     load_scene_spec,
 )
@@ -190,31 +190,45 @@ def build_aligned_image_prompt(
     return "\n".join(parts).strip() + "\n"
 
 
+def _narration_corpus_part(cfg: "Config", seg_id: str) -> str:
+    found = cfg.find_segment_asset(cfg.narration_dir, seg_id, ".md")
+    if found is None or not found.is_file():
+        return ""
+    try:
+        return found.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _hint_source_parts(cfg: "Config", seg_id: str) -> list[str]:
+    from docgen.manim_scene_support import (
+        collect_source_snippets,
+        merged_scene_generation_settings,
+    )
+
+    settings = merged_scene_generation_settings(cfg, seg_id)
+    parts: list[str] = []
+    for hint in settings.hints:
+        if str(hint).strip():
+            parts.append(str(hint).strip())
+    for label, text in collect_source_snippets(cfg, settings, extra_paths=[]):
+        body = str(text or "").strip()
+        if body:
+            parts.append(f"{label}\n{body}")
+    return parts
+
+
 def collect_alignment_corpus(cfg: "Config", spec: dict[str, Any]) -> str:
     """Narration + scene-generation hints + source snippets for one spec."""
-    parts: list[str] = []
     seg_id = str(spec.get("segment_id") or "").strip()
-    if seg_id:
-        found = cfg.find_segment_asset(cfg.narration_dir, seg_id, ".md")
-        if found is not None and found.is_file():
-            try:
-                parts.append(found.read_text(encoding="utf-8"))
-            except OSError:
-                pass
-        from docgen.manim_scene_support import (
-            collect_source_snippets,
-            merged_scene_generation_settings,
-        )
-
-        settings = merged_scene_generation_settings(cfg, seg_id)
-        for h in settings.hints:
-            if str(h).strip():
-                parts.append(str(h).strip())
-        for label, text in collect_source_snippets(cfg, settings, extra_paths=[]):
-            body = str(text or "").strip()
-            if body:
-                parts.append(f"{label}\n{body}")
-    return "\n\n".join(p for p in parts if str(p).strip())
+    if not seg_id:
+        return ""
+    parts: list[str] = []
+    narration = _narration_corpus_part(cfg, seg_id)
+    if narration:
+        parts.append(narration)
+    parts.extend(_hint_source_parts(cfg, seg_id))
+    return "\n\n".join(part for part in parts if str(part).strip())
 
 
 def _resolve_asset_path(cfg: "Config", relpath: str) -> Path:
@@ -225,6 +239,218 @@ def _resolve_asset_path(cfg: "Config", relpath: str) -> Path:
             "(no absolute paths or '..')"
         )
     return cfg.base_dir / p
+
+
+def _review_retry_count(cfg: "Config") -> int:
+    block = cfg._block("image_generation")
+    raw = block.get("align_review_retries")
+    if raw is None:
+        return 1
+    from docgen.config import require_yaml_number
+
+    return max(0, int(require_yaml_number(
+        raw, label="image_generation.align_review_retries", source=cfg._source_label()
+    )))
+
+
+def _override_or(override: str | None, configured: object, default: str) -> str:
+    chosen = (override or "").strip()
+    if chosen:
+        return chosen
+    text = str(configured or "").strip()
+    if text:
+        return text
+    return default
+
+
+def _optional_quality(configured: object) -> str | None:
+    if not configured:
+        return None
+    text = str(configured).strip()
+    if text:
+        return text
+    return None
+
+
+def _image_job(cfg: "Config", model_override: str | None, size_override: str | None) -> dict[str, Any]:
+    from docgen.image_align import align_review_enabled, align_with_docs
+
+    icfg = cfg.image_generation_config
+    return {
+        "model": _override_or(model_override, icfg.get("model"), DEFAULT_IMAGE_MODEL),
+        "size": _override_or(size_override, icfg.get("size"), DEFAULT_IMAGE_SIZE),
+        "quality": _optional_quality(icfg.get("quality")),
+        "align": align_with_docs(cfg),
+        "align_review": align_review_enabled(cfg),
+        "pixel_retries": _review_retry_count(cfg),
+        "review_model": str(icfg.get("review_model") or "").strip(),
+        "style": _override_or(None, icfg.get("style"), DEFAULT_IMAGE_STYLE),
+    }
+
+
+def _live_review(
+    align: bool,
+    align_review: bool,
+    review_fn: Callable[..., ImageReviewResult] | None,
+    image_fn: Callable[[str], bytes] | None,
+) -> bool:
+    if not align:
+        return False
+    if not align_review:
+        return False
+    if review_fn is not None:
+        return True
+    return image_fn is None
+
+
+def _reject_unaligned_prompts(spec_path: Path, spec: dict[str, Any], corpus: str, align: bool) -> None:
+    if not align:
+        return
+    issues = image_prompt_alignment_violations(spec, corpus_text=corpus)
+    if not issues:
+        return
+    joined = "\n  ".join(issues)
+    raise ImageGenerationError(
+        f"{spec_path}: image prompt alignment failed — rewrite each "
+        f"`prompt` so it uses documented terms from narration/source "
+        f"(or set image_generation.align_with_docs: false):\n  {joined}"
+    )
+
+
+def _effective_prompt(prompt: str, *, align: bool, corpus: str, label: str, style: str) -> str:
+    if align and prompt:
+        return build_aligned_image_prompt(prompt, corpus_text=corpus, label=label, style=style)
+    return prompt
+
+
+def _existing_or_dry(
+    *,
+    spec_path: Path,
+    rel: str,
+    out: Path,
+    prompt: str,
+    effective: str,
+    force: bool,
+    dry_run: bool,
+) -> ImageAssetResult | None:
+    if out.is_file() and not force:
+        return ImageAssetResult(rel, out, "exists", prompt, effective)
+    if not prompt:
+        raise ImageGenerationError(
+            f"{spec_path}: image element {rel!r} has no `prompt` and the asset is missing "
+            f"({out}); add the file to the bundle or set a prompt in the spec."
+        )
+    if dry_run:
+        return ImageAssetResult(rel, out, "dry-run", prompt, effective)
+    return None
+
+
+def _prompt_with_critique(effective: str, critique: str) -> str:
+    if not critique:
+        return effective
+    return (
+        f"{effective}\n\n--- PIXEL REVIEW FAILED ---\n{critique}\n"
+        "Redraw so the image matches the documented subject. "
+        "Do not invent labels or extra components."
+    )
+
+
+def _write_or_raise(spec_path: Path, rel: str, out: Path, data: bytes) -> None:
+    if not data:
+        raise ImageGenerationError(
+            f"{spec_path}: image element {rel!r} — provider returned empty bytes"
+        )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+
+
+def _draw_until_aligned(
+    *,
+    spec_path: Path,
+    rel: str,
+    out: Path,
+    prompt: str,
+    effective: str,
+    fn: Callable[[str], bytes],
+    pixel_retries: int,
+    pixel_kwargs: dict[str, Any],
+) -> None:
+    critique = ""
+    last_issues: list[str] = []
+    kept = False
+    for _attempt in range(1 + pixel_retries):
+        _write_or_raise(spec_path, rel, out, fn(_prompt_with_critique(effective, critique)))
+        last_issues = _pixel_alignment_issues(out, relpath=rel, authored_prompt=prompt, **pixel_kwargs)
+        if not last_issues:
+            kept = True
+            break
+        critique = "\n".join(last_issues)
+    if kept:
+        return
+    out.unlink(missing_ok=True)
+    joined = "\n  ".join(last_issues)
+    raise ImageGenerationError(
+        f"{spec_path}: image {rel!r} failed pixel alignment "
+        f"(OCR / vision review):\n  {joined}"
+    )
+
+
+def _one_image(
+    cfg: "Config",
+    spec_path: Path,
+    el: dict[str, Any],
+    *,
+    job: dict[str, Any],
+    corpus: str,
+    force: bool,
+    dry_run: bool,
+    image_fn: Callable[[str], bytes] | None,
+    review_fn: Callable[..., ImageReviewResult] | None,
+    ocr_fn: Callable[[Path], str | None] | None,
+) -> ImageAssetResult:
+    rel = str(el["image"]).strip()
+    prompt = str(el.get("prompt") or "").strip()
+    out = _resolve_asset_path(cfg, rel)
+    label = str(el.get("label") or "").strip()
+    effective = _effective_prompt(
+        prompt, align=job["align"], corpus=corpus, label=label, style=job["style"]
+    )
+    planned = _existing_or_dry(
+        spec_path=spec_path,
+        rel=rel,
+        out=out,
+        prompt=prompt,
+        effective=effective,
+        force=force,
+        dry_run=dry_run,
+    )
+    if planned is not None:
+        return planned
+    fn = image_fn or (
+        lambda p: generate_image_bytes(
+            prompt=p, model=job["model"], size=job["size"], quality=job["quality"], cfg=cfg
+        )
+    )
+    _draw_until_aligned(
+        spec_path=spec_path,
+        rel=rel,
+        out=out,
+        prompt=prompt,
+        effective=effective,
+        fn=fn,
+        pixel_retries=job["pixel_retries"],
+        pixel_kwargs={
+            "corpus": corpus,
+            "label": label,
+            "cfg": cfg,
+            "align": job["align"],
+            "live_review": _live_review(job["align"], job["align_review"], review_fn, image_fn),
+            "review_model": job["review_model"],
+            "review_fn": review_fn,
+            "ocr_fn": ocr_fn,
+        },
+    )
+    return ImageAssetResult(rel, out, "generated", prompt, effective)
 
 
 def generate_images_for_spec(
@@ -250,109 +476,24 @@ def generate_images_for_spec(
     not injected (or ``review_fn`` is provided).
     """
     spec = load_scene_spec(spec_path)
-    elements = iter_image_elements(spec)
-    icfg = cfg.image_generation_config
-    model = (model_override or "").strip() or str(icfg.get("model") or DEFAULT_IMAGE_MODEL)
-    size = (size_override or "").strip() or str(icfg.get("size") or DEFAULT_IMAGE_SIZE)
-    quality = icfg.get("quality")
-    quality = str(quality).strip() if quality else None
-    align = bool(icfg.get("align_with_docs", True))
-    align_review = bool(icfg.get("align_review", True))
-    try:
-        pixel_retries = int(icfg.get("align_review_retries", 1) or 0)
-    except (TypeError, ValueError):
-        pixel_retries = 1
-    pixel_retries = max(0, pixel_retries)
-    review_model = str(icfg.get("review_model") or "").strip()
-    style = str(icfg.get("style") or "").strip() or DEFAULT_IMAGE_STYLE
-    corpus = collect_alignment_corpus(cfg, spec) if align else ""
-    live_review = align and align_review and (review_fn is not None or image_fn is None)
-
-    if align:
-        issues = image_prompt_alignment_violations(spec, corpus_text=corpus)
-        if issues:
-            joined = "\n  ".join(issues)
-            raise ImageGenerationError(
-                f"{spec_path}: image prompt alignment failed — rewrite each "
-                f"`prompt` so it uses documented terms from narration/source "
-                f"(or set image_generation.align_with_docs: false):\n  {joined}"
-            )
-
-    results: list[ImageAssetResult] = []
-    for el in elements:
-        rel = str(el["image"]).strip()
-        prompt = str(el.get("prompt") or "").strip()
-        out = _resolve_asset_path(cfg, rel)
-        label = str(el.get("label") or "").strip()
-        effective = (
-            build_aligned_image_prompt(
-                prompt, corpus_text=corpus, label=label, style=style
-            )
-            if align and prompt
-            else prompt
+    job = _image_job(cfg, model_override, size_override)
+    corpus = collect_alignment_corpus(cfg, spec) if job["align"] else ""
+    _reject_unaligned_prompts(spec_path, spec, corpus, job["align"])
+    return [
+        _one_image(
+            cfg,
+            spec_path,
+            el,
+            job=job,
+            corpus=corpus,
+            force=force,
+            dry_run=dry_run,
+            image_fn=image_fn,
+            review_fn=review_fn,
+            ocr_fn=ocr_fn,
         )
-
-        if out.is_file() and not force:
-            results.append(ImageAssetResult(rel, out, "exists", prompt, effective))
-            continue
-        if not prompt:
-            raise ImageGenerationError(
-                f"{spec_path}: image element {rel!r} has no `prompt` and the asset is missing "
-                f"({out}); add the file to the bundle or set a prompt in the spec."
-            )
-        if dry_run:
-            results.append(ImageAssetResult(rel, out, "dry-run", prompt, effective))
-            continue
-
-        fn = image_fn or (
-            lambda p: generate_image_bytes(
-                prompt=p, model=model, size=size, quality=quality, cfg=cfg
-            )
-        )
-        critique = ""
-        kept = False
-        last_issues: list[str] = []
-        for attempt in range(1 + pixel_retries):
-            to_send = effective
-            if critique:
-                to_send = (
-                    f"{effective}\n\n--- PIXEL REVIEW FAILED ---\n{critique}\n"
-                    "Redraw so the image matches the documented subject. "
-                    "Do not invent labels or extra components."
-                )
-            data = fn(to_send)
-            if not data:
-                raise ImageGenerationError(
-                    f"{spec_path}: image element {rel!r} — provider returned empty bytes"
-                )
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_bytes(data)
-            last_issues = _pixel_alignment_issues(
-                out,
-                relpath=rel,
-                corpus=corpus,
-                authored_prompt=prompt,
-                label=label,
-                cfg=cfg,
-                align=align,
-                live_review=live_review,
-                review_model=review_model,
-                review_fn=review_fn,
-                ocr_fn=ocr_fn,
-            )
-            if not last_issues:
-                kept = True
-                break
-            critique = "\n".join(last_issues)
-        if not kept:
-            out.unlink(missing_ok=True)
-            joined = "\n  ".join(last_issues)
-            raise ImageGenerationError(
-                f"{spec_path}: image {rel!r} failed pixel alignment "
-                f"(OCR / vision review):\n  {joined}"
-            )
-        results.append(ImageAssetResult(rel, out, "generated", prompt, effective))
-    return results
+        for el in iter_image_elements(spec)
+    ]
 
 
 def _pixel_alignment_issues(
