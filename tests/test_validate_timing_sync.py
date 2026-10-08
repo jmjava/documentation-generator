@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -210,6 +211,76 @@ def _write_scene_spec(cfg: Config, *, labels: list[str]) -> None:
         "rows": [{"run_time": 1.0, "boxes": boxes}],
     }
     (specs / "01-x.scene.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+
+
+class _FakeDurationProbe:
+    def __init__(self, returncode: int, stdout: str, stderr: str = "") -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def _install_duration_probe(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    """Drive the real ``_probe_media_duration`` (do not replace the method)."""
+
+    def _run(*_args: object, **_kwargs: object) -> _FakeDurationProbe:
+        if mode == "timeout":
+            raise subprocess.TimeoutExpired(cmd=["ffprobe"], timeout=30)
+        if mode == "nonzero":
+            # Leftover stdout looks like a duration that would pass the check.
+            return _FakeDurationProbe(1, "10.4\n", stderr="Invalid data")
+        if mode == "nan":
+            return _FakeDurationProbe(0, "nan\n")
+        if mode == "inf":
+            return _FakeDurationProbe(0, "inf\n")
+        return _FakeDurationProbe(0, "not-a-duration\n")
+
+    monkeypatch.setattr(subprocess, "run", _run)
+
+
+class TestMediaDurationProbeFailClosed:
+    """ffprobe duration failures fail the check that asked; they are not a skip."""
+
+    @pytest.mark.parametrize("mode", ("nonzero", "timeout", "invalid", "nan", "inf"))
+    def test_timing_sync_fails_closed(self, cfg: Config, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+        _write_timing(cfg, last_end=10.0)
+        _install_duration_probe(monkeypatch, mode)
+        check = Validator(cfg)._check_timing_sync("01")
+        assert check.passed is False
+        assert any("cannot probe audio duration" in detail for detail in check.details)
+        if mode == "nonzero":
+            assert any("exit 1" in detail for detail in check.details)
+        elif mode == "timeout":
+            assert any("timed out" in detail for detail in check.details)
+        else:
+            assert any("ffprobe duration" in detail for detail in check.details)
+
+    @pytest.mark.parametrize("mode", ("nonzero", "timeout", "invalid", "nan", "inf"))
+    def test_story_end_fails_closed(self, cfg: Config, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+        words = [
+            {"word": "Alpha", "start": 2.0, "end": 2.4},
+            {"word": "Omega", "start": 80.0, "end": 80.5},
+        ]
+        (cfg.animations_dir / "timing.json").write_text(
+            json.dumps(
+                {
+                    "01-x": {
+                        "text": "Alpha Omega",
+                        "words": words,
+                        "segments": [{"start": 0.0, "end": 85.0, "text": "x"}],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        _write_scene_spec(cfg, labels=["Alpha", "Omega"])
+        _install_duration_probe(monkeypatch, mode)
+        check = Validator(cfg)._check_story_end("01")
+        assert check.passed is False
+        assert any("cannot probe audio duration" in detail for detail in check.details)
+        if mode == "nonzero":
+            assert any("exit 1" in detail for detail in check.details)
+            assert not any("skipped" in detail.lower() for detail in check.details)
 
 
 class TestStoryEnd:

@@ -155,6 +155,36 @@ def test_tts_empty_provider_output_raises(tmp_path: Path) -> None:
     assert not (tmp_path / "audio" / "01-intro.mp3").exists()
 
 
+def test_cli_tts_missing_narration_exits_1(tmp_path: Path) -> None:
+    """A listed segment with no narration file must fail closed and leave audio."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    (tmp_path / "narration").mkdir()
+    audio = tmp_path / "audio" / "01-intro.mp3"
+    audio.parent.mkdir()
+    stale = b"keep-me"
+    audio.write_bytes(stale)
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(tmp_path / "docgen.yaml"), "tts", "--segment", "01"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "No narration file" in combined
+    assert "01-intro.md" in combined
+    assert "Traceback" not in combined
+    assert audio.read_bytes() == stale
+
+
 def test_probe_duration_returns_none_for_missing_file(tmp_path):
     result = _probe_duration(tmp_path / "nonexistent.mp3")
     assert result is None

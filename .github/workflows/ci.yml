@@ -20,12 +20,22 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install ruff lizard==1.24.0
+      - run: pip install ruff lizard==1.24.0 vulture==2.16
       - run: ruff check src/ tests/
       - name: Complexity proving test
         run: bash scripts/test-check-complexity.sh
       - name: PR-diff complexity
         run: python3 scripts/check-complexity.py --base origin/main --paths src
+      - name: Hotspot proving test
+        run: bash scripts/test-check-hotspots.sh
+      - name: PR-diff hotspots
+        run: python3 scripts/check-hotspots.py --base origin/main --paths src
+      - name: Vulture proving test
+        run: bash scripts/test-check-vulture.sh
+      - name: Vulture baseline
+        run: python3 scripts/check-vulture.py src tests
+      - name: Mutation score proving test
+        run: bash scripts/test-check-mutation.sh
 
   unit:
     runs-on: ubuntu-latest
@@ -95,3 +105,42 @@ jobs:
       - run: pip install --no-cache-dir "."
       - name: Validate scratch init bundle
         run: bash scripts/ci-validate-scratch-bundle.sh
+
+  # mutmut on src/docgen/path_filters.py only. The job reads the committed
+  # survived ceiling and does not rewrite it.
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          attempt=1
+          max_attempts=4
+          backoff=4
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "apt attempt $attempt/$max_attempts"
+            if timeout 600s sudo apt-get -o Acquire::Retries=3 update \
+              && timeout 600s sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends ffmpeg tesseract-ocr; then
+              exit 0
+            fi
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              echo "apt failed after $max_attempts attempts"
+              exit 1
+            fi
+            echo "apt failed, retrying in ${backoff}s..."
+            sleep "$backoff"
+            backoff=$((backoff * 2))
+            attempt=$((attempt + 1))
+          done
+      - run: pip install --no-cache-dir ".[dev]" "mutmut==3.8.0"
+      - name: Mutation score for path_filters.py
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          mutmut run --max-children 1
+          mutmut export-cicd-stats
+          python3 scripts/check-mutation-score.py

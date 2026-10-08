@@ -11,6 +11,7 @@ from click.testing import CliRunner
 from docgen.cli import main
 from docgen.scene_benchmark import (
     BenchmarkCase,
+    CaseScore,
     compare_to_baseline,
     default_baseline_path,
     format_table,
@@ -133,6 +134,39 @@ def test_full_corpus_meets_committed_baseline() -> None:
     assert "quality average" in table
 
 
+def _tiny_score(case_id: str) -> CaseScore:
+    return CaseScore(
+        case_id=case_id,
+        title=case_id,
+        role="quality",
+        wait_skips=0,
+        overshoots=0,
+        hold_idle_violations=0,
+        cadence_violations=0,
+        sim_drift=0,
+        mid_hold_pulses=1,
+        box_reveals=1,
+        last_motion_frac=1.0,
+        audio_end=1.0,
+        defect_points=0,
+        quality_points=10,
+        score=100,
+    )
+
+
+def test_compare_flags_baseline_id_missing_from_current_scores() -> None:
+    """A baseline id dropped from the score list must fail (leftover #17)."""
+    scores = [_tiny_score("alpha"), _tiny_score("beta")]
+    baseline = {"version": 1, "cases": {score.case_id: score.snapshot() for score in scores}}
+    assert compare_to_baseline(scores, baseline) == []
+    reduced = [score for score in scores if score.case_id != "beta"]
+    notes = compare_to_baseline(reduced, baseline)
+    assert notes == ["beta: missing from current scores"]
+    kept = next(score for score in scores if score.case_id == "alpha")
+    kept.filtered_case_id = "alpha"
+    assert compare_to_baseline([kept], baseline) == []
+
+
 def test_compare_flags_skip_regression() -> None:
     scores = run_benchmark()
     dump = load_baseline()
@@ -166,6 +200,36 @@ def test_cli_benchmark_text_and_json(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["cases"][0]["case_id"] == "early_title"
+
+
+def test_cli_benchmark_score_regression_exits_1(tmp_path: Path) -> None:
+    """Consumers and CI depend on exit 1 when a quality case falls below baseline."""
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "cases": {
+                    "early_title": {
+                        "role": "quality",
+                        "wait_skips": 0,
+                        "defect_points": 0,
+                        "quality_points": 16,
+                        "mid_hold_pulses": 4,
+                        "score": 101,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = CliRunner().invoke(
+        main,
+        ["benchmark", "--case", "early_title", "--baseline", str(baseline)],
+    )
+    assert result.exit_code == 1, result.output
+    assert "regressions vs baseline:" in result.output
+    assert "early_title: score 101 → 100" in result.output
 
 
 def test_packaged_baseline_exists() -> None:

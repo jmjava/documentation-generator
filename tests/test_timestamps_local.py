@@ -403,3 +403,31 @@ class TestExtractLocal:
         out.write_text(json.dumps(payload), encoding="utf-8")
         assert load_bundle_timing(cfg) == payload
 
+
+def test_cli_timestamps_whisper_without_stt_exits_1(tmp_path) -> None:
+    """Claude chat has no speech-to-text; whisper must fail closed and leave timing.json."""
+    from click.testing import CliRunner
+
+    from docgen.cli import main
+
+    raw = {
+        "ai": {"provider": "anthropic"},
+        "segments": {"all": ["01"]},
+        "segment_names": {"01": "01-x"},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    timing = tmp_path / "animations" / "timing.json"
+    timing.parent.mkdir(parents=True)
+    stale = '{"keep": true}\n'
+    timing.write_text(stale, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(tmp_path / "docgen.yaml"), "timestamps", "--engine", "whisper"],
+    )
+    combined = result.output + result.stderr
+    assert result.exit_code == 1, combined
+    assert "speech-to-text" in combined
+    assert "Traceback" not in combined
+    assert timing.read_text(encoding="utf-8") == stale
+
