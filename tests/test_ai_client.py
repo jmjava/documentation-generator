@@ -15,6 +15,7 @@ from docgen.ai_client import (
     DEFAULT_GROK_IMAGE_MODEL,
     GROK_BASE_URL,
     chat_completion,
+    chat_completion_with_image,
     openai_client,
     resolve_ai_settings,
     resolve_chat_model,
@@ -135,6 +136,41 @@ def test_chat_completion_uses_remapped_model(
         )
     assert out == "ok"
     assert captured["model"] == DEFAULT_GROK_CHAT_MODEL
+
+
+def test_chat_completion_with_image_sends_data_uri(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "sk-proj-cursor")
+    captured: dict = {}
+
+    class _Msg:
+        content = "PASS\nok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+    fake = MagicMock()
+    fake.chat.completions.create.side_effect = lambda **kw: captured.update(kw) or _Resp()
+
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        out = chat_completion_with_image(
+            system_prompt="sys",
+            user_message="review this",
+            image_bytes=b"png-bytes",
+            media_type="image/png",
+            model="gpt-4o",
+            temperature=0.0,
+            cfg=_cfg(tmp_path, {}),
+        )
+    assert out == "PASS\nok"
+    content = captured["messages"][1]["content"]
+    assert content[0]["type"] == "text"
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
 def test_openai_empty_chat_content_raises(
@@ -581,6 +617,35 @@ def test_anthropic_chat_posts_messages(
     assert captured["url"].endswith("/v1/messages")
     assert captured["headers"]["x-api-key"] == "sk-ant-test"
     assert captured["payload"]["model"] == DEFAULT_ANTHROPIC_CHAT_MODEL
+
+
+@pytest.mark.usefixtures("clear_ai_env")
+def test_anthropic_vision_chat_posts_image_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    cfg = _cfg(tmp_path, {"ai": {"provider": "anthropic"}})
+    captured: dict = {}
+
+    def _http(url: str, *, data: bytes, headers: dict, **_kwargs) -> bytes:
+        captured["payload"] = json.loads(data.decode())
+        return json.dumps({"content": [{"type": "text", "text": "PASS\nok"}]}).encode()
+
+    with patch("docgen.ai_client._http_with_retries", side_effect=_http):
+        out = chat_completion_with_image(
+            system_prompt="sys",
+            user_message="review",
+            image_bytes=b"png-bytes",
+            media_type="image/png",
+            model="claude-sonnet-4-5",
+            temperature=0.0,
+            cfg=cfg,
+        )
+    assert out == "PASS\nok"
+    content = captured["payload"]["messages"][0]["content"]
+    assert content[0]["type"] == "image"
+    assert content[0]["source"]["type"] == "base64"
+    assert content[1]["type"] == "text"
 
 
 def test_anthropic_chat_honors_base_url(

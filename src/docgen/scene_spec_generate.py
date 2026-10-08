@@ -6,45 +6,20 @@ The model emits only structured YAML validated by :mod:`docgen.scene_spec`, then
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from docgen.openai_retry import call_with_rate_limit_retries
 from docgen.manim_scene_support import (
     SceneGenerationError,
-    collect_source_snippets,
-    derive_class_name,
-    extract_reference_classes,
-    merged_scene_generation_settings,
 )
-from docgen.manim_scene_support import _load_narration as load_narration_for_scene
-from docgen.manim_scene_support import _load_timing_segments as load_timing_for_scene
 from docgen.manim_primitives import ALLOWED_EMPHASIS, ALLOWED_REVEALS, ALLOWED_SHAPES
 from docgen.scene_spec import (
     ALLOWED_COLORS,
-    FRAME_HEIGHT,
-    FRAME_WIDTH,
-    SceneSpecError,
-    auto_fit_row_widths,
-    auto_paginate,
-    coerce_legacy_wait_at_to_whisper_rows,
-    sanitize_pacing_conflicts,
-    compile_scene_class,
-    cluster_subject_beats,
-    layout_budget_violations,
-    layout_density_violations,
-    layout_stack_budget,
-    narration_sentences,
-    spec_rows_reference_whisper_waits,
-    pacing_violations,
-    sync_row_labels_to_whisper_words,
-    upgrade_wait_segments_to_wait_words,
-    validate_scene_spec,
 )
 
 if TYPE_CHECKING:
@@ -90,10 +65,14 @@ Optional **image elements** (only when project-owner hints ask for generated ima
 may instead be an image element with:
   - image: bundle-relative asset path, e.g. ``images/<short-name>.png`` (no absolute paths, no "..")
   - width / height: positive numbers (frame budget rules above apply; images count like boxes)
-  - prompt: string — a clear visual description; ``docgen image-generate`` renders it via the OpenAI Images API
-  - label: optional single word from the narration used as the timing anchor for the reveal
+  - prompt: string — a clear visual description grounded in the narration **and** SOURCE
+    DOCUMENTATION; ``docgen image-generate`` renders it and rejects prompts that invent
+    undocumented product names or share no documented terms
+  - label: optional spoken phrase from the narration used as the timing anchor for the reveal
 Image elements must NOT carry ``color`` or ``font_size``. Prefer labeled boxes for diagrams; use images
-only for illustrative artwork the hints explicitly request.
+only for illustrative artwork the hints explicitly request. Image ``prompt`` text must name
+the same concepts as the narration/source (not generic "a diagram" / invented architecture).
+Any words you expect to appear *inside* the artwork must be short ASCII copied from the docs.
 
 Optional per-box (**Whisper ``words`` only**); omit if unsure — compile fills from each box ``label`` → first transcript match:
 - wait_word: non-negative int — index into ``timing.json`` → ``words``; that box waits until that token's **start**, then fades in (**one box at a time** within each row).
@@ -199,93 +178,13 @@ def _invoke_llm(
     )
 
 
-def build_scene_spec_user_message(
-    *,
-    seg_id: str,
-    seg_name: str,
-    class_name: str,
-    narration_text: str,
-    timing_enrichment: str,
-    hints: list[str],
-    extra_hints: list[str],
-    reference_scenes: str,
-    source_snippets: list[tuple[str, str]],
-    word_count: int = 0,
-) -> str:
+def build_scene_spec_user_message(*args, **kwargs):
     """User message: narration + timing + hints; demand YAML spec."""
-    parts: list[str] = []
-    parts.append(
-        f"Produce a **scene spec YAML** (not Python) for segment `{seg_id}` / class `{class_name}` "
-        f"(narration stem `{seg_name}`)."
-    )
-    parts.append("")
-    parts.append("**Required YAML fields** — use these exact values:")
-    parts.append(f"  segment_id: {json.dumps(str(seg_id).strip())}")
-    parts.append(f"  class_name: {json.dumps(class_name)}")
-    parts.append("")
-    parts.append("--- NARRATION ---")
-    parts.append(narration_text.strip() or "(empty)")
-    parts.append("")
-    beats = cluster_subject_beats(narration_sentences(narration_text))
-    if beats:
-        wc_note = f" ({word_count} Whisper words)" if word_count > 0 else ""
-        parts.append(
-            f"**SUBJECT BEATS{wc_note} — cover each with ≥1 spoken-phrase label "
-            f"(hold the board inside a beat; change when the topic shifts):**"
-        )
-        for i, beat in enumerate(beats, start=1):
-            preview = beat if len(beat) <= 160 else beat[:157] + "..."
-            parts.append(f"  {i}. {preview}")
-        parts.append(
-            "scene-spec-generate **rejects** specs that leave beats uncovered or use "
-            "labels that are not spoken in the narration (not a blind label count)."
-        )
-        parts.append("")
-    parts.append(timing_enrichment.strip())
-
-    all_hints = list(hints) + list(extra_hints)
-    if all_hints:
-        parts.append("")
-        parts.append("--- PROJECT-OWNER HINTS ---")
-        for h in all_hints:
-            if str(h).strip():
-                parts.append(f"- {str(h).strip()}")
-
-    if reference_scenes:
-        parts.append("")
-        parts.append(
-            "--- REFERENCE (existing Manim classes — steal **ideas**, output YAML only) ---"
-        )
-        parts.append(reference_scenes)
-
-    parts.append("")
-    parts.append("--- FRAME / LAYOUT BUDGET (plan every page; scene-spec-generate rejects overflow) ---")
-    horiz_safe = FRAME_WIDTH - 1.0
-    budget_default = layout_stack_budget(
-        {"font_size": 36}, {"first_row_title_buff": 0.5}
-    )
-    budget_compact = layout_stack_budget(
-        {"font_size": 32}, {"first_row_title_buff": 0.45}
-    )
-    parts.append(
-        f"Frame ≈ {FRAME_WIDTH:.2f} × {FRAME_HEIGHT:.2f} Manim units. "
-        f"Horizontal safe width ≈ {horiz_safe:.2f} u "
-        "(sum of box widths + (n_boxes-1)*column_gap per row must stay ≤ this)."
-    )
-    parts.append(
-        "**Vertical stack budgets** (use these numbers unless you change "
-        "title.font_size / layout.first_row_title_buff):\n"
-        f"  • Default font_size=36, first_row_title_buff=0.5 → "
-        f"max stack height ≈ {budget_default:.2f} u\n"
-        f"  • Compact font_size=32, first_row_title_buff=0.45 → "
-        f"max stack height ≈ {budget_compact:.2f} u\n"
-        "Per page: sum(max box height per row) + (n_rows-1)*row_gap ≤ that budget. "
-        "When you would exceed it, spill to another page (do not shrink/cram)."
-    )
-    return "\n".join(parts)
+    from docgen.scene_spec_flow import build_scene_spec_user_message as _impl
+    return _impl(*args, **kwargs)
 
 
-@dataclass(frozen=True)
+@dataclass
 class SceneSpecGenerationResult:
     seg_id: str
     seg_name: str
@@ -335,70 +234,10 @@ def _load_timing_words(cfg: Config, timing_key: str) -> list[dict[str, Any]]:
     return list(words) if isinstance(words, list) else []
 
 
-def linted_class_block_from_spec(
-    cfg: Config,
-    spec: dict[str, Any],
-    *,
-    timing_key: str | None = None,
-) -> tuple[str, dict[str, Any]]:
-    """Merge ``timing_key``, auto-paginate + word-align, compile, run ``manim_scene_lint``."""
-    from docgen.manim_scene_support import SceneGenerationError, lint_generated_block
-
-    merged = dict(spec)
-    sid = str(merged["segment_id"]).strip()
-    if timing_key is not None:
-        merged["timing_key"] = timing_key
-    elif not merged.get("timing_key"):
-        merged["timing_key"] = cfg.resolve_segment_name(sid)
-
-    # Engine-side layout planning + audio sync so authored YAML stays minimal.
-    merged = auto_fit_row_widths(merged)
-    merged = auto_paginate(merged)
-    tk = str(merged["timing_key"])
-    segments = load_timing_for_scene(cfg, tk)
-    words = _load_timing_words(cfg, tk)
-    merged = coerce_legacy_wait_at_to_whisper_rows(merged, words, segments)
-    if words and segments:
-        merged = upgrade_wait_segments_to_wait_words(merged, words, segments)
-    if words:
-        # LLM-authored wait_word values are often wrong (duplicates / guesses). Compile
-        # always re-derives indices from each box label + transcript order so multi-box
-        # rows reveal one box at a time. Fail-closed: unmatched labels clear wait_word
-        # and are rejected below (no leftover LLM indices, no fuzzy false positives).
-        merged = sync_row_labels_to_whisper_words(merged, words, overwrite=True)
-
-    if spec_rows_reference_whisper_waits(merged) and not words:
-        raise SceneGenerationError(
-            f"timing.json has no word-level `words` for stem {tk!r}; run `docgen timestamps` "
-            "before compiling scenes that use wait_word or wait_segment."
-        )
-
-    pace_issues = pacing_violations(merged, words_present=bool(words))
-    if pace_issues:
-        shown = "\n  ".join(pace_issues[:12])
-        more = f"\n  (+{len(pace_issues) - 12} more)" if len(pace_issues) > 12 else ""
-        raise SceneGenerationError(
-            f"scene pacing failed for timing_key {tk!r} — every story box needs a "
-            f"spoken label matched in timing.json words (or pace: none):\n  {shown}{more}"
-        )
-
-    try:
-        # Pass Whisper words so compile clamps FadeIn/page-fade run_times against
-        # the next wait_word (issue #66 — do not emit clock-racing garbage).
-        class_block = compile_scene_class(merged, words=words or None)
-    except SceneSpecError as exc:
-        raise SceneGenerationError(str(exc)) from exc
-    issues = lint_generated_block(
-        class_block,
-        min_font_size=cfg.manim_min_font_size,
-        unsafe_unicode=cfg.manim_unsafe_unicode,
-    )
-    if issues:
-        joined = "\n  ".join(issues[:20])
-        raise SceneGenerationError(
-            f"compiled scene failed manim_scene_lint:\n  {joined}"
-        )
-    return class_block, merged
+def linted_class_block_from_spec(*args, **kwargs):
+    """Merge timing_key, auto-paginate + word-align, compile, lint."""
+    from docgen.scene_spec_flow import linted_class_block_from_spec as _impl
+    return _impl(*args, **kwargs)
 
 
 def inject_class_block_into_scenes_py(
@@ -438,216 +277,15 @@ def _save_draft(cfg: Config, seg_id: str, content: str) -> Path:
     return path
 
 
-def _parse_and_harden_llm_spec(
-    cfg: Config,
-    *,
-    seg_id: str,
-    class_name: str,
-    seg_name: str,
-    narration_text: str,
-    word_count: int,
-    raw: str,
-    enforce_density: bool,
-    density_slack: int = 0,
-) -> dict[str, Any]:
-    """Parse YAML, auto-layout, validate schema/budget/(optional) density, compile-lint."""
-    body = strip_yaml_fences(raw)
-    try:
-        loaded = yaml.safe_load(body)
-    except yaml.YAMLError as exc:
-        draft = _save_draft(cfg, seg_id, raw)
-        raise SceneGenerationError(
-            f"segment {seg_id}: LLM output is not valid YAML ({exc}). Draft: {draft}"
-        ) from exc
-    if not isinstance(loaded, dict):
-        draft = _save_draft(cfg, seg_id, raw)
-        raise SceneGenerationError(
-            f"segment {seg_id}: LLM YAML root must be a mapping. Draft: {draft}"
-        )
-
-    merged_spec = normalize_spec_from_llm(loaded, seg_id=seg_id, class_name=class_name)
-    merged_spec = auto_fit_row_widths(merged_spec)
-    merged_spec = auto_paginate(merged_spec)
-    merged_spec = sanitize_pacing_conflicts(merged_spec)
-    try:
-        validate_scene_spec(merged_spec, path_label=f"segment {seg_id}")
-    except SceneSpecError as exc:
-        draft = _save_draft(cfg, seg_id, body)
-        raise SceneGenerationError(
-            f"segment {seg_id}: scene spec invalid: {exc}. Draft: {draft}"
-        ) from exc
-
-    budget_issues = layout_budget_violations(merged_spec)
-    if budget_issues:
-        draft = _save_draft(cfg, seg_id, body)
-        joined = "\n  ".join(budget_issues)
-        raise SceneGenerationError(
-            f"segment {seg_id}: scene spec exceeds frame budget:\n  {joined}\nDraft: {draft}"
-        )
-
-    if enforce_density and getattr(cfg, "subject_beat_coverage_enabled", True):
-        density_issues = layout_density_violations(
-            merged_spec,
-            narration_text=narration_text,
-            word_count=word_count,
-            slack=density_slack,
-        )
-        if density_issues:
-            draft = _save_draft(cfg, seg_id, body)
-            joined = "\n  ".join(density_issues)
-            raise SceneGenerationError(
-                f"segment {seg_id}: scene spec failed subject-beat coverage:\n  {joined}\nDraft: {draft}"
-            )
-
-    try:
-        _, _ = linted_class_block_from_spec(cfg, merged_spec, timing_key=seg_name)
-    except SceneGenerationError as exc:
-        draft = _save_draft(cfg, seg_id, body)
-        raise SceneGenerationError(f"{exc} Draft: {draft}") from exc
-    return merged_spec
+def _parse_and_harden_llm_spec(*args, **kwargs):
+    """Parse YAML, auto-layout, validate, compile-lint."""
+    from docgen.scene_spec_flow import _parse_and_harden_llm_spec as _impl
+    return _impl(*args, **kwargs)
 
 
-def generate_scene_spec(
-    cfg: Config,
-    seg_id: str,
-    *,
-    extra_paths: list[str],
-    extra_hints: list[str],
-    class_name_override: str | None = None,
-    dry_run: bool = False,
-    model_override: str | None = None,
-    temperature_override: float | None = None,
-    llm: Callable[..., str] | None = None,
-) -> SceneSpecGenerationResult:
-    """Prompt OpenAI for YAML, validate schema, compile+lint the merged Python."""
-    settings = merged_scene_generation_settings(cfg, seg_id)
-    seg_name = cfg.resolve_segment_name(seg_id)
-    class_name = derive_class_name(
-        seg_id, seg_name, class_name_override or settings.class_name
-    )
-    narration_text = load_narration_for_scene(cfg, seg_id, seg_name)
-    whisper_segments = load_timing_for_scene(cfg, seg_name)
-    from docgen.manim_scene_support import build_timing_enrichment_for_prompt
+def generate_scene_spec(*args, **kwargs):
+    """Prompt for YAML, validate schema, compile+lint the merged Python."""
+    from docgen.scene_spec_flow import generate_scene_spec as _impl
+    return _impl(*args, **kwargs)
 
-    timing_block = build_timing_enrichment_for_prompt(cfg, seg_id, seg_name, whisper_segments)
-    word_count = len(_load_timing_words(cfg, seg_name))
 
-    scenes_path = cfg.animations_dir / "scenes.py"
-    existing = scenes_path.read_text(encoding="utf-8") if scenes_path.exists() else ""
-    reference_scenes = extract_reference_classes(existing)
-    snippets = collect_source_snippets(cfg, settings, extra_paths=extra_paths)
-
-    system_prompt = scene_spec_system_prompt(cfg, seg_id)
-    user_message = build_scene_spec_user_message(
-        seg_id=seg_id,
-        seg_name=seg_name,
-        class_name=class_name,
-        narration_text=narration_text,
-        timing_enrichment=timing_block,
-        hints=settings.hints,
-        extra_hints=extra_hints,
-        reference_scenes=reference_scenes,
-        source_snippets=snippets,
-        word_count=word_count,
-    )
-
-    if dry_run:
-        return SceneSpecGenerationResult(
-            seg_id=seg_id,
-            seg_name=seg_name,
-            class_name=class_name,
-            spec={},
-            yaml_text="",
-            prompt=f"--- system ---\n{system_prompt}\n\n--- user ---\n{user_message}",
-            raw_response="",
-        )
-
-    model = (model_override or "").strip() or settings.model
-    if temperature_override is not None:
-        temperature = float(temperature_override)
-    else:
-        # ``0.0 or 0.35`` used to replace an explicit deterministic temperature.
-        temperature = float(settings.temperature)
-    invoke = llm or (lambda **kw: _invoke_llm(cfg=cfg, **kw))
-    n_beats = len(cluster_subject_beats(narration_sentences(narration_text)))
-    # Near-miss: allow a couple uncovered beats after retry, not a blind label quota.
-    near_miss_slack = max(1, n_beats // 8) if n_beats else 0
-    raw = ""
-    merged_spec: dict[str, Any] = {}
-    last_sparse: SceneGenerationError | None = None
-    for attempt in range(3):
-        msg = user_message
-        if attempt > 0 and last_sparse is not None:
-            msg = (
-                f"{user_message}\n\n--- RETRY: SUBJECT-BEAT COVERAGE FAILED ---\n"
-                f"{last_sparse}\n"
-                f"Cover each of the {n_beats} subject beats with a spoken-phrase label. "
-                "Hold the board across sentences in the same beat; add a new label only "
-                "when the topic shifts. Do not invent unspoken diagram terms."
-            )
-        try:
-            raw = invoke(
-                system_prompt=system_prompt,
-                user_message=msg,
-                model=model,
-                temperature=min(0.9, temperature + 0.15 * attempt),
-            )
-        except RuntimeError as exc:
-            from docgen.ai_client import resolve_ai_settings
-
-            settings = resolve_ai_settings(cfg)
-            raise SceneGenerationError(
-                f"Chat call failed ({exc}). "
-                f"{settings.auth_help()} Set DOCGEN_ENV_OVERRIDES=1 to load the bundle "
-                "env_file, or use --dry-run to inspect the prompt only."
-            ) from exc
-        try:
-            merged_spec = _parse_and_harden_llm_spec(
-                cfg,
-                seg_id=seg_id,
-                class_name=class_name,
-                seg_name=seg_name,
-                narration_text=narration_text,
-                word_count=word_count,
-                raw=raw,
-                enforce_density=True,
-                density_slack=0,
-            )
-            last_sparse = None
-            break
-        except SceneGenerationError as exc:
-            if "subject-beat coverage" not in str(exc):
-                raise
-            # Near-miss: accept without another LLM call when close enough.
-            try:
-                merged_spec = _parse_and_harden_llm_spec(
-                    cfg,
-                    seg_id=seg_id,
-                    class_name=class_name,
-                    seg_name=seg_name,
-                    narration_text=narration_text,
-                    word_count=word_count,
-                    raw=raw,
-                    enforce_density=True,
-                    density_slack=near_miss_slack,
-                )
-                last_sparse = None
-                break
-            except SceneGenerationError as near:
-                if "subject-beat coverage" not in str(near) or attempt >= 2:
-                    raise
-                last_sparse = near
-                continue
-    if last_sparse is not None:
-        raise last_sparse
-
-    yaml_text = spec_to_yaml_text(merged_spec)
-    return SceneSpecGenerationResult(
-        seg_id=seg_id,
-        seg_name=seg_name,
-        class_name=class_name,
-        spec=merged_spec,
-        yaml_text=yaml_text,
-        prompt=f"--- system ---\n{system_prompt}\n\n--- user ---\n{user_message}",
-        raw_response=raw,
-    )

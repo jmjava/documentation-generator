@@ -623,6 +623,158 @@ class TestSubjectBeatCoverageValidate:
         assert check["passed"], check["details"]
 
 
+class TestImagePromptAlignmentValidate:
+    def test_validate_flags_unaligned_image_prompt(self, cfg_dir: Path) -> None:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("segment_names", {})["01"] = "01-test"
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "narration" / "01-test.md").write_text(
+            "The bootstrap pipeline seeds the cluster.\n",
+            encoding="utf-8",
+        )
+        specs = cfg_dir / "animations" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-test.scene.yaml").write_text(
+            yaml.dump(
+                {
+                    "segment_id": "01",
+                    "class_name": "DemoScene",
+                    "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                    "rows": [
+                        {
+                            "run_time": 1.0,
+                            "boxes": [
+                                {
+                                    "label": "bootstrap pipeline",
+                                    "color": "C_ORANGE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                },
+                                {
+                                    "image": "images/arch.png",
+                                    "width": 4.0,
+                                    "height": 2.0,
+                                    "prompt": "isometric render of the WidgetX orchestrator",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = Config.from_yaml(cfg_dir / "docgen.yaml")
+        report = Validator(config).validate_segment("01")
+        details = [d for c in report["checks"] for d in c["details"]]
+        assert any("documented terms" in d for d in details)
+
+    def test_validate_passes_grounded_image_prompt(self, cfg_dir: Path) -> None:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("segment_names", {})["01"] = "01-test"
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "narration" / "01-test.md").write_text(
+            "The bootstrap pipeline seeds the cluster.\n",
+            encoding="utf-8",
+        )
+        specs = cfg_dir / "animations" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-test.scene.yaml").write_text(
+            yaml.dump(
+                {
+                    "segment_id": "01",
+                    "class_name": "DemoScene",
+                    "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                    "rows": [
+                        {
+                            "run_time": 1.0,
+                            "boxes": [
+                                {
+                                    "label": "bootstrap pipeline",
+                                    "color": "C_ORANGE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                },
+                                {
+                                    "image": "images/arch.png",
+                                    "width": 4.0,
+                                    "height": 2.0,
+                                    "prompt": "clean diagram of the bootstrap pipeline",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = Config.from_yaml(cfg_dir / "docgen.yaml")
+        report = Validator(config).validate_segment("01")
+        details = [d for c in report["checks"] for d in c["details"]]
+        assert not any("documented terms" in d or "visual style" in d for d in details)
+
+    def test_validate_flags_invented_ocr_on_asset(self, cfg_dir: Path, monkeypatch) -> None:
+        cfg_raw = yaml.safe_load((cfg_dir / "docgen.yaml").read_text(encoding="utf-8"))
+        cfg_raw["visual_map"]["01"] = {"type": "manim", "source": "Scene01.mp4"}
+        cfg_raw.setdefault("segment_names", {})["01"] = "01-test"
+        (cfg_dir / "docgen.yaml").write_text(yaml.dump(cfg_raw), encoding="utf-8")
+        (cfg_dir / "narration" / "01-test.md").write_text(
+            "The bootstrap pipeline seeds the cluster.\n",
+            encoding="utf-8",
+        )
+        specs = cfg_dir / "animations" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "01-test.scene.yaml").write_text(
+            yaml.dump(
+                {
+                    "segment_id": "01",
+                    "class_name": "DemoScene",
+                    "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+                    "rows": [
+                        {
+                            "run_time": 1.0,
+                            "boxes": [
+                                {
+                                    "label": "bootstrap pipeline",
+                                    "color": "C_ORANGE",
+                                    "width": 4.0,
+                                    "height": 1.0,
+                                    "font_size": 18,
+                                },
+                                {
+                                    "image": "images/arch.png",
+                                    "width": 4.0,
+                                    "height": 2.0,
+                                    "prompt": "clean diagram of the bootstrap pipeline",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        asset = cfg_dir / "images" / "arch.png"
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+        monkeypatch.setattr(
+            "docgen.image_align.ocr_image_text",
+            lambda _path: "WidgetX Orchestrator console",
+        )
+        monkeypatch.setattr(
+            "docgen.validate._tesseract_unavailable_detail",
+            lambda: None,
+        )
+        config = Config.from_yaml(cfg_dir / "docgen.yaml")
+        report = Validator(config).validate_segment("01")
+        matches = [c for c in report["checks"] if any("OCR" in d for d in c["details"])]
+        assert matches
+        assert not matches[0]["passed"]
+
+
 # ── ffprobe JSON probes honor returncode ──────────────────────────────
 
 class _FakeProbe:
@@ -686,7 +838,7 @@ class TestFfprobeJsonReturncode:
 
 @pytest.mark.parametrize(
     "check_name",
-    ("av_sync", "subject_beat_coverage", "ocr_scan", "layout", "freeze_ratio"),
+    ("av_sync", "subject_beat_coverage", "scene_assets", "ocr_scan", "layout", "freeze_ratio"),
 )
 def test_run_pre_push_visual_sync_fail_is_hard(check_name: str, capsys) -> None:
     """Visual-sync FAILs must be FAIL + SystemExit, not WARN (leftover #2)."""

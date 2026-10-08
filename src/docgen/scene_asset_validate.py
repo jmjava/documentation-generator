@@ -398,7 +398,10 @@ def scene_asset_violations_for_segment(cfg: "Config", seg_id: str) -> list[str]:
         validate_scene_spec,
     )
 
+    from docgen.image_align import image_doc_alignment_issues
+
     issues: list[str] = []
+    issues.extend(image_doc_alignment_issues(cfg, seg_id))
     scenes_path = cfg.animations_dir / "scenes.py"
     scenes_text = ""
     if scenes_path.is_file():
