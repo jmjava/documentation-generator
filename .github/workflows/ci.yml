@@ -22,6 +22,10 @@ jobs:
           python-version: "3.12"
       - run: pip install ruff lizard==1.24.0 vulture==2.16
       - run: ruff check src/ tests/
+      - name: Ruff proving test
+        run: bash scripts/test-check-ruff.sh
+      - name: Ruff baseline
+        run: python3 scripts/check-ruff.py src tests
       - name: Complexity proving test
         run: bash scripts/test-check-complexity.sh
       - name: PR-diff complexity

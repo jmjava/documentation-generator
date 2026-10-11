@@ -1,0 +1,5 @@
+# Ruff findings under the committed [tool.ruff.lint] select (E4, E7, E9, F).
+# Each line is: <count> <path> <code> <message>
+# Observed with ruff 0.15.7: src/ and tests/ have no findings.
+# check-ruff.py fails when a count rises or a new key appears.
+# CI reads this file and must not rewrite it. Do not refresh it to hide a finding.
