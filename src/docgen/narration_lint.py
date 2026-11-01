@@ -61,6 +61,15 @@ def lint_pre_tts(text: str, deny_patterns: list[str] | None = None) -> LintResul
     return LintResult(stage="pre-tts", passed=len(issues) == 0, issues=issues)
 
 
+def _empty_transcript_issues(transcript: str) -> list[str]:
+    """An empty Whisper transcript has no speech for the artifact scan to clear."""
+    if transcript.strip():
+        return []
+    return [
+        "Whisper transcript is empty — post-tts lint cannot pass audio with no spoken words"
+    ]
+
+
 def lint_post_tts(transcript: str, deny_patterns: list[str] | None = None) -> LintResult:
     """Scan Whisper transcript of generated audio for spoken artifacts."""
     patterns = deny_patterns or [
@@ -75,7 +84,7 @@ def lint_post_tts(transcript: str, deny_patterns: list[str] | None = None) -> Li
         "backtick",
     ]
 
-    issues: list[str] = []
+    issues = _empty_transcript_issues(transcript)
     lower = transcript.lower()
     for pat in patterns:
         if re.search(pat, lower, re.IGNORECASE):

@@ -67,3 +67,15 @@ def test_post_tts_script_section():
 def test_post_tts_custom_patterns():
     result = lint_post_tts("Normal speech here.", deny_patterns=["normal speech"])
     assert not result.passed
+
+
+def test_post_tts_empty_transcript_fails():
+    result = lint_post_tts("")
+    assert not result.passed
+    assert any("empty" in i.lower() for i in result.issues)
+
+
+def test_post_tts_whitespace_transcript_fails():
+    result = lint_post_tts(" \n\t ")
+    assert not result.passed
+    assert any("empty" in i.lower() for i in result.issues)
