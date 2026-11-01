@@ -30,6 +30,39 @@ def test_concat_unknown_target_raises(tmp_path: Path) -> None:
         ConcatBuilder(cfg).build(name="missing")
 
 
+def test_concat_refuses_recording_symlink_outside_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recording symlink must not be handed to ffmpeg."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    raw = {
+        "dirs": {"recordings": "recordings"},
+        "segments": {"all": ["01", "02"], "default": ["01", "02"]},
+        "segment_names": {"01": "01-a", "02": "02-b"},
+        "concat": {"full": ["01", "02"]},
+    }
+    (bundle / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.mp4"
+    secret.write_bytes(b"secret-video")
+    rec = bundle / "recordings"
+    rec.mkdir()
+    (rec / "01-a.mp4").write_bytes(b"seg-a")
+    (rec / "02-b.mp4").symlink_to(secret)
+
+    def _ffmpeg_must_not_run(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("ffmpeg should not run")
+
+    monkeypatch.setattr(subprocess, "run", _ffmpeg_must_not_run)
+    with pytest.raises(ConcatError, match="stay inside the bundle"):
+        ConcatBuilder(cfg).build(name="full")
+    assert secret.read_bytes() == b"secret-video"
+    assert not (rec / "full.mp4").exists()
+
+
 def test_concat_missing_recording_raises_before_ffmpeg(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, {"full": ["01", "02"]})
     (tmp_path / "recordings").mkdir()
