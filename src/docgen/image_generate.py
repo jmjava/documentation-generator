@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from docgen.image_align import (
     ImageReviewResult,
     image_ocr_alignment_violations,
+    image_path_issue,
     image_prompt_alignment_violations,
     ocr_image_text,
     review_image_against_docs,
@@ -232,13 +233,11 @@ def collect_alignment_corpus(cfg: "Config", spec: dict[str, Any]) -> str:
 
 
 def _resolve_asset_path(cfg: "Config", relpath: str) -> Path:
-    p = Path(relpath)
-    if p.is_absolute() or ".." in p.parts:
-        raise ImageGenerationError(
-            f"image path {relpath!r} must be relative to the bundle directory "
-            "(no absolute paths or '..')"
-        )
-    return cfg.base_dir / p
+    """Bundle-relative image path. A symlink that leaves the bundle is refused."""
+    issue = image_path_issue(cfg.base_dir, relpath)
+    if issue:
+        raise ImageGenerationError(issue)
+    return cfg.base_dir / relpath
 
 
 def _review_retry_count(cfg: "Config") -> int:
