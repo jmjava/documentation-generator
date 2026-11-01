@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 import time
 from collections.abc import Callable
@@ -37,16 +38,24 @@ def call_with_rate_limit_retries(fn: Callable[[], T]) -> T:
             time.sleep(delay)
 
 
+def _finite_retry_after(raw: str) -> float | None:
+    """Seconds to wait, or None when Retry-After is not a finite positive number."""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return value
+
+
 def _rate_limit_delay_sec(exc: BaseException, attempt: int) -> float:
     retry_after: float | None = None
     resp = getattr(exc, "response", None)
     if resp is not None:
         raw = resp.headers.get("retry-after")
         if raw:
-            try:
-                retry_after = float(raw)
-            except ValueError:
-                retry_after = None
+            retry_after = _finite_retry_after(raw)
     if retry_after is not None and retry_after > 0:
         delay = retry_after
     else:
