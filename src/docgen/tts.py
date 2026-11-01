@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -35,6 +36,17 @@ def _require_audio_output_inside_bundle(base: Path, path: Path) -> None:
         ) from exc
 
 
+def _finite_probe_seconds(raw: str) -> float | None:
+    """A duration probe only succeeds for a positive finite number of seconds."""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return value
+
+
 def _probe_duration(path: Path) -> float | None:
     """Return the duration of an audio file in seconds, or None on failure."""
     try:
@@ -47,10 +59,7 @@ def _probe_duration(path: Path) -> float | None:
         return None
     if out.returncode != 0:
         return None
-    try:
-        return float(out.stdout.strip())
-    except ValueError:
-        return None
+    return _finite_probe_seconds(out.stdout.strip())
 
 
 def markdown_to_tts_plain(text: str) -> str:
