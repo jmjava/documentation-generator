@@ -29,6 +29,14 @@ def _reject_font_probe_failure(font: str, exc: BaseException) -> None:
     ) from exc
 
 
+def _reject_non_positive_quality(height: int, fps: int) -> None:
+    """``NpNN`` must name a positive frame size and frame rate."""
+    if height <= 0 or fps <= 0:
+        raise RuntimeError(
+            f"[manim] quality {height}p{fps} needs a positive height and frame rate"
+        )
+
+
 def _reject_unknown_quality(quality: str) -> None:
     """Unknown ``manim.quality`` must not silently render at 720p30."""
     raise RuntimeError(
@@ -254,6 +262,7 @@ class ManimRunner:
         if match:
             height = int(match.group(1))
             fps = int(match.group(2))
+            _reject_non_positive_quality(height, fps)
             width = (height * 16) // 9
             if width % 2:
                 width += 1
