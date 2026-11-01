@@ -75,6 +75,12 @@ def test_missing_font_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         ManimRunner(cfg)._check_font()
 
 
+def test_quality_zero_frame_rate_is_refused(tmp_path: Path) -> None:
+    cfg = _config_with_quality(tmp_path, "1080p00")
+    with pytest.raises(RuntimeError, match="positive"):
+        ManimRunner(cfg)._quality_args()
+
+
 def test_quality_unknown_is_refused(tmp_path: Path) -> None:
     cfg = _config_with_quality(tmp_path, "banana")
     runner = ManimRunner(cfg)
