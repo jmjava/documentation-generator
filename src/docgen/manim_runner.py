@@ -14,6 +14,14 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+def _reject_unknown_quality(quality: str) -> None:
+    """Unknown ``manim.quality`` must not silently render at 720p30."""
+    raise RuntimeError(
+        f"[manim] quality {quality!r} is not recognized; "
+        "use a preset (480p15, 720p30, 1080p60, 2160p60) or NpNN such as 1080p30"
+    )
+
+
 class ManimRunner:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -244,8 +252,4 @@ class ManimRunner:
                 f"{height}p{fps} (--resolution {width}x{height}, --frame_rate {fps})",
             )
 
-        print(
-            f"[manim] WARNING: quality '{self.config.manim_quality}' not recognized; "
-            "falling back to 720p30 (-qm)."
-        )
-        return (["-qm"], "720p30 (-qm fallback)")
+        _reject_unknown_quality(self.config.manim_quality)
