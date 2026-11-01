@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
+import pytest
 import yaml
 
-from docgen.bundle_clean import clean_bundle_regenerable_outputs, remove_narration_markdown_except_readme
+from docgen.bundle_clean import (
+    BundleCleanError,
+    clean_bundle_regenerable_outputs,
+    remove_narration_markdown_except_readme,
+)
 from docgen.config import Config
 
 
@@ -50,6 +56,21 @@ def test_remove_narration_skips_readme(tmp_path: Path) -> None:
     assert remove_narration_markdown_except_readme(d) == 1
     assert (d / "README.md").is_file()
     assert not (d / "01-x.md").exists()
+
+
+def test_clean_refuses_audio_dir_symlink_outside_bundle(tmp_path: Path) -> None:
+    """A symlinked audio directory must not delete mp3s outside the bundle."""
+    cfg = _minimal_bundle(tmp_path)
+    outside = tmp_path / "outside-audio"
+    outside.mkdir()
+    secret = outside / "secret.mp3"
+    secret.write_bytes(b"secret")
+    audio = cfg.audio_dir
+    shutil.rmtree(audio)
+    audio.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(BundleCleanError, match="stay inside the bundle"):
+        clean_bundle_regenerable_outputs(cfg)
+    assert secret.read_bytes() == b"secret"
 
 
 def test_clean_bundle_wipes_and_keep_narration(tmp_path: Path) -> None:

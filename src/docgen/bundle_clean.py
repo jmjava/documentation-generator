@@ -14,6 +14,27 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+class BundleCleanError(RuntimeError):
+    """Raised when clean would delete files outside the bundle."""
+
+
+def _remove_audio_mp3s(base: Path, audio_dir: Path) -> int:
+    """Delete bundle mp3s. A directory symlink that leaves the bundle is refused."""
+    if not audio_dir.is_dir():
+        return 0
+    try:
+        audio_dir.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise BundleCleanError(
+            "audio directory must stay inside the bundle"
+        ) from exc
+    removed = 0
+    for audio in audio_dir.glob("*.mp3"):
+        audio.unlink()
+        removed += 1
+    return removed
+
+
 def remove_narration_markdown_except_readme(narration_dir: Path) -> int:
     """Delete ``*.md`` under ``narration_dir`` except ``README.md`` (any case)."""
     if not narration_dir.is_dir():
@@ -56,12 +77,7 @@ def clean_bundle_regenerable_outputs(
     wipe_animations_directory(cfg.animations_dir)
     out["animations_dir_reset"] = True
 
-    mp3_n = 0
-    if cfg.audio_dir.is_dir():
-        for f in cfg.audio_dir.glob("*.mp3"):
-            f.unlink()
-            mp3_n += 1
-    out["audio_mp3_removed"] = mp3_n
+    out["audio_mp3_removed"] = _remove_audio_mp3s(base, cfg.audio_dir)
 
     rec_mp4 = 0
     if cfg.recordings_dir.is_dir():
