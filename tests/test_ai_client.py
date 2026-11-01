@@ -479,8 +479,9 @@ def test_openai_whisper_bool_word_start_raises(
             transcribe_audio(mp3, cfg=cfg)
 
 
+@pytest.mark.usefixtures("clear_ai_env")
 def test_openai_whisper_inverted_word_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     cfg = _cfg(tmp_path, {})
@@ -496,8 +497,9 @@ def test_openai_whisper_inverted_word_is_refused(
             transcribe_audio(mp3, cfg=cfg)
 
 
+@pytest.mark.usefixtures("clear_ai_env")
 def test_openai_whisper_empty_word_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     cfg = _cfg(tmp_path, {})
@@ -513,8 +515,9 @@ def test_openai_whisper_empty_word_is_refused(
             transcribe_audio(mp3, cfg=cfg)
 
 
+@pytest.mark.usefixtures("clear_ai_env")
 def test_openai_whisper_inverted_segment_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     cfg = _cfg(tmp_path, {})
