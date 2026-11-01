@@ -315,6 +315,16 @@ def generate_narration_markdown(
     )
 
 
+def _require_narration_output_inside_bundle(base: Path, path: Path) -> None:
+    """Refuse a narration file that resolves outside the bundle."""
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise ValueError(
+            f"{path.name}: narration path must stay inside the bundle"
+        ) from exc
+
+
 def write_narration_markdown(
     cfg: "Config",
     seg_id: str,
@@ -327,6 +337,7 @@ def write_narration_markdown(
     out_dir = cfg.narration_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{seg_name}.md"
+    _require_narration_output_inside_bundle(cfg.base_dir, out)
     if out.exists() and not force:
         raise FileExistsError(str(out))
     out.write_text(body.strip() + "\n", encoding="utf-8")
