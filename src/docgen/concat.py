@@ -14,6 +14,16 @@ class ConcatError(RuntimeError):
     """Raised when concat cannot build a complete output."""
 
 
+def _require_recording_inside_bundle(base: Path, path: Path) -> None:
+    """Refuse a recording that resolves outside the bundle (symlink escape)."""
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise ConcatError(
+            f"{path.name}: recording path must stay inside the bundle"
+        ) from exc
+
+
 class ConcatBuilder:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -59,6 +69,7 @@ class ConcatBuilder:
         for seg_id in seg_ids:
             found = self.config.find_segment_asset(recordings_dir, str(seg_id), ".mp4")
             if found:
+                _require_recording_inside_bundle(self.config.base_dir, found)
                 files.append(found)
             else:
                 missing.append(str(seg_id))
