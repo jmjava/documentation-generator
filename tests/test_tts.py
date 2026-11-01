@@ -258,6 +258,13 @@ def test_probe_duration_returns_float(mock_run):
     assert result == 12.345
 
 
+@pytest.mark.parametrize("stdout", ["inf\n", "nan\n", "-1.5\n", "0\n"])
+@patch("docgen.tts.subprocess.run")
+def test_probe_duration_returns_none_for_non_finite(mock_run, stdout: str):
+    mock_run.return_value = type("R", (), {"stdout": stdout, "returncode": 0})()
+    assert _probe_duration(Path("/tmp/test.mp3")) is None
+
+
 @patch("docgen.tts.subprocess.run")
 def test_probe_duration_returns_none_when_ffprobe_fails(mock_run):
     mock_run.return_value = type("R", (), {"stdout": "12.345\n", "returncode": 1})()
