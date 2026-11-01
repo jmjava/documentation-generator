@@ -40,6 +40,21 @@ def _require_positive_fps(cap: Any, raw: float) -> float:
     return fps
 
 
+def _require_positive_sample_interval(raw: object) -> float:
+    """A zero or negative interval makes the sample loop run forever."""
+    try:
+        interval = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OCR sample interval must be a positive finite number of seconds"
+        ) from exc
+    if not math.isfinite(interval) or interval <= 0:
+        raise ValueError(
+            "OCR sample interval must be a positive finite number of seconds"
+        )
+    return interval
+
+
 class OCRScanner:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -59,9 +74,11 @@ class OCRScanner:
             return report
 
         fps = _require_positive_fps(cap, cap.get(cv2.CAP_PROP_FPS))
+        interval = _require_positive_sample_interval(
+            self.ocr_cfg.get("sample_interval_sec", 2)
+        )
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps if fps > 0 else 0
-        interval = self.ocr_cfg.get("sample_interval_sec", 2)
         error_patterns = self.ocr_cfg.get("error_patterns", [])
         min_conf = self.ocr_cfg.get("min_confidence", 40)
 
