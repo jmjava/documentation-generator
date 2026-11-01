@@ -822,18 +822,32 @@ def _grok_stt_segment(s: Any, index: int) -> dict[str, Any]:
     return {"start": start, "end": end, "text": str(s.get("text") or "")}
 
 
+def _require_openai_word_token(word: Any, start: float, end: float) -> str:
+    """OpenAI words use the same non-empty, ordered-interval contract as Grok."""
+    token = str(word or "").strip()
+    if not token:
+        raise AIError("STT words[].word must be a non-empty token")
+    _stt_ordered_interval(start, end, label="words[]")
+    return token
+
+
 def _openai_stt_word(w: Any) -> dict[str, Any]:
+    start = _stt_json_number(_stt_field(w, "start"), label="words[].start")
+    end = _stt_json_number(_stt_field(w, "end"), label="words[].end")
     return {
-        "start": _stt_json_number(_stt_field(w, "start"), label="words[].start"),
-        "end": _stt_json_number(_stt_field(w, "end"), label="words[].end"),
-        "word": _stt_field(w, "word"),
+        "start": start,
+        "end": end,
+        "word": _require_openai_word_token(_stt_field(w, "word"), start, end),
     }
 
 
 def _openai_stt_segment(s: Any) -> dict[str, Any]:
+    start = _stt_json_number(_stt_field(s, "start"), label="segments[].start")
+    end = _stt_json_number(_stt_field(s, "end"), label="segments[].end")
+    _stt_ordered_interval(start, end, label="segments[]")
     return {
-        "start": _stt_json_number(_stt_field(s, "start"), label="segments[].start"),
-        "end": _stt_json_number(_stt_field(s, "end"), label="segments[].end"),
+        "start": start,
+        "end": end,
         "text": _stt_field(s, "text"),
     }
 

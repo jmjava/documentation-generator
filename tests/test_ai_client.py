@@ -479,6 +479,61 @@ def test_openai_whisper_bool_word_start_raises(
             transcribe_audio(mp3, cfg=cfg)
 
 
+@pytest.mark.usefixtures("clear_ai_env")
+def test_openai_whisper_inverted_word_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    fake = MagicMock()
+    fake.audio.transcriptions.create.return_value = _openai_whisper_result(
+        text="Hi",
+        words=[{"start": 0.4, "end": 0.1, "word": "Hi"}],
+    )
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with pytest.raises(AIError, match=r"words\[\] end must be >= start"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+@pytest.mark.usefixtures("clear_ai_env")
+def test_openai_whisper_empty_word_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    fake = MagicMock()
+    fake.audio.transcriptions.create.return_value = _openai_whisper_result(
+        text="Hi",
+        words=[{"start": 0.0, "end": 0.2, "word": "  "}],
+    )
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with pytest.raises(AIError, match="non-empty token"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
+@pytest.mark.usefixtures("clear_ai_env")
+def test_openai_whisper_inverted_segment_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    cfg = _cfg(tmp_path, {})
+    mp3 = tmp_path / "n.mp3"
+    mp3.write_bytes(b"fake-mp3")
+    fake = MagicMock()
+    fake.audio.transcriptions.create.return_value = _openai_whisper_result(
+        text="Hi",
+        words=[{"start": 0.0, "end": 0.2, "word": "Hi"}],
+        segments=[{"start": 0.5, "end": 0.1, "text": "Hi"}],
+    )
+    with patch("docgen.ai_client.openai_client", return_value=fake):
+        with pytest.raises(AIError, match=r"segments\[\] end must be >= start"):
+            transcribe_audio(mp3, cfg=cfg)
+
+
 def test_openai_whisper_maps_typed_words(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
 ) -> None:
