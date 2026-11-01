@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,6 +34,19 @@ def _ocr_keyword_from_label(label: str) -> str | None:
         return None
     # Prefer longer tokens (OCR noise is worse on short words).
     return max(tokens, key=len)
+
+
+def _require_positive_fps(cap: Any, raw: float) -> float:
+    """A zero or missing frame rate must not be treated as 30 fps."""
+    try:
+        fps = float(raw)
+    except (TypeError, ValueError) as exc:
+        cap.release()
+        raise ValueError("video frame rate is not a number") from exc
+    if not math.isfinite(fps) or fps <= 0:
+        cap.release()
+        raise ValueError("video frame rate must be a positive finite number")
+    return fps
 
 
 class AVSyncValidator:
@@ -84,7 +98,7 @@ class AVSyncValidator:
         if not cap.isOpened():
             report.passed = False
             return report
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        fps = _require_positive_fps(cap, cap.get(cv2.CAP_PROP_FPS))
 
         for anchor in anchors:
             # Sample frames within tolerance window
