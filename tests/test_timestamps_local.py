@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import yaml
 
 import docgen.align as align_module
 from docgen.config import Config
-from docgen.timestamps import TimestampExtractor
+from docgen.timestamps import TimestampError, TimestampExtractor
 
 
 @pytest.fixture
@@ -32,6 +33,37 @@ def _fake_audio_env(monkeypatch, duration: float = 6.0) -> None:
         "detect_speech_intervals",
         lambda p, d, **kw: [(0.0, d / 2 - 0.3), (d / 2 + 0.3, d)],
     )
+
+
+def test_extract_all_refuses_timing_symlink_outside_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Do not read or rewrite timing.json when it resolves outside the bundle."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    raw = {
+        "segments": {"all": ["01"]},
+        "segment_names": {"01": "01-x"},
+    }
+    (bundle / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    (bundle / "audio").mkdir()
+    (bundle / "narration").mkdir()
+    (bundle / "audio" / "01-x.mp3").write_bytes(b"fake-mp3")
+    (bundle / "narration" / "01-x.md").write_text(
+        "Alpha begins the story. Beta ends it.\n", encoding="utf-8"
+    )
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "timing.json"
+    secret.write_text("{}\n", encoding="utf-8")
+    anim = bundle / "animations"
+    anim.mkdir()
+    (anim / "timing.json").symlink_to(secret)
+    _fake_audio_env(monkeypatch)
+    with pytest.raises(TimestampError, match="stay inside the bundle"):
+        TimestampExtractor(cfg).extract_all()
+    assert secret.read_text(encoding="utf-8") == "{}\n"
 
 
 class TestResolveEngine:

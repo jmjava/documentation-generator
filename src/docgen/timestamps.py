@@ -29,6 +29,14 @@ class TimestampError(RuntimeError):
     """Raised when timestamps cannot be extracted for required segments."""
 
 
+def _require_timing_file_inside_bundle(base: Path, path: Path) -> None:
+    """Refuse ``timing.json`` when its resolved path leaves the bundle."""
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise TimestampError("timing.json must stay inside the bundle") from exc
+
+
 def _json_kind(value: Any) -> str:
     return "null" if value is None else type(value).__name__
 
@@ -276,6 +284,9 @@ class TimestampExtractor:
                 + ". Run `docgen tts` first."
             )
 
+        _require_timing_file_inside_bundle(
+            self.config.base_dir, self.config.animations_dir / "timing.json"
+        )
         timing = dict(load_bundle_timing(self.config))
         for sid, mp3 in jobs:
             key = mp3.stem
