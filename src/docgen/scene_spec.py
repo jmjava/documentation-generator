@@ -12,8 +12,13 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
 * Lays out each **page** as a vertical stack of rows (``VGroup`` per row,
   then ``arrange(DOWN)``), positioned under the title — **no scaling** to cram
   content; use multiple **pages** when the story needs more boxes than fit.
-* Between pages, runs a **page transition** (default ``fade`` out the previous
-  page's stack) so the next page appears on a clear canvas.
+* Between pages, runs a **page transition** so the next page appears on a
+  clear canvas. ``fade`` (default) dissolves the previous board. ``slide``
+  travels it off to the left and brings the next page's first node in from
+  the right. ``rise`` drops the board and settles the next node from above.
+  ``zoom`` shrinks the board away and scales the next node up. ``none``
+  removes the previous board instantly. Later boxes on the incoming page
+  stay paced — the handoff does not dump the whole next board.
 * Uses the shared ``_box`` helper (text centered in the node; optional
   ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
   slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
@@ -87,7 +92,20 @@ ALLOWED_COLORS = frozenset(
     }
 )
 
-ALLOWED_PAGE_TRANSITIONS = frozenset({"fade", "slide", "none"})
+# Order is the author-facing set. ``fade`` stays the default so a topic change
+# stays a dissolve; slide / rise / zoom are the animated handoffs.
+PAGE_TRANSITION_ORDER = ("fade", "slide", "rise", "zoom", "none")
+ALLOWED_PAGE_TRANSITIONS = frozenset(PAGE_TRANSITION_ORDER)
+# Animated exits advance ``_TimedScene._clock``. ``none`` is an instant remove.
+ANIMATED_PAGE_TRANSITIONS = frozenset({"fade", "slide", "rise", "zoom"})
+# Manim frame is ~14.22 x 8. A 0.35 nudge barely left the center; these shifts
+# carry a centered row off the focal area while the fade finishes.
+PAGE_SLIDE_SHIFT = 3.2
+# Exit drops the old board. The entrance is shorter than ``MIN_TITLE_ROW_BUFF``
+# so the incoming node starts under the title instead of crossing it.
+PAGE_RISE_SHIFT = 1.6
+PAGE_RISE_ENTER = 0.28
+PAGE_ZOOM_SCALE = 0.15
 
 
 def _is_yaml_number(value: Any) -> bool:
@@ -947,7 +965,7 @@ def simulate_reveal_timeline(
             int(slot["page"]) > 0
             and int(slot["row"]) == 0
             and int(slot["box"]) == 0
-            and str(slot["page_transition"]) in {"fade", "slide"}
+            and str(slot["page_transition"]) in ANIMATED_PAGE_TRANSITIONS
         ):
             page_fade_out = float(slot["page_transition_run_time"])
 
@@ -2015,6 +2033,44 @@ def _box_ctor_line(var: str, box: dict[str, Any]) -> str:
     return f"        {var} = _box({lab!r}, {col}, {w}, {h}, {fs}{extra})"
 
 
+def _page_exit_call(target: str, transition: str) -> str:
+    """Animation that takes one revealed mobject off before the next page."""
+    kind = str(transition or "fade").strip().lower()
+    if kind == "slide":
+        return f"FadeOut({target}, shift=LEFT * {PAGE_SLIDE_SHIFT})"
+    if kind == "rise":
+        return f"FadeOut({target}, shift=DOWN * {PAGE_RISE_SHIFT})"
+    if kind == "zoom":
+        return f"FadeOut({target}, scale={PAGE_ZOOM_SCALE})"
+    return f"FadeOut({target})"
+
+
+def _page_enter_call(target: str, transition: str) -> str:
+    """Entrance that continues the exit.
+
+    Manim ``FadeIn(shift=v)`` starts at ``-v`` and moves by ``v`` into place.
+    ``slide`` uses the same leftward vector as the exit, so the new node
+    arrives from the right. ``rise`` only settles a short distance: a full
+    exit drop would start the new node on top of the title.
+    """
+    kind = str(transition or "fade").strip().lower()
+    if kind == "slide":
+        return f"FadeIn({target}, shift=LEFT * {PAGE_SLIDE_SHIFT})"
+    if kind == "rise":
+        return f"FadeIn({target}, shift=DOWN * {PAGE_RISE_ENTER})"
+    if kind == "zoom":
+        return f"FadeIn({target}, scale={PAGE_ZOOM_SCALE})"
+    return f"FadeIn({target})"
+
+
+def _author_reveal(box: dict[str, Any]) -> str | None:
+    raw = box.get("reveal")
+    if raw is None:
+        return None
+    text = str(raw).strip().lower()
+    return text or None
+
+
 def _reveal_anim(bx: str, reveal: str) -> str:
     kind = str(reveal or "fade").strip().lower()
     if kind == "grow":
@@ -2258,49 +2314,56 @@ def compile_scene_class(
                     lines.append(
                         f"        self.wait_until_word(timing_words, {int(ww)})"
                     )
+                page_enter_trans: str | None = None
                 if p > 0 and r == 0 and b_idx == 0:
-                    trans = page.get("transition")
+                    trans = str(page.get("transition") or "fade")
                     prev_boxes = page_box_vars.get(p - 1) or []
                     prev_edges = page_edge_vars.get(p - 1) or []
                     fade_targets = prev_boxes + prev_edges
-                    if trans == "fade":
-                        if fade_targets:
-                            fade_args = ", ".join(f"FadeOut({t})" for t in fade_targets)
-                            lines.append(
-                                f"        self.timed_play({fade_args}, "
-                                f"run_time={page_fade_rt})"
-                            )
-                        else:
-                            lines.append(f"        self.timed_wait({page_fade_rt})")
-                    elif trans == "slide":
-                        if fade_targets:
-                            fade_args = ", ".join(
-                                f"FadeOut({t}, shift=LEFT * 0.35)" for t in fade_targets
-                            )
-                            lines.append(
-                                f"        self.timed_play({fade_args}, "
-                                f"run_time={page_fade_rt})"
-                            )
-                        else:
-                            lines.append(f"        self.timed_wait({page_fade_rt})")
-                    elif trans == "none":
+                    if trans == "none":
                         for t in fade_targets:
                             lines.append(f"        self.remove({t})")
                         lines.append("        self.timed_wait(0.05)")
+                    else:
+                        if trans not in ANIMATED_PAGE_TRANSITIONS:
+                            trans = "fade"
+                        page_enter_trans = trans
+                        if fade_targets:
+                            fade_args = ", ".join(
+                                _page_exit_call(t, trans) for t in fade_targets
+                            )
+                            lines.append(
+                                f"        self.timed_play({fade_args}, "
+                                f"run_time={page_fade_rt})"
+                            )
+                        else:
+                            lines.append(f"        self.timed_wait({page_fade_rt})")
                 bx = f"_bx_{p}_{r}_{b_idx}"
-                reveal = (
-                    str(ev.reveal)
-                    if ev is not None
-                    else default_box_reveal(
-                        box,
-                        page_has_edges=page_has_edges,
-                        is_first_on_page=not first_box_seen,
-                    )
+                author_reveal = _author_reveal(box)
+                # Slide / rise / zoom hand the first incoming node in with the
+                # exit. An explicit box ``reveal`` still wins. Later boxes stay
+                # on their own paced entrance so the rest of the page does not dump.
+                use_page_enter = (
+                    page_enter_trans in {"slide", "rise", "zoom"} and author_reveal is None
                 )
+                if use_page_enter:
+                    reveal_part = _page_enter_call(bx, str(page_enter_trans))
+                else:
+                    reveal = (
+                        str(ev.reveal)
+                        if ev is not None
+                        else default_box_reveal(
+                            box,
+                            page_has_edges=page_has_edges,
+                            is_first_on_page=not first_box_seen,
+                        )
+                    )
+                    reveal_part = _reveal_anim(bx, reveal)
                 first_box_seen = True
-                reveal_part = _reveal_anim(bx, reveal)
                 edge_anims = edges_with_target.get((p, bx), [])
                 parts = [reveal_part]
+                # Arrows stay with the later endpoint. Sliding them in with the
+                # first node would point at a box that has not been revealed yet.
                 for evar, kind in edge_anims:
                     if kind == "grow":
                         parts.append(f"GrowArrow({evar})")
