@@ -194,6 +194,18 @@ def test_ffprobe_duration_label_ignores_stdout_when_ffprobe_fails(
     assert _ffprobe_duration_label(path, fallback="concat") == "concat"
 
 
+def test_ffprobe_duration_label_rejects_non_finite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Infinity must use the fallback. ``int(inf)`` would otherwise crash the badge."""
+    path = _write_recording(tmp_path)
+    payload = json.dumps({"format": {"duration": "Infinity"}})
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_k: _FakeProbe(0, payload)
+    )
+    assert _ffprobe_duration_label(path, fallback="varies") == "varies"
+
+
 def test_ffprobe_duration_label_formats_successful_probe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
