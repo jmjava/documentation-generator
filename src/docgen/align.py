@@ -21,6 +21,7 @@ distributed proportionally across the concatenated speech timeline.
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -100,6 +101,19 @@ def parse_silencedetect_output(stderr: str, duration: float) -> list[tuple[float
     return speech
 
 
+def _finite_probe_seconds(audio_path: Path, raw: str) -> float:
+    """A usable duration is a finite number of seconds greater than zero."""
+    try:
+        duration = float(raw)
+    except ValueError as exc:
+        raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
+    if not math.isfinite(duration) or duration <= 0:
+        raise AlignmentError(
+            f"cannot probe duration of {audio_path}: duration must be a finite positive number"
+        )
+    return duration
+
+
 def probe_duration(audio_path: Path) -> float:
     try:
         out = subprocess.run(
@@ -112,10 +126,7 @@ def probe_duration(audio_path: Path) -> float:
     except subprocess.TimeoutExpired as exc:
         raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
     _raise_if_nonzero(out, audio_path, "ffprobe")
-    try:
-        return float(out.stdout.strip())
-    except ValueError as exc:
-        raise AlignmentError(f"cannot probe duration of {audio_path}: {exc}") from exc
+    return _finite_probe_seconds(audio_path, out.stdout.strip())
 
 
 def detect_speech_intervals(
