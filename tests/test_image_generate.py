@@ -42,6 +42,31 @@ def cfg(tmp_path) -> Config:
     return Config.from_yaml(tmp_path / "docgen.yaml")
 
 
+def test_generate_refuses_symlink_that_leaves_bundle(tmp_path: Path) -> None:
+    """An existing symlink must not count as a bundle asset or be overwritten."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "docgen.yaml").write_text(
+        yaml.dump({"segments": {"all": ["1"]}}), encoding="utf-8"
+    )
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.png"
+    secret.write_bytes(b"secret")
+    link_dir = bundle / "images"
+    link_dir.mkdir()
+    link = link_dir / "arch.png"
+    link.symlink_to(secret)
+    spec = _write_spec(cfg.animations_dir / "specs" / "01-x.scene.yaml")
+
+    with pytest.raises(ImageGenerationError, match="stay inside the bundle"):
+        generate_images_for_spec(cfg, spec, image_fn=lambda _p: _PNG_BYTES)
+    with pytest.raises(ImageGenerationError, match="stay inside the bundle"):
+        generate_images_for_spec(cfg, spec, force=True, image_fn=lambda _p: _PNG_BYTES)
+    assert secret.read_bytes() == b"secret"
+
+
 def test_generates_missing_asset(cfg: Config) -> None:
     spec = _write_spec(cfg.animations_dir / "specs" / "01-x.scene.yaml")
     results = generate_images_for_spec(cfg, spec, image_fn=lambda p: _PNG_BYTES)
