@@ -14,6 +14,14 @@ if TYPE_CHECKING:
     from docgen.config import Config
 
 
+def _reject_missing_font(font: str) -> None:
+    """A missing font must not render with a Pango substitute."""
+    raise RuntimeError(
+        f"[manim] font {font!r} was not found by fc-list. "
+        "Install it or set manim.font to an available font."
+    )
+
+
 def _reject_unknown_quality(quality: str) -> None:
     """Unknown ``manim.quality`` must not silently render at 720p30."""
     raise RuntimeError(
@@ -103,12 +111,7 @@ class ManimRunner:
                 capture_output=True, text=True, timeout=10,
             )
             if not result.stdout.strip():
-                print(
-                    f"[manim] WARNING: font '{font}' not found by fc-list. "
-                    "Pango may substitute a different font. "
-                    f"Install it (e.g. `apt install fonts-liberation`) or set "
-                    f"`manim.font` in docgen.yaml to an available font."
-                )
+                _reject_missing_font(font)
             else:
                 print(f"[manim] Font '{font}' verified via fc-list")
         except (FileNotFoundError, subprocess.TimeoutExpired):
