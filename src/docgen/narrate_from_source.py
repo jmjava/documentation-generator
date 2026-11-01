@@ -238,19 +238,28 @@ def build_owner_hints_guidance(
     return "\n".join(f"- {h}" for h in lines if h.strip())
 
 
+def _stem_belongs_to_segment(seg_id: str, path: Path) -> bool:
+    """``01*.md`` also matches segment ``010``; only the id or an ``id-`` stem belongs."""
+    stem = path.stem
+    return stem == seg_id or stem.startswith(f"{seg_id}-")
+
+
+def _fallback_narration_text(directory: Path, seg_id: str) -> str:
+    if not directory.is_dir():
+        return ""
+    for cand in directory.glob(f"{seg_id}*.md"):
+        if _stem_belongs_to_segment(seg_id, cand):
+            return cand.read_text(encoding="utf-8")
+    return ""
+
+
 def _existing_narration_text(cfg: "Config", seg_id: str) -> str:
     """Return current ``narration/<stem>.md`` text, or empty if missing."""
     seg_name = cfg.resolve_segment_name(seg_id)
     path = cfg.narration_dir / f"{seg_name}.md"
-    if not path.is_file():
-        # Match wizard asset discovery for NN-*.md fallbacks.
-        if cfg.narration_dir.is_dir():
-            for cand in cfg.narration_dir.glob(f"{seg_id}-*.md"):
-                return cand.read_text(encoding="utf-8")
-            for cand in cfg.narration_dir.glob(f"{seg_id}*.md"):
-                return cand.read_text(encoding="utf-8")
-        return ""
-    return path.read_text(encoding="utf-8")
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return _fallback_narration_text(cfg.narration_dir, seg_id)
 
 
 def generate_narration_markdown(
