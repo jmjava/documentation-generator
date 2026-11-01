@@ -35,6 +35,7 @@ import os
 import random
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -609,8 +610,17 @@ def transcribe_audio(audio_path: str | Path, *, cfg: "Config | None" = None) -> 
     return _openai_stt_payload(result)
 
 
+def _require_http_url(url: str) -> None:
+    """Image fetches are http(s) only. ``file:`` and other schemes are refused."""
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        shown = scheme or "an empty scheme"
+        raise AIError(f"image URL must use http or https, not {shown!r}")
+
+
 def fetch_url_bytes(url: str, *, timeout: int = 120) -> bytes:
     """GET ``url`` and return the response body (image CDN / signed URLs)."""
+    _require_http_url(url)
     last_exc: BaseException | None = None
     for attempt in range(_MAX_HTTP_ATTEMPTS):
         req = urllib.request.Request(url, method="GET")
