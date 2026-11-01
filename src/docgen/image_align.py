@@ -379,22 +379,27 @@ def image_path_issue(base: Path, rel: str) -> str | None:
     return None
 
 
-def _pixel_issues_for_spec(cfg: "Config", raw: dict, settings: dict) -> list[str]:
-    from docgen.image_generate import collect_alignment_corpus
+def _kept_bundle_images(base: Path, raw: dict) -> tuple[list[str], list[tuple[dict, str]]]:
     from docgen.scene_spec import iter_image_elements
 
-    elements = list(iter_image_elements(raw))
     issues: list[str] = []
     kept: list[tuple[dict, str]] = []
-    for el in elements:
+    for el in iter_image_elements(raw):
         rel = str(el.get("image") or "").strip()
         if not rel:
             continue
-        escaped = image_path_issue(cfg.base_dir, rel)
+        escaped = image_path_issue(base, rel)
         if escaped:
             issues.append(escaped)
             continue
         kept.append((el, rel))
+    return issues, kept
+
+
+def _pixel_issues_for_spec(cfg: "Config", raw: dict, settings: dict) -> list[str]:
+    from docgen.image_generate import collect_alignment_corpus
+
+    issues, kept = _kept_bundle_images(cfg.base_dir, raw)
     corpus = collect_alignment_corpus(cfg, raw)
     if not corpus.strip():
         return issues
