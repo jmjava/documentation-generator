@@ -22,6 +22,13 @@ def _reject_missing_font(font: str) -> None:
     )
 
 
+def _reject_font_probe_failure(font: str, exc: BaseException) -> None:
+    """fc-list must actually run; a missing or timed-out probe is not a verified font."""
+    raise RuntimeError(
+        f"[manim] cannot verify font {font!r}: fc-list failed ({type(exc).__name__})"
+    ) from exc
+
+
 def _reject_unknown_quality(quality: str) -> None:
     """Unknown ``manim.quality`` must not silently render at 720p30."""
     raise RuntimeError(
@@ -114,8 +121,8 @@ class ManimRunner:
                 _reject_missing_font(font)
             else:
                 print(f"[manim] Font '{font}' verified via fc-list")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            _reject_font_probe_failure(font, exc)
 
     def _clear_scene_partials(self, scene_name: str) -> None:
         """Remove partial movie files / output for one scene (corrupt-cache recovery)."""
