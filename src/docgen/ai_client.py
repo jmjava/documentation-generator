@@ -320,14 +320,27 @@ def resolve_image_model(model: str, settings: AISettings | None = None, *, cfg: 
     return chosen
 
 
+def _grok_voice_name(chosen: str) -> str:
+    """Map a voice onto Grok. An unknown name must not silently become ``eve``."""
+    key = chosen.lower()
+    if not key:
+        return DEFAULT_GROK_TTS_VOICE
+    if key in _GROK_VOICES:
+        return key
+    mapped = _OPENAI_TO_GROK_VOICE.get(key)
+    if mapped is None:
+        raise AIError(
+            f"voice {chosen!r} is not a Grok voice and has no OpenAI alias"
+        )
+    return mapped
+
+
 def resolve_tts_voice(voice: str, settings: AISettings | None = None, *, cfg: "Config | None" = None) -> str:
     chosen = (voice or "").strip()
     st = settings or resolve_ai_settings(cfg)
     if not st.is_grok:
         return chosen
-    if chosen.lower() in _GROK_VOICES:
-        return chosen.lower()
-    return _OPENAI_TO_GROK_VOICE.get(chosen.lower(), DEFAULT_GROK_TTS_VOICE)
+    return _grok_voice_name(chosen)
 
 
 def chat_completion(
