@@ -25,6 +25,16 @@ def _require_narration_inside_bundle(base: Path, src: Path) -> None:
         ) from exc
 
 
+def _require_audio_output_inside_bundle(base: Path, path: Path) -> None:
+    """Refuse an mp3 path that resolves outside the bundle, including via a symlink."""
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise TTSError(
+            f"{path.name}: audio path must stay inside the bundle"
+        ) from exc
+
+
 def _probe_duration(path: Path) -> float | None:
     """Return the duration of an audio file in seconds, or None on failure."""
     try:
@@ -134,6 +144,7 @@ class TTSGenerator:
 
         stem = src.stem
         out_path = audio_dir / f"{stem}.mp3"
+        _require_audio_output_inside_bundle(self.config.base_dir, out_path)
 
         old_duration = _probe_duration(out_path) if out_path.exists() else None
 

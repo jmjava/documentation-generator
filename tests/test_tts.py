@@ -157,6 +157,41 @@ def test_tts_empty_segments_all_raises(tmp_path: Path) -> None:
         TTSGenerator(cfg).generate(dry_run=True)
 
 
+def test_tts_refuses_audio_symlink_outside_bundle(tmp_path: Path) -> None:
+    """Do not write speech through an mp3 symlink that leaves the bundle."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+        "validation": {"narration_lint": {"block_tts_on_pre_lint": False}},
+    }
+    (bundle / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    narr = bundle / "narration"
+    narr.mkdir()
+    (narr / "01-intro.md").write_text(
+        "This is spoken prose about the checkout service.\n",
+        encoding="utf-8",
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.mp3"
+    secret.write_bytes(b"secret")
+    audio = bundle / "audio"
+    audio.mkdir()
+    (audio / "01-intro.mp3").symlink_to(secret)
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+
+    def _overwrite(*, output_path: Path, **_kwargs: object) -> None:
+        output_path.write_bytes(b"new-audio")
+
+    with patch("docgen.ai_client.synthesize_speech", side_effect=_overwrite):
+        with pytest.raises(TTSError, match="stay inside the bundle"):
+            TTSGenerator(cfg).generate(segment="01")
+    assert secret.read_bytes() == b"secret"
+
+
 def test_tts_empty_provider_output_raises(tmp_path: Path) -> None:
     raw = {
         "dirs": {"narration": "narration", "audio": "audio"},
