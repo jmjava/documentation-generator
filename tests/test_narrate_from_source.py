@@ -184,6 +184,34 @@ def test_generate_narration_markdown_rejects_unknown_mode(tmp_path: Path) -> Non
         generate_narration_markdown(cfg, "01", extra_paths=[], extra_hints=[], mode="delete")
 
 
+def test_write_narration_refuses_symlink_outside_bundle(tmp_path: Path) -> None:
+    """force=True must not follow a narration symlink out of the bundle."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / ".git").mkdir()
+    (bundle / "docgen.yaml").write_text(
+        yaml.dump(
+            {
+                "dirs": {"narration": "narration"},
+                "segments": {"default": ["01"], "all": ["01"]},
+                "segment_names": {"01": "01-demo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.md"
+    secret.write_text("keep this\n", encoding="utf-8")
+    narr = bundle / "narration"
+    narr.mkdir()
+    (narr / "01-demo.md").symlink_to(secret)
+    with pytest.raises(ValueError, match="stay inside the bundle"):
+        write_narration_markdown(cfg, "01", "overwrite\n", force=True)
+    assert secret.read_text(encoding="utf-8") == "keep this\n"
+
+
 def test_write_narration_markdown_creates_file(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / "docgen.yaml").write_text(
