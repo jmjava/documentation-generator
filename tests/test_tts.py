@@ -54,6 +54,32 @@ def test_passthrough_plain():
     assert markdown_to_tts_plain(text) == text
 
 
+def test_tts_refuses_narration_symlink_outside_bundle(tmp_path: Path) -> None:
+    """Dry-run must not read narration that resolves outside the bundle."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    raw = {
+        "dirs": {"narration": "narration", "audio": "audio"},
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-intro"},
+    }
+    (bundle / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    narr = bundle / "narration"
+    narr.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.md"
+    secret.write_text(
+        "This is spoken prose about the checkout service.\n",
+        encoding="utf-8",
+    )
+    (narr / "01-intro.md").symlink_to(secret)
+    cfg = Config.from_yaml(bundle / "docgen.yaml")
+    with pytest.raises(TTSError, match="stay inside the bundle"):
+        TTSGenerator(cfg).generate(segment="01", dry_run=True)
+    assert secret.read_text(encoding="utf-8").startswith("This is spoken")
+
+
 def test_tts_missing_narration_raises(tmp_path: Path) -> None:
     raw = {
         "dirs": {"narration": "narration", "audio": "audio"},

@@ -15,6 +15,16 @@ class TTSError(RuntimeError):
     """Raised when TTS cannot run (missing/empty narration or pre-lint failure)."""
 
 
+def _require_narration_inside_bundle(base: Path, src: Path) -> None:
+    """Refuse a narration file that resolves outside the bundle (symlink escape)."""
+    try:
+        src.resolve().relative_to(base.resolve())
+    except ValueError as exc:
+        raise TTSError(
+            f"{src.name}: narration path must stay inside the bundle"
+        ) from exc
+
+
 def _probe_duration(path: Path) -> float | None:
     """Return the duration of an audio file in seconds, or None on failure."""
     try:
@@ -90,6 +100,7 @@ class TTSGenerator:
                 f"No narration file found for segment {seg_id} "
                 f"(expected {self.config.resolve_segment_name(seg_id)}.md under {narration_dir})"
             )
+        _require_narration_inside_bundle(self.config.base_dir, src)
         raw = src.read_text(encoding="utf-8")
         plain = markdown_to_tts_plain(raw)
         if not plain.strip():
