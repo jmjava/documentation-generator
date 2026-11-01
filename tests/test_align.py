@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 
 from docgen.align import (
+    AlignmentError,
     build_local_timing,
+    detect_speech_intervals,
     parse_silencedetect_output,
     reconcile_intervals_to_sentences,
     split_sentences,
@@ -191,3 +193,17 @@ def test_detect_speech_intervals_empty_stderr_is_full_span_only_on_success(
 
     monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
     assert detect_speech_intervals(Path("/tmp/x.mp3"), 10.0) == [(0.0, 10.0)]
+
+
+def test_silence_settings_must_be_finite(monkeypatch) -> None:
+    from pathlib import Path
+
+    def _boom(*_a, **_k):
+        raise AssertionError("ffmpeg should not run")
+
+    monkeypatch.setattr("docgen.align.subprocess.run", _boom)
+    audio = Path("/tmp/x.mp3")
+    with pytest.raises(AlignmentError, match="min silence"):
+        detect_speech_intervals(audio, 10.0, min_silence_sec=float("inf"))
+    with pytest.raises(AlignmentError, match="silence noise"):
+        detect_speech_intervals(audio, 10.0, noise_db=float("nan"))

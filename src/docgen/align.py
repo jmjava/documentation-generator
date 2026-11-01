@@ -129,6 +129,19 @@ def probe_duration(audio_path: Path) -> float:
     return _finite_probe_seconds(audio_path, out.stdout.strip())
 
 
+def _require_silence_settings(noise_db: float, min_silence_sec: float) -> None:
+    """Silence settings must be finite, and the minimum gap must be positive."""
+    if not math.isfinite(noise_db):
+        raise AlignmentError(
+            f"silence noise must be a finite number of dB, not {noise_db!r}"
+        )
+    if not math.isfinite(min_silence_sec) or min_silence_sec <= 0:
+        raise AlignmentError(
+            "min silence must be a finite number of seconds greater than zero, "
+            f"not {min_silence_sec!r}"
+        )
+
+
 def detect_speech_intervals(
     audio_path: Path,
     duration: float,
@@ -137,6 +150,7 @@ def detect_speech_intervals(
     min_silence_sec: float = DEFAULT_MIN_SILENCE_SEC,
 ) -> list[tuple[float, float]]:
     """Run ffmpeg silencedetect and return speech (non-silent) intervals."""
+    _require_silence_settings(noise_db, min_silence_sec)
     cmd = [
         "ffmpeg", "-hide_banner", "-nostats",
         "-i", str(audio_path),
