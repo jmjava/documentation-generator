@@ -12,7 +12,7 @@ module looks at the **PNG**:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -363,18 +363,42 @@ def _asset_review_issues(
     return [f"{rel}: vision review FAIL — {verdict.reason}"]
 
 
+def image_path_issue(base: Path, rel: str) -> str | None:
+    """Refuse an image path that can leave the bundle directory."""
+    text = str(rel or "").strip()
+    if not text:
+        return None
+    raw = PurePosixPath(text.replace("\\", "/"))
+    if raw.is_absolute() or ".." in raw.parts:
+        return f"{text}: image path must stay inside the bundle"
+    asset = (base / text).resolve()
+    try:
+        asset.relative_to(base.resolve())
+    except ValueError:
+        return f"{text}: image path must stay inside the bundle"
+    return None
+
+
 def _pixel_issues_for_spec(cfg: "Config", raw: dict, settings: dict) -> list[str]:
     from docgen.image_generate import collect_alignment_corpus
     from docgen.scene_spec import iter_image_elements
 
-    corpus = collect_alignment_corpus(cfg, raw)
-    if not corpus.strip():
-        return []
+    elements = list(iter_image_elements(raw))
     issues: list[str] = []
-    for el in iter_image_elements(raw):
+    kept: list[tuple[dict, str]] = []
+    for el in elements:
         rel = str(el.get("image") or "").strip()
         if not rel:
             continue
+        escaped = image_path_issue(cfg.base_dir, rel)
+        if escaped:
+            issues.append(escaped)
+            continue
+        kept.append((el, rel))
+    corpus = collect_alignment_corpus(cfg, raw)
+    if not corpus.strip():
+        return issues
+    for el, rel in kept:
         asset = cfg.base_dir / rel
         if not asset.is_file():
             continue

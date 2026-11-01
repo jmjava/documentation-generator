@@ -6,9 +6,23 @@ from pathlib import Path
 
 from docgen.image_align import (
     build_review_user_message,
+    image_path_issue,
     parse_review_verdict,
     review_image_against_docs,
 )
+
+
+def test_image_path_issue_refuses_escape(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.png"
+    secret.write_bytes(b"secret")
+    link = tmp_path / "bundle" / "shot.png"
+    link.parent.mkdir()
+    link.symlink_to(secret)
+    assert image_path_issue(tmp_path / "bundle", "../outside/secret.png")
+    assert image_path_issue(tmp_path / "bundle", "shot.png")
+    assert image_path_issue(tmp_path / "bundle", "inside.png") is None
 
 
 def test_parse_review_verdict_pass_and_fail() -> None:
