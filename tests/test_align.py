@@ -132,6 +132,21 @@ class TestBuildLocalTiming:
         assert timing["segments"][1]["start"] == pytest.approx(4.0)
 
 
+def test_probe_duration_rejects_non_finite(monkeypatch) -> None:
+    from pathlib import Path
+
+    from docgen.align import AlignmentError, probe_duration
+
+    class _Proc:
+        returncode = 0
+        stdout = "inf\n"
+        stderr = ""
+
+    monkeypatch.setattr("docgen.align.subprocess.run", lambda *_a, **_k: _Proc())
+    with pytest.raises(AlignmentError, match="finite"):
+        probe_duration(Path("/tmp/x.mp3"))
+
+
 def test_probe_duration_rejects_nonzero_ffprobe_exit(monkeypatch) -> None:
     from pathlib import Path
 
