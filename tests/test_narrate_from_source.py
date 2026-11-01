@@ -10,6 +10,7 @@ import yaml
 
 from docgen.config import Config, ConfigError
 from docgen.narrate_from_source import (
+    _existing_narration_text,
     build_owner_hints_guidance,
     collect_source_snippets,
     generate_narration_markdown,
@@ -405,3 +406,32 @@ def test_narration_generate_all_empty_all_raises_even_with_default(tmp_path: Pat
     )
     assert r.exit_code != 0
     assert "segments.all is empty" in (r.output + r.stderr)
+
+
+def _narration_cfg(tmp_path: Path) -> Config:
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "segment_names": {"01": "01-missing"},
+        "dirs": {"narration": "narration"},
+    }
+    (tmp_path / "docgen.yaml").write_text(yaml.dump(raw), encoding="utf-8")
+    (tmp_path / "narration").mkdir()
+    return Config.from_yaml(tmp_path / "docgen.yaml")
+
+
+def test_narration_fallback_does_not_read_another_segment(tmp_path: Path) -> None:
+    cfg = _narration_cfg(tmp_path)
+    (tmp_path / "narration" / "010-other.md").write_text("other segment\n", encoding="utf-8")
+    assert _existing_narration_text(cfg, "01") == ""
+
+
+def test_narration_fallback_reads_hyphen_stem(tmp_path: Path) -> None:
+    cfg = _narration_cfg(tmp_path)
+    (tmp_path / "narration" / "01-demo.md").write_text("this segment\n", encoding="utf-8")
+    assert _existing_narration_text(cfg, "01") == "this segment\n"
+
+
+def test_narration_fallback_reads_bare_segment_id(tmp_path: Path) -> None:
+    cfg = _narration_cfg(tmp_path)
+    (tmp_path / "narration" / "01.md").write_text("id file\n", encoding="utf-8")
+    assert _existing_narration_text(cfg, "01") == "id file\n"
