@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,19 @@ class OCRReport:
     passed: bool = True
 
 
+def _require_positive_fps(cap: Any, raw: float) -> float:
+    """A zero or missing frame rate must not be treated as 30 fps."""
+    try:
+        fps = float(raw)
+    except (TypeError, ValueError) as exc:
+        cap.release()
+        raise ValueError("video frame rate is not a number") from exc
+    if not math.isfinite(fps) or fps <= 0:
+        cap.release()
+        raise ValueError("video frame rate must be a positive finite number")
+    return fps
+
+
 class OCRScanner:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -44,7 +58,7 @@ class OCRScanner:
             report.frames.append(OCRFrame(0, "", issues=["Could not open video"]))
             return report
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        fps = _require_positive_fps(cap, cap.get(cv2.CAP_PROP_FPS))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps if fps > 0 else 0
         interval = self.ocr_cfg.get("sample_interval_sec", 2)
