@@ -75,6 +75,16 @@ def test_xai_alias_and_openai_model_remap(
     assert resolve_tts_voice("eve", st) == "eve"
 
 
+def test_unknown_grok_voice_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DOCGEN_AI_PROVIDER", "xai")
+    cfg = _cfg(tmp_path, {})
+    st = resolve_ai_settings(cfg)
+    with pytest.raises(AIError, match="not a Grok voice"):
+        resolve_tts_voice("banana", st)
+
+
 def test_openai_client_grok_passes_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
