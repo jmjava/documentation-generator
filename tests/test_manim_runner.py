@@ -41,16 +41,16 @@ def test_quality_720p30_uses_preset_flag(tmp_path: Path) -> None:
     assert "720p30" in label
 
 
-def test_quality_unknown_falls_back(tmp_path: Path) -> None:
+def test_quality_unknown_is_refused(tmp_path: Path) -> None:
     cfg = _config_with_quality(tmp_path, "banana")
     runner = ManimRunner(cfg)
-    args, _label = runner._quality_args()
-    assert args == ["-qm"]
+    with pytest.raises(RuntimeError, match="not recognized"):
+        runner._quality_args()
 
 
 def test_quality_args_never_include_preview_flag(tmp_path: Path) -> None:
     """-p opens a GUI player; headless servers fail with 'Unable to create a GL context'."""
-    for quality in ("480p15", "720p30", "1080p60", "2160p60", "1080p30", "banana"):
+    for quality in ("480p15", "720p30", "1080p60", "2160p60", "1080p30"):
         cfg = _config_with_quality(tmp_path, quality)
         args, _label = ManimRunner(cfg)._quality_args()
         assert "-p" not in args
