@@ -20,7 +20,10 @@ from docgen.manim_scene_support import (
 from docgen.manim_primitives import ALLOWED_EMPHASIS, ALLOWED_REVEALS, ALLOWED_SHAPES
 from docgen.scene_spec import (
     ALLOWED_COLORS,
+    PAGE_TRANSITION_ORDER,
 )
+
+_PAGE_TRANSITION_CHOICES = " | ".join(PAGE_TRANSITION_ORDER)
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -45,7 +48,7 @@ Required keys:
 - class_name: string (echo the value from the user message exactly)
 - title: mapping with text (string), font_size (int, >= 14), color (one of the palette tokens below);
   optional subtitle (string ≤80 chars) for a second line under the title
-- **Exactly one of:** ``rows`` (non-empty list of row mappings, single page) **or** ``pages`` (non-empty list of page mappings; each page has ``rows`` as above, optionally ``transition``: fade | none for pages after the first)
+- **Exactly one of:** ``rows`` (non-empty list of row mappings, single page) **or** ``pages`` (non-empty list of page mappings; each page has ``rows`` as above, optionally ``transition``: {_PAGE_TRANSITION_CHOICES} for pages after the first)
 
 Each row must have:
 - run_time: positive number (seconds for timed_play FadeIn of **each** box in that row)
@@ -85,7 +88,7 @@ Optional per-row (legacy; first box only — prefer per-box above):
 
 Optional top-level:
 - layout: optional first_row_title_buff, row_gap, column_gap (positive numbers);
-  for multi-page specs also page_transition: fade | slide | none (default fade), page_transition_run_time (default 0.45, max 5);
+  for multi-page specs also page_transition: {_PAGE_TRANSITION_CHOICES} (default fade), page_transition_run_time (default 0.45, max 5);
   dwell_emphasis: auto (default; pulse during long holds) | none; dwell_run_time: seconds for that pulse (default 0.5, max 3).
 - edges: optional list of connectors for **single-page** ``rows`` specs (see below).
 
@@ -95,13 +98,19 @@ Optional per-page (when using ``pages``):
   drawn as arrows between those boxes after layout. Box labels must be unique on that page.
   Prefer edges for pipeline / flow diagrams (A → B → C); omit when boxes are unrelated topics.
 
-Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: fade|slide|none, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in). Prefer ``slide`` when the next page continues the same pipeline.
+Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: {_PAGE_TRANSITION_CHOICES}, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
+Between pages, pick a handoff (only the **first** node of the next page plays it; later boxes stay paced):
+- ``slide`` — previous board travels left, first node enters from the right. Use when the next page continues the same pipeline.
+- ``rise`` — previous board drops away, first node settles down from above. Use for a deeper step.
+- ``zoom`` — previous board shrinks out, first node scales up. Use when the next page focuses a detail.
+- ``fade`` — dissolve (default). Use for a hard topic change.
+- ``none`` — instant remove. Rare.
 
 Palette tokens (exact spelling): {", ".join(sorted(ALLOWED_COLORS))}
 
 Design goals:
 - **Frame:** dogfood Manim canvas is ~14.22 × 8 units; title + buffer eat the top — see user-message budget. Never stack so many tall rows that boxes would clip off the bottom.
-- **Do not** rely on shrinking: split into **pages** with fade between them.
+- **Do not** rely on shrinking: split into **pages** with a page transition between them.
 - **Rows** within a page stack vertically; multiple boxes in one row arrange horizontally with safe spacing.
 - **Edges / arrows:** when narration describes a flow or pipeline, add ``edges`` so the board shows
   directed connections (not only isolated boxes). Keep edge endpoints as spoken labels.

@@ -15,8 +15,17 @@ from docgen.manim_primitives import (
     plan_hold_pulses,
     resolve_box_emphasis,
 )
+from docgen.scene_asset_validate import motion_plan_from_source
+from docgen.scene_clock_harness import (
+    run_compiled_scene_clock,
+    simulator_exec_drift_violations,
+)
 from docgen.scene_spec import (
     MIN_REVEAL_RUN_TIME,
+    PAGE_RISE_ENTER,
+    PAGE_RISE_SHIFT,
+    PAGE_SLIDE_SHIFT,
+    PAGE_ZOOM_SCALE,
     TITLE_WRITE_RUN_TIME,
     SceneSpecError,
     compile_scene_class,
@@ -329,24 +338,125 @@ def test_compile_emits_clamped_title_write() -> None:
     assert "Write(title), run_time=0.5" in out
 
 
-def test_compile_slide_page_transition() -> None:
-    spec = {
+def _paged_spec(transition: str, *, second_reveal: str | None = None) -> dict:
+    second = _box("P1", reveal=second_reveal)
+    return {
         "segment_id": "01",
         "class_name": "PagedScene",
         "timing_key": "01-x",
         "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
-        "layout": {"page_transition": "slide", "page_transition_run_time": 0.4},
+        "layout": {"page_transition": transition, "page_transition_run_time": 0.4},
         "pages": [
-            {"rows": [{"run_time": 0.5, "boxes": [_box("P0")]}]},
             {
-                "transition": "slide",
-                "rows": [{"run_time": 0.5, "boxes": [_box("P1")]}],
+                "rows": [{"run_time": 0.5, "boxes": [_box("P0"), _box("Next")]}],
+                "edges": [{"from": "P0", "to": "Next", "color": "C_ACCENT"}],
+            },
+            {
+                "transition": transition,
+                "rows": [{"run_time": 0.5, "boxes": [second, _box("Later")]}],
+                "edges": [{"from": "P1", "to": "Later", "color": "C_ACCENT"}],
             },
         ],
     }
+
+
+def test_compile_slide_page_transition() -> None:
+    spec = _paged_spec("slide")
     validate_scene_spec(spec)
     out = compile_scene_class(spec)
-    assert "FadeOut(_bx_0_0_0, shift=LEFT * 0.35)" in out
+    assert f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    assert f"FadeOut(_ar_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    # FadeIn(shift=LEFT) starts on the right and travels left into place.
+    assert f"FadeIn(_bx_1_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    # The next box and its arrow stay paced; they do not ride the page handoff.
+    assert "FadeIn(_bx_1_0_1)" in out
+    assert f"FadeIn(_bx_1_0_1, shift=LEFT * {PAGE_SLIDE_SHIFT})" not in out
+    assert "GrowArrow(_ar_1_0)" in out
+    plan = motion_plan_from_source(out)
+    assert "page_slide" in plan
+    assert "reveal:slide:_bx_1_0_0" in plan
+    assert "reveal:fade:_bx_1_0_1" in plan
+
+
+def test_compile_rise_and_zoom_page_transitions() -> None:
+    rise = compile_scene_class(_paged_spec("rise"))
+    assert f"FadeOut(_bx_0_0_0, shift=DOWN * {PAGE_RISE_SHIFT})" in rise
+    assert f"FadeIn(_bx_1_0_0, shift=DOWN * {PAGE_RISE_ENTER})" in rise
+    assert "page_rise" in motion_plan_from_source(rise)
+    assert "reveal:rise:_bx_1_0_0" in motion_plan_from_source(rise)
+
+    zoom = compile_scene_class(_paged_spec("zoom"))
+    assert f"FadeOut(_bx_0_0_0, scale={PAGE_ZOOM_SCALE})" in zoom
+    assert f"FadeIn(_bx_1_0_0, scale={PAGE_ZOOM_SCALE})" in zoom
+    assert "GrowArrow(_ar_1_0)" in zoom
+    assert "page_zoom" in motion_plan_from_source(zoom)
+    assert "reveal:zoom:_bx_1_0_0" in motion_plan_from_source(zoom)
+
+
+def test_explicit_reveal_wins_over_page_entrance() -> None:
+    out = compile_scene_class(_paged_spec("slide", second_reveal="grow"))
+    assert f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    assert "GrowFromCenter(_bx_1_0_0)" in out
+    assert f"FadeIn(_bx_1_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" not in out
+
+
+def test_animated_page_transitions_stay_on_the_clock() -> None:
+    words = [
+        {"word": "Alpha", "start": 1.2, "end": 1.4},
+        {"word": "Beta", "start": 4.0, "end": 4.2},
+        {"word": "Gamma", "start": 4.4, "end": 4.6},
+        {"word": "tail", "start": 12.0, "end": 12.4},
+    ]
+    for transition in ("slide", "rise", "zoom", "fade"):
+        spec = {
+            "segment_id": "01",
+            "class_name": "PagedScene",
+            "timing_key": "01-x",
+            "title": {"text": "T", "font_size": 36, "color": "C_WHITE"},
+            "layout": {
+                "page_transition": transition,
+                "page_transition_run_time": 0.45,
+                "dwell_emphasis": "none",
+            },
+            "pages": [
+                {
+                    "rows": [
+                        {
+                            "run_time": 0.8,
+                            "boxes": [_box("Alpha", wait_word=0, emphasis="none")],
+                        }
+                    ]
+                },
+                {
+                    "transition": transition,
+                    "rows": [
+                        {
+                            "run_time": 0.8,
+                            "boxes": [
+                                _box("Beta", wait_word=1, emphasis="none"),
+                                _box("Gamma", wait_word=2, emphasis="none"),
+                            ],
+                        }
+                    ],
+                },
+            ],
+        }
+        out = compile_scene_class(spec, words=words)
+        events = simulate_reveal_timeline(spec, words)
+        assert events[1].page_fade_out > 0
+        assert events[1].page_fade_out < 0.45
+        assert f"run_time={round(events[1].page_fade_out, 3)}" in out
+        trace = run_compiled_scene_clock(out, words)
+        assert trace.skipped_waits() == []
+        assert simulator_exec_drift_violations(events, trace) == []
+
+
+def test_scene_spec_prompt_lists_page_transitions() -> None:
+    from docgen.scene_spec import PAGE_TRANSITION_ORDER
+    from docgen.scene_spec_generate import _SCENE_SPEC_SYSTEM_BASE
+
+    for name in PAGE_TRANSITION_ORDER:
+        assert name in _SCENE_SPEC_SYSTEM_BASE
 
 
 def test_flow_page_auto_grows_first_box() -> None:

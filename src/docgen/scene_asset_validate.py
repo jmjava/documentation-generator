@@ -125,6 +125,49 @@ def _const_value(node: ast.AST) -> object | None:
     return None
 
 
+def _call_keyword(call: ast.Call, name: str) -> ast.AST | None:
+    for kw in call.keywords:
+        if kw.arg == name:
+            return kw.value
+    return None
+
+
+def _shift_direction(call: ast.Call) -> str | None:
+    """``LEFT`` / ``DOWN`` / … from ``shift=LEFT * n``, or None when unset."""
+    node = _call_keyword(call, "shift")
+    if node is None:
+        return None
+    if isinstance(node, ast.BinOp):
+        node = node.left
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return "shift"
+
+
+def _fade_in_kind(call: ast.Call) -> str:
+    direction = _shift_direction(call)
+    if _call_keyword(call, "scale") is not None and direction is None:
+        return "zoom"
+    if direction == "DOWN":
+        return "rise"
+    if direction is not None:
+        return "slide"
+    return "fade"
+
+
+def _fade_out_token(call: ast.Call) -> str:
+    direction = _shift_direction(call)
+    if _call_keyword(call, "scale") is not None and direction is None:
+        return "page_zoom"
+    if direction in {"LEFT", "RIGHT"}:
+        return "page_slide"
+    if direction in {"UP", "DOWN"}:
+        return "page_rise"
+    return "page_fade"
+
+
 def _construct_calls(source: str) -> list[ast.Call]:
     try:
         tree = ast.parse(source)
@@ -221,9 +264,8 @@ def motion_plan_from_source(source: str) -> list[str]:
             name = _call_name(arg)
             target = _first_arg_id(arg)
             if name == "FadeIn":
-                has_shift = any(k.arg == "shift" for k in arg.keywords)
                 if target and str(target).startswith("_bx_"):
-                    plan.append(f"reveal:{'slide' if has_shift else 'fade'}:{target}")
+                    plan.append(f"reveal:{_fade_in_kind(arg)}:{target}")
                 elif target and str(target).startswith("_ar_"):
                     plan.append(f"edge:fade:{target}")
             elif name == "GrowFromCenter" and target:
@@ -235,7 +277,7 @@ def motion_plan_from_source(source: str) -> list[str]:
             elif name == "GrowArrow" and target:
                 plan.append(f"edge:grow:{target}")
             elif name == "FadeOut":
-                plan.append("page_fade")
+                plan.append(_fade_out_token(arg))
     return plan
 
 
