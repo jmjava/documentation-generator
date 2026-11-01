@@ -41,6 +41,18 @@ def test_quality_720p30_uses_preset_flag(tmp_path: Path) -> None:
     assert "720p30" in label
 
 
+def test_missing_font_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _config_with_quality(tmp_path, "720p30")
+
+    class _Proc:
+        stdout = "\n"
+        returncode = 0
+
+    monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: _Proc())
+    with pytest.raises(RuntimeError, match="not found by fc-list"):
+        ManimRunner(cfg)._check_font()
+
+
 def test_quality_unknown_is_refused(tmp_path: Path) -> None:
     cfg = _config_with_quality(tmp_path, "banana")
     runner = ManimRunner(cfg)
