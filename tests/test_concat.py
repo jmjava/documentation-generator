@@ -157,6 +157,23 @@ def test_concat_ffmpeg_timeout_removes_incomplete_output(
     assert not list((tmp_path / "recordings").glob(".concat-*.txt"))
 
 
+def test_concat_timeout_refuses_when_incomplete_output_remains(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _cfg(tmp_path, {"full": ["01", "02"]})
+    _seed_recordings(tmp_path)
+    out = tmp_path / "recordings" / "full.mp4"
+    out.mkdir()
+
+    def fake_run(cmd, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=300)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ConcatError, match="could not be removed"):
+        ConcatBuilder(cfg).build(name="full")
+    assert out.is_dir()
+
+
 def test_concat_ffmpeg_failure_removes_incomplete_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

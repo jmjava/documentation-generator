@@ -117,8 +117,11 @@ class ConcatBuilder:
 
 def _unlink_incomplete(path: Path) -> None:
     """Remove a truncated concat output so later stages cannot treat it as finished."""
-    if path.exists():
-        try:
-            path.unlink()
-        except OSError:
-            pass
+    if not path.exists():
+        return
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise ConcatError(
+            f"[concat] incomplete {path.name} could not be removed"
+        ) from exc
