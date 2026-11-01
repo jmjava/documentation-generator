@@ -138,7 +138,9 @@ jobs:
             backoff=$((backoff * 2))
             attempt=$((attempt + 1))
           done
-      - run: pip install --no-cache-dir ".[dev]" "mutmut==3.8.0"
+      # mutmut 3.8.0 reads pytest's private Function._nodeid. Pytest 9 removed
+      # that attribute (use nodeid). 3.8.1 matches the public attribute.
+      - run: pip install --no-cache-dir ".[dev]" "mutmut==3.8.1"
       - name: Mutation score for path_filters.py
         env:
           PYTHONPATH: ${{ github.workspace }}/src
