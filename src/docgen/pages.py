@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -239,6 +240,14 @@ class PagesGenerator:
         return _ffprobe_duration_label(rec, fallback="concat")
 
 
+def _positive_duration_badge(dur: float) -> str | None:
+    """Format a finite positive duration. Non-finite values are not a badge."""
+    if not math.isfinite(dur) or dur <= 0:
+        return None
+    minutes, seconds = divmod(int(dur), 60)
+    return f"~{minutes}m {seconds}s"
+
+
 def _ffprobe_duration_label(path: Path, *, fallback: str) -> str:
     """Format an mp4 duration for a pages badge, or *fallback* if the probe fails.
 
@@ -267,10 +276,10 @@ def _ffprobe_duration_label(path: Path, *, fallback: str) -> str:
         dur = float(fmt.get("duration", 0))
     except (TypeError, ValueError):
         return fallback
-    if dur > 0:
-        m, s = divmod(int(dur), 60)
-        return f"~{m}m {s}s"
-    return fallback
+    badge = _positive_duration_badge(dur)
+    if badge is None:
+        return fallback
+    return badge
 
 
 def _esc(s: str) -> str:
