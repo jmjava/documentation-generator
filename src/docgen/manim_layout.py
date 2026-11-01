@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from docgen.config import Config
@@ -22,6 +23,19 @@ class LayoutReport:
     path: str
     issues: list[LayoutIssue] = field(default_factory=list)
     passed: bool = True
+
+
+def _require_positive_fps(cap: Any, raw: float) -> float:
+    """A zero or missing frame rate must not be treated as 30 fps."""
+    try:
+        fps = float(raw)
+    except (TypeError, ValueError) as exc:
+        cap.release()
+        raise ValueError("video frame rate is not a number") from exc
+    if not math.isfinite(fps) or fps <= 0:
+        cap.release()
+        raise ValueError("video frame rate must be a positive finite number")
+    return fps
 
 
 class LayoutValidator:
@@ -45,7 +59,7 @@ class LayoutValidator:
             report.issues.append(LayoutIssue(0, "error", "Could not open video"))
             return report
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        fps = _require_positive_fps(cap, cap.get(cv2.CAP_PROP_FPS))
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total / fps if fps > 0 else 0
         h_frame = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
