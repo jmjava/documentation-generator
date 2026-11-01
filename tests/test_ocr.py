@@ -52,6 +52,24 @@ def test_zero_fps_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert cap.sampled is False
 
 
+def test_zero_sample_interval_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = {
+        "segments": {"all": ["01"], "default": ["01"]},
+        "validation": {"ocr": {"sample_interval_sec": 0}},
+    }
+    path = tmp_path / "docgen.yaml"
+    path.write_text(yaml.dump(raw), encoding="utf-8")
+    cap = _Cap()
+    cap.fps = 30.0
+    cap.frames = 0.0
+    monkeypatch.setattr(cv2, "VideoCapture", lambda *_a, **_k: cap)
+    with pytest.raises(ValueError, match="sample interval"):
+        OCRScanner(Config.from_yaml(path)).scan_video(tmp_path / "clip.mp4")
+    assert cap.sampled is False
+
+
 def test_positive_fps_still_samples(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cap = _Cap()
     cap.fps = 30.0
