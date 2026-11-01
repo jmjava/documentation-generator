@@ -208,6 +208,64 @@ def _row_width(row: dict[str, Any], col_gap: float) -> float:
     return sum(ws) + max(0, len(ws) - 1) * col_gap
 
 
+def _fit_row_width(boxes: list[dict[str, Any]], col_gap: float) -> float:
+    ws = [float(b.get("width", 0)) for b in boxes]
+    if not ws:
+        return 0.0
+    return sum(ws) + max(0, len(ws) - 1) * col_gap
+
+
+def _scaled_box_widths(
+    boxes: list[dict[str, Any]], scale: float, min_box_w: float
+) -> list[dict[str, Any]]:
+    scaled: list[dict[str, Any]] = []
+    for box in boxes:
+        copied = dict(box)
+        try:
+            copied["width"] = max(min_box_w, float(box["width"]) * scale)
+        except (KeyError, TypeError, ValueError):
+            pass
+        scaled.append(copied)
+    return scaled
+
+
+def _chunk_boxes_to_width(
+    boxes: list[dict[str, Any]],
+    *,
+    safe: float,
+    col_gap: float,
+    min_box_w: float,
+) -> list[list[dict[str, Any]]]:
+    """Split a still-too-wide row into chunks of at most three, then scale each."""
+    chunks: list[list[dict[str, Any]]] = []
+    for i in range(0, len(boxes), 3):
+        part = [dict(b) for b in boxes[i : i + 3]]
+        prw = _fit_row_width(part, col_gap)
+        if prw > safe + 0.05 and prw > 0:
+            part = _scaled_box_widths(part, safe / prw, min_box_w)
+        chunks.append(part)
+    return chunks
+
+
+def _fit_boxes_to_width(
+    boxes: list[dict[str, Any]],
+    *,
+    safe: float,
+    col_gap: float,
+    min_box_w: float,
+) -> list[list[dict[str, Any]]]:
+    if not boxes:
+        return []
+    rw = _fit_row_width(boxes, col_gap)
+    if rw <= safe + 0.05:
+        return [boxes]
+    scale = safe / rw if rw > 0 else 1.0
+    scaled = _scaled_box_widths(boxes, scale, min_box_w)
+    if _fit_row_width(scaled, col_gap) <= safe + 0.05:
+        return [scaled]
+    return _chunk_boxes_to_width(boxes, safe=safe, col_gap=col_gap, min_box_w=min_box_w)
+
+
 def auto_fit_row_widths(spec: dict[str, Any]) -> dict[str, Any]:
     """Scale or split rows that exceed the horizontal safe width.
 
@@ -220,44 +278,8 @@ def auto_fit_row_widths(spec: dict[str, Any]) -> dict[str, Any]:
     safe = _LAYOUT_HORIZONTAL_SAFE
     min_box_w = 1.6
 
-    def _row_width(boxes: list[dict[str, Any]]) -> float:
-        ws = [float(b.get("width", 0)) for b in boxes]
-        if not ws:
-            return 0.0
-        return sum(ws) + max(0, len(ws) - 1) * col_gap
-
     def _fit_boxes(boxes: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-        if not boxes:
-            return []
-        rw = _row_width(boxes)
-        if rw <= safe + 0.05:
-            return [boxes]
-        # Proportional scale down to safe width.
-        scale = safe / rw if rw > 0 else 1.0
-        scaled = []
-        for b in boxes:
-            nb = dict(b)
-            try:
-                nb["width"] = max(min_box_w, float(b["width"]) * scale)
-            except (KeyError, TypeError, ValueError):
-                pass
-            scaled.append(nb)
-        if _row_width(scaled) <= safe + 0.05:
-            return [scaled]
-        # Still too wide: split into chunks of ≤3, then scale each chunk.
-        chunks: list[list[dict[str, Any]]] = []
-        for i in range(0, len(boxes), 3):
-            part = [dict(b) for b in boxes[i : i + 3]]
-            prw = _row_width(part)
-            if prw > safe + 0.05 and prw > 0:
-                pscale = safe / prw
-                for b in part:
-                    try:
-                        b["width"] = max(min_box_w, float(b["width"]) * pscale)
-                    except (KeyError, TypeError, ValueError):
-                        pass
-            chunks.append(part)
-        return chunks
+        return _fit_boxes_to_width(boxes, safe=safe, col_gap=col_gap, min_box_w=min_box_w)
 
     def _rewrite_rows(rows: list[Any]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
@@ -303,6 +325,84 @@ def auto_fit_row_widths(spec: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _paginate_source_pages(
+    spec: dict[str, Any], transition_default: str
+) -> list[tuple[list[dict[str, Any]], str | None]] | None:
+    """Rows plus the transition that should lead each source page (``None`` when absent)."""
+    if spec.get("pages") is not None:
+        src_pages: list[tuple[list[dict[str, Any]], str | None]] = []
+        for pi, page in enumerate(spec["pages"]):
+            if not isinstance(page, dict):
+                continue
+            rows = page.get("rows")
+            if not isinstance(rows, list) or not rows:
+                continue
+            tr = None if pi == 0 else str(page.get("transition", transition_default))
+            src_pages.append((list(rows), tr))
+        return src_pages
+    rows = spec.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return None
+    return [(list(rows), None)]
+
+
+def _split_rows_to_pages(
+    rows: list[dict[str, Any]], *, budget: float, row_gap: float
+) -> list[list[dict[str, Any]]]:
+    out: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    current_h = 0.0
+    for row in rows:
+        rh = _row_height(row)
+        if not current:
+            current.append(row)
+            current_h = rh
+            continue
+        projected = current_h + row_gap + rh
+        if projected > budget + 0.02:
+            out.append(current)
+            current = [row]
+            current_h = rh
+        else:
+            current.append(row)
+            current_h = projected
+    if current:
+        out.append(current)
+    return out
+
+
+def _paginate_page_entry(
+    *,
+    page_idx: int,
+    chunk_idx: int,
+    chunk: list[dict[str, Any]],
+    tr: str | None,
+    transition_default: str,
+) -> dict[str, Any]:
+    """First chunk of the first source page has no transition; later chunks hand off."""
+    entry: dict[str, Any] = {"rows": chunk}
+    if page_idx == 0 and chunk_idx == 0:
+        return entry
+    if chunk_idx == 0 and tr is not None:
+        entry["transition"] = tr
+    else:
+        entry["transition"] = transition_default
+    return entry
+
+
+def _finish_paginated_spec(
+    spec: dict[str, Any], new_pages: list[dict[str, Any]]
+) -> dict[str, Any]:
+    # If nothing changed (single page, no split), keep the original ``rows`` form.
+    only_one = len(new_pages) == 1 and "transition" not in new_pages[0]
+    if only_one and spec.get("rows") is not None and spec.get("pages") is None:
+        return spec
+    new_spec = dict(spec)
+    new_spec.pop("rows", None)
+    new_spec["pages"] = new_pages
+    return new_spec
+
+
 def auto_paginate(spec: dict[str, Any]) -> dict[str, Any]:
     """Re-paginate a spec so every page fits the Manim frame.
 
@@ -323,69 +423,23 @@ def auto_paginate(spec: dict[str, Any]) -> dict[str, Any]:
         return spec
     row_gap = float(layout.get("row_gap", 0.6))
     transition_default = str(layout.get("page_transition", "fade"))
-
-    # Source rows + per-source-page transition (preserve existing carving + transitions).
-    if spec.get("pages") is not None:
-        src_pages: list[tuple[list[dict[str, Any]], str | None]] = []
-        for pi, page in enumerate(spec["pages"]):
-            if not isinstance(page, dict):
-                continue
-            rows = page.get("rows")
-            if not isinstance(rows, list) or not rows:
-                continue
-            tr = None if pi == 0 else str(page.get("transition", transition_default))
-            src_pages.append((list(rows), tr))
-    else:
-        rows = spec.get("rows")
-        if not isinstance(rows, list) or not rows:
-            return spec
-        src_pages = [(list(rows), None)]
-
-    def _split_rows_to_pages(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-        out: list[list[dict[str, Any]]] = []
-        current: list[dict[str, Any]] = []
-        current_h = 0.0
-        for row in rows:
-            rh = _row_height(row)
-            if not current:
-                current.append(row)
-                current_h = rh
-                continue
-            projected = current_h + row_gap + rh
-            if projected > budget + 0.02:
-                out.append(current)
-                current = [row]
-                current_h = rh
-            else:
-                current.append(row)
-                current_h = projected
-        if current:
-            out.append(current)
-        return out
-
-    new_pages: list[dict[str, Any]] = []
-    for page_idx, (rows, tr) in enumerate(src_pages):
-        chunks = _split_rows_to_pages(rows)
-        for chunk_idx, chunk in enumerate(chunks):
-            entry: dict[str, Any] = {"rows": chunk}
-            # First chunk of first source page has no transition; later chunks fade in
-            # over the previous page; preserve the source page's transition for its first chunk.
-            if not (page_idx == 0 and chunk_idx == 0):
-                if chunk_idx == 0 and tr is not None:
-                    entry["transition"] = tr
-                else:
-                    entry["transition"] = transition_default
-            new_pages.append(entry)
-
-    # If nothing changed (single page, no split), keep the original ``rows`` form.
-    only_one = len(new_pages) == 1 and "transition" not in new_pages[0]
-    if only_one and spec.get("rows") is not None and spec.get("pages") is None:
+    src_pages = _paginate_source_pages(spec, transition_default)
+    if src_pages is None:
         return spec
-
-    new_spec = dict(spec)
-    new_spec.pop("rows", None)
-    new_spec["pages"] = new_pages
-    return new_spec
+    new_pages = [
+        _paginate_page_entry(
+            page_idx=page_idx,
+            chunk_idx=chunk_idx,
+            chunk=chunk,
+            tr=tr,
+            transition_default=transition_default,
+        )
+        for page_idx, (rows, tr) in enumerate(src_pages)
+        for chunk_idx, chunk in enumerate(
+            _split_rows_to_pages(rows, budget=budget, row_gap=row_gap)
+        )
+    ]
+    return _finish_paginated_spec(spec, new_pages)
 
 
 def _normalize_word(s: str) -> str:
@@ -444,6 +498,22 @@ def _tokens_match(label_token: str, word_token: str) -> bool:
     return _stem(label_token) == _stem(word_token)
 
 
+def _glued_compound_span(tokens: list[str], ti: int, spoken: str) -> int | None:
+    """How many label tokens glue into one Whisper word, or ``None`` if they do not.
+
+    Spoken words are longer only when TTS/Whisper glued extra chars we already
+    normalized away (rare); compounds require exact equality.
+    """
+    glued = tokens[ti]
+    for k in range(2, len(tokens) - ti + 1):
+        glued += tokens[ti + k - 1]
+        if glued == spoken:
+            return k
+        if len(glued) > len(spoken):
+            return None
+    return None
+
+
 def _consume_label_tokens_at(
     tokens: list[str],
     word_norms: list[str],
@@ -475,18 +545,7 @@ def _consume_label_tokens_at(
             ti += 1
             wi += 1
             continue
-        # Glue 2+ label tokens into one Whisper word (hyphenated / dotted compounds).
-        glued = tokens[ti]
-        matched_k: int | None = None
-        for k in range(2, m - ti + 1):
-            glued += tokens[ti + k - 1]
-            if glued == spoken:
-                matched_k = k
-                break
-            # Spoken word is longer only when TTS/Whisper glued extra chars we already
-            # normalized away (rare); require exact equality for compounds.
-            if len(glued) > len(spoken):
-                break
+        matched_k = _glued_compound_span(tokens, ti, spoken)
         if matched_k is None:
             return None
         ti += matched_k
@@ -550,6 +609,155 @@ def wait_word_index_at_segment_start(
     return wait_word_index_for_time(words, t)
 
 
+def _whisper_word_stream(
+    words: list[dict[str, Any]],
+) -> list[tuple[str, float, int]]:
+    """``(normalized word, start, original index)`` for nonempty spoken tokens."""
+    word_stream: list[tuple[str, float, int]] = []
+    for wi, word in enumerate(words):
+        if not isinstance(word, dict):
+            continue
+        normalized = _normalize_word(word.get("word", ""))
+        if not normalized:
+            continue
+        try:
+            start = float(word.get("start", 0.0))
+        except (TypeError, ValueError):
+            continue
+        word_stream.append((normalized, start, wi))
+    return word_stream
+
+
+def _find_label_in_stream(
+    label: str,
+    from_idx: int,
+    word_stream: list[tuple[str, float, int]],
+) -> tuple[int, int] | None:
+    """Return (last matched stream index, original ``words`` index of phrase start)."""
+    tokens = _label_tokens(label)
+    if not tokens:
+        return None
+    norms = [item[0] for item in word_stream]
+    i = from_idx
+    while i < len(word_stream):
+        last = _consume_label_tokens_at(tokens, norms, i)
+        if last is not None:
+            return (last, word_stream[i][2])
+        i += 1
+    return None
+
+
+def _advance_past_label(
+    label: str, cursor: int, word_stream: list[tuple[str, float, int]]
+) -> int:
+    found = _find_label_in_stream(label, cursor, word_stream)
+    if found is None:
+        return cursor
+    return found[0] + 1
+
+
+def _preserved_row_cursor(
+    row: dict[str, Any],
+    boxes: list[Any],
+    cursor: int,
+    word_stream: list[tuple[str, float, int]],
+    overwrite: bool,
+) -> int | None:
+    """Cursor after a row whose pacing is left alone, or ``None`` to keep syncing."""
+    if overwrite:
+        return None
+    if row.get("wait_word") is None and row.get("wait_segment") is None:
+        return None
+    first = boxes[0]
+    if isinstance(first, dict):
+        return _advance_past_label(str(first.get("label", "")), cursor, word_stream)
+    return cursor
+
+
+def _sync_one_box(
+    box: Any,
+    *,
+    overwrite: bool,
+    cursor: int,
+    word_stream: list[tuple[str, float, int]],
+) -> int:
+    if not isinstance(box, dict):
+        return cursor
+    box.pop("wait_at", None)
+    if box.get("image") is not None and not str(box.get("label", "")).strip():
+        # Unlabeled image element: no transcript anchor to re-derive from,
+        # so keep any author-provided wait_word as-is.
+        return cursor
+    if not overwrite and box.get("wait_word") is not None:
+        return _advance_past_label(str(box.get("label", "")), cursor, word_stream)
+    found = _find_label_in_stream(str(box.get("label", "")), cursor, word_stream)
+    if found is not None:
+        last_stream_i, first_word_i = found
+        box["wait_word"] = int(first_word_i)
+        box.pop("wait_segment", None)
+        return last_stream_i + 1
+    if overwrite:
+        # Fail-closed: never keep a leftover LLM / legacy index for an
+        # unmatched spoken label — callers must reject or set pace: none.
+        box.pop("wait_word", None)
+        box.pop("wait_segment", None)
+    return cursor
+
+
+def _sync_spec_rows(
+    rows: list[Any],
+    *,
+    overwrite: bool,
+    cursor: int,
+    word_stream: list[tuple[str, float, int]],
+) -> int:
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row.pop("wait_at", None)
+        boxes = row.get("boxes")
+        if not isinstance(boxes, list) or not boxes:
+            continue
+        preserved = _preserved_row_cursor(row, boxes, cursor, word_stream, overwrite)
+        if preserved is not None:
+            cursor = preserved
+            continue
+        if overwrite:
+            row.pop("wait_word", None)
+            row.pop("wait_segment", None)
+        for box in boxes:
+            cursor = _sync_one_box(
+                box, overwrite=overwrite, cursor=cursor, word_stream=word_stream
+            )
+    return cursor
+
+
+def _shallow_copy_rows(rows: list[Any]) -> list[Any]:
+    return [dict(row) if isinstance(row, dict) else row for row in rows]
+
+
+def _copy_one_page(page: Any, apply_rows: Any) -> Any:
+    if not isinstance(page, dict):
+        return page
+    copied = dict(page)
+    if isinstance(copied.get("rows"), list):
+        copied["rows"] = _shallow_copy_rows(copied["rows"])
+        apply_rows(copied["rows"])
+    return copied
+
+
+def _copy_spec_rows(spec: dict[str, Any], apply_rows: Any) -> dict[str, Any]:
+    """Shallow-copy pages or rows, then let ``apply_rows`` mutate each row list."""
+    out = dict(spec)
+    if out.get("pages") is not None:
+        out["pages"] = [_copy_one_page(page, apply_rows) for page in out["pages"]]
+        return out
+    if isinstance(out.get("rows"), list):
+        out["rows"] = _shallow_copy_rows(out["rows"])
+        apply_rows(out["rows"])
+    return out
+
+
 def sync_row_labels_to_whisper_words(
     spec: dict[str, Any],
     words: list[dict[str, Any]],
@@ -567,109 +775,82 @@ def sync_row_labels_to_whisper_words(
     """
     if not isinstance(words, list) or not words:
         return spec
-
-    word_stream: list[tuple[str, float, int]] = []
-    for wi, w in enumerate(words):
-        if not isinstance(w, dict):
-            continue
-        nw = _normalize_word(w.get("word", ""))
-        if not nw:
-            continue
-        try:
-            start = float(w.get("start", 0.0))
-        except (TypeError, ValueError):
-            continue
-        word_stream.append((nw, start, wi))
-
+    word_stream = _whisper_word_stream(words)
     if not word_stream:
         return spec
-
-    cursor = 0
-
-    def _find_label(label: str, from_idx: int) -> tuple[int, int] | None:
-        """Return (last matched stream index, original ``words`` index of phrase start)."""
-        tokens = _label_tokens(label)
-        if not tokens:
-            return None
-        norms = [w[0] for w in word_stream]
-        n = len(word_stream)
-        i = from_idx
-        while i < n:
-            last = _consume_label_tokens_at(tokens, norms, i)
-            if last is not None:
-                return (last, word_stream[i][2])
-            i += 1
-        return None
+    cursor = {"n": 0}
 
     def _process_rows(rows: list[Any]) -> None:
-        nonlocal cursor
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            row.pop("wait_at", None)
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list) or not boxes:
-                continue
+        cursor["n"] = _sync_spec_rows(
+            rows, overwrite=overwrite, cursor=cursor["n"], word_stream=word_stream
+        )
 
-            if not overwrite and (
-                row.get("wait_word") is not None or row.get("wait_segment") is not None
-            ):
-                first = boxes[0]
-                if isinstance(first, dict):
-                    found = _find_label(str(first.get("label", "")), cursor)
-                    if found is not None:
-                        cursor = found[0] + 1
-                continue
-
-            if overwrite:
-                row.pop("wait_word", None)
-                row.pop("wait_segment", None)
-
-            for box in boxes:
-                if not isinstance(box, dict):
-                    continue
-                box.pop("wait_at", None)
-                if box.get("image") is not None and not str(box.get("label", "")).strip():
-                    # Unlabeled image element: no transcript anchor to re-derive from,
-                    # so keep any author-provided wait_word as-is.
-                    continue
-                if not overwrite and box.get("wait_word") is not None:
-                    found = _find_label(str(box.get("label", "")), cursor)
-                    if found is not None:
-                        cursor = found[0] + 1
-                    continue
-
-                label = str(box.get("label", ""))
-                found = _find_label(label, cursor)
-                if found is not None:
-                    last_stream_i, first_word_i = found
-                    box["wait_word"] = int(first_word_i)
-                    box.pop("wait_segment", None)
-                    cursor = last_stream_i + 1
-                elif overwrite:
-                    # Fail-closed: never keep a leftover LLM / legacy index for an
-                    # unmatched spoken label — callers must reject or set pace: none.
-                    box.pop("wait_word", None)
-                    box.pop("wait_segment", None)
-
-    new_spec = dict(spec)
-    if new_spec.get("pages") is not None:
-        new_pages = []
-        for page in new_spec["pages"]:
-            page = dict(page) if isinstance(page, dict) else page
-            if isinstance(page, dict) and isinstance(page.get("rows"), list):
-                page["rows"] = [dict(r) if isinstance(r, dict) else r for r in page["rows"]]
-                _process_rows(page["rows"])
-            new_pages.append(page)
-        new_spec["pages"] = new_pages
-    elif isinstance(new_spec.get("rows"), list):
-        new_spec["rows"] = [dict(r) if isinstance(r, dict) else r for r in new_spec["rows"]]
-        _process_rows(new_spec["rows"])
-    return new_spec
+    return _copy_spec_rows(spec, _process_rows)
 
 
 def _pace_none(obj: dict[str, Any]) -> bool:
     return str(obj.get("pace", "")).strip().lower() == "none"
+
+
+def _paced_anchor(
+    box: Any, *, row_opt_out: bool, loc: str
+) -> str | None:
+    if not isinstance(box, dict) or row_opt_out or _pace_none(box):
+        return None
+    if _is_image_element(box) and not str(box.get("label", "")).strip():
+        return None
+    label = str(box.get("label", "")).strip()
+    if not label:
+        return None
+    return f"{loc}: label {label!r}"
+
+
+def _wait_word_issue(box: dict[str, Any], loc: str, *, words_present: bool) -> str | None:
+    if not words_present or box.get("wait_word") is not None:
+        return None
+    return (
+        f"{loc} has no wait_word match in "
+        "timing.json words — use a spoken phrase from the narration, or set "
+        "pace: none to opt out of beat sync"
+    )
+
+
+def _row_pacing_scan(
+    spec: dict[str, Any],
+    pi: int,
+    ri: int,
+    row: Any,
+    *,
+    words_present: bool,
+    issues: list[str],
+    paced_anchors: list[str],
+) -> None:
+    if not isinstance(row, dict):
+        return
+    boxes = row.get("boxes")
+    if not isinstance(boxes, list):
+        return
+    prefix = f"pages[{pi}].rows[{ri}]" if spec.get("pages") is not None else f"rows[{ri}]"
+    row_opt_out = _pace_none(row)
+    for bi, box in enumerate(boxes):
+        loc_base = f"{prefix}.boxes[{bi}]"
+        anchor = _paced_anchor(box, row_opt_out=row_opt_out, loc=loc_base)
+        if anchor is None:
+            continue
+        paced_anchors.append(anchor)
+        issue = _wait_word_issue(box, anchor, words_present=words_present)
+        if issue is not None:
+            issues.append(issue)
+
+
+def _missing_timing_words_issue(paced_anchors: list[str]) -> list[str]:
+    shown = paced_anchors[0]
+    more = f" (+{len(paced_anchors) - 1} more)" if len(paced_anchors) > 1 else ""
+    return [
+        f"{shown}{more} is paced but timing.json has no word-level `words` — "
+        "run `docgen timestamps` before scene-compile, or set pace: none to opt "
+        "out of beat sync"
+    ]
 
 
 def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]:
@@ -685,43 +866,39 @@ def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]
     """
     issues: list[str] = []
     paced_anchors: list[str] = []
-    pages = _spec_pages_rows(spec)
-    for pi, rows in enumerate(pages):
+    for pi, rows in enumerate(_spec_pages_rows(spec)):
         for ri, row in enumerate(rows):
-            if not isinstance(row, dict):
-                continue
-            row_opt_out = _pace_none(row)
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list):
-                continue
-            prefix = f"pages[{pi}].rows[{ri}]" if spec.get("pages") is not None else f"rows[{ri}]"
-            for bi, box in enumerate(boxes):
-                if not isinstance(box, dict):
-                    continue
-                if row_opt_out or _pace_none(box):
-                    continue
-                if _is_image_element(box) and not str(box.get("label", "")).strip():
-                    continue
-                label = str(box.get("label", "")).strip()
-                if not label:
-                    continue
-                loc = f"{prefix}.boxes[{bi}]: label {label!r}"
-                paced_anchors.append(loc)
-                if words_present and box.get("wait_word") is None:
-                    issues.append(
-                        f"{loc} has no wait_word match in "
-                        "timing.json words — use a spoken phrase from the narration, or set "
-                        "pace: none to opt out of beat sync"
-                    )
+            _row_pacing_scan(
+                spec,
+                pi,
+                ri,
+                row,
+                words_present=words_present,
+                issues=issues,
+                paced_anchors=paced_anchors,
+            )
     if paced_anchors and not words_present:
-        shown = paced_anchors[0]
-        more = f" (+{len(paced_anchors) - 1} more)" if len(paced_anchors) > 1 else ""
-        return [
-            f"{shown}{more} is paced but timing.json has no word-level `words` — "
-            "run `docgen timestamps` before scene-compile, or set pace: none to opt "
-            "out of beat sync"
-        ]
+        return _missing_timing_words_issue(paced_anchors)
     return issues
+
+
+def _anchor_time(box: Any, words: list[dict[str, Any]]) -> tuple[str, float] | None:
+    if not isinstance(box, dict) or _pace_none(box):
+        return None
+    label = str(box.get("label", "")).strip()
+    ww = box.get("wait_word")
+    if not label or ww is None:
+        return None
+    try:
+        wi = int(ww)
+    except (TypeError, ValueError):
+        return None
+    if wi < 0 or wi >= len(words) or not isinstance(words[wi], dict):
+        return None
+    try:
+        return (label, float(words[wi].get("start", 0.0)))
+    except (TypeError, ValueError):
+        return None
 
 
 def iter_paced_label_anchors(
@@ -744,26 +921,9 @@ def iter_paced_label_anchors(
             if not isinstance(boxes, list):
                 continue
             for box in boxes:
-                if not isinstance(box, dict) or _pace_none(box):
-                    continue
-                label = str(box.get("label", "")).strip()
-                ww = box.get("wait_word")
-                if not label or ww is None:
-                    continue
-                try:
-                    wi = int(ww)
-                except (TypeError, ValueError):
-                    continue
-                if wi < 0 or wi >= len(words):
-                    continue
-                w = words[wi]
-                if not isinstance(w, dict):
-                    continue
-                try:
-                    t = float(w.get("start", 0.0))
-                except (TypeError, ValueError):
-                    continue
-                out.append((label, t))
+                anchor = _anchor_time(box, words)
+                if anchor is not None:
+                    out.append(anchor)
     return out
 
 
@@ -847,6 +1007,101 @@ def _word_start_at(words: list[dict[str, Any]], index: int | None) -> float | No
     return start
 
 
+def _slot_label(box: dict[str, Any]) -> str:
+    if box.get("image") is not None and not str(box.get("label", "")).strip():
+        # Unlabeled image: still revealed, but no spoken wait.
+        return ""
+    return str(box.get("label", "")).strip()
+
+
+def _reveal_slot(
+    box: dict[str, Any],
+    row: dict[str, Any],
+    *,
+    p: int,
+    r: int,
+    b: int,
+    first_box_seen: bool,
+    page_has_edges: bool,
+    trans: Any,
+    default_tr: str,
+    default_tr_rt: float,
+    row_rt: float,
+    words: list[dict[str, Any]] | None,
+    layout: Any,
+) -> dict[str, Any]:
+    ww = _box_wait_word(row, box, b)
+    return {
+        "page": p,
+        "row": r,
+        "box": b,
+        "label": _slot_label(box),
+        "wait_word": ww,
+        "word_start": _word_start_at(words or [], ww),
+        "run_time": row_rt,
+        "page_transition": str(trans or default_tr),
+        "page_transition_run_time": default_tr_rt,
+        "emphasis": resolve_box_emphasis(box, layout),
+        "reveal": default_box_reveal(
+            box,
+            page_has_edges=page_has_edges,
+            is_first_on_page=not first_box_seen,
+        ),
+    }
+
+
+def _row_run_time(row: dict[str, Any]) -> float:
+    try:
+        return float(row.get("run_time", 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _page_reveal_slots(
+    page: dict[str, Any],
+    rows: list[Any],
+    *,
+    p: int,
+    default_tr: str,
+    default_tr_rt: float,
+    words: list[dict[str, Any]] | None,
+    layout: Any,
+) -> list[dict[str, Any]]:
+    trans = page.get("transition", default_tr)
+    page_has_edges = bool(page.get("edges"))
+    first_box_seen = False
+    slots: list[dict[str, Any]] = []
+    for r, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        boxes = row.get("boxes")
+        if not isinstance(boxes, list):
+            continue
+        row_rt = _row_run_time(row)
+        for b, box in enumerate(boxes):
+            if not isinstance(box, dict):
+                continue
+            slots.append(
+                _reveal_slot(
+                    box,
+                    row,
+                    p=p,
+                    r=r,
+                    b=b,
+                    first_box_seen=first_box_seen,
+                    page_has_edges=page_has_edges,
+                    trans=trans,
+                    default_tr=default_tr,
+                    default_tr_rt=default_tr_rt,
+                    row_rt=row_rt,
+                    words=words,
+                    layout=layout,
+                )
+            )
+            first_box_seen = True
+    return slots
+
+
 def iter_reveal_slots(
     spec: dict[str, Any],
     words: list[dict[str, Any]] | None = None,
@@ -862,61 +1117,143 @@ def iter_reveal_slots(
         if words
         else spec
     )
-    pages = _normalized_pages(working)
     layout = working.get("layout") or {}
     default_tr = str(layout.get("page_transition", "fade"))
     default_tr_rt = float(layout.get("page_transition_run_time", 0.45))
     slots: list[dict[str, Any]] = []
-    for p, page in enumerate(pages):
+    for p, page in enumerate(_normalized_pages(working)):
         if not isinstance(page, dict):
             continue
         rows = page.get("rows")
         if not isinstance(rows, list):
             continue
-        trans = page.get("transition", default_tr)
-        page_has_edges = bool(page.get("edges"))
-        first_box_seen = False
-        for r, row in enumerate(rows):
-            if not isinstance(row, dict):
-                continue
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list):
-                continue
-            try:
-                row_rt = float(row.get("run_time", 1.0))
-            except (TypeError, ValueError):
-                row_rt = 1.0
-            for b, box in enumerate(boxes):
-                if not isinstance(box, dict):
-                    continue
-                if box.get("image") is not None and not str(box.get("label", "")).strip():
-                    # Unlabeled image: still revealed, but no spoken wait.
-                    label = ""
-                else:
-                    label = str(box.get("label", "")).strip()
-                ww = _box_wait_word(row, box, b)
-                reveal = default_box_reveal(
-                    box,
-                    page_has_edges=page_has_edges,
-                    is_first_on_page=not first_box_seen,
-                )
-                first_box_seen = True
-                slots.append(
-                    {
-                        "page": p,
-                        "row": r,
-                        "box": b,
-                        "label": label,
-                        "wait_word": ww,
-                        "word_start": _word_start_at(words or [], ww),
-                        "run_time": row_rt,
-                        "page_transition": str(trans or default_tr),
-                        "page_transition_run_time": default_tr_rt,
-                        "emphasis": resolve_box_emphasis(box, layout),
-                        "reveal": reveal,
-                    }
-                )
+        slots.extend(
+            _page_reveal_slots(
+                page,
+                rows,
+                p=p,
+                default_tr=default_tr,
+                default_tr_rt=default_tr_rt,
+                words=words,
+                layout=layout,
+            )
+        )
     return slots
+
+
+def _clock_after_wait(
+    clock: float, ww: Any, word_start: Any
+) -> tuple[float, bool]:
+    if ww is None or word_start is None:
+        return clock, False
+    target = float(word_start)
+    if target > clock + 0.05:
+        return target, False
+    if clock > target + 0.05:
+        # Truly late: prior FadeIn/title already passed this spoken start.
+        return clock, True
+    # On-time within tolerance (clamp landed on the beat).
+    return max(clock, target), False
+
+
+def _opening_page_fade(slot: dict[str, Any]) -> float:
+    if int(slot["page"]) <= 0 or int(slot["row"]) != 0 or int(slot["box"]) != 0:
+        return 0.0
+    if str(slot["page_transition"]) not in ANIMATED_PAGE_TRANSITIONS:
+        return 0.0
+    return float(slot["page_transition_run_time"])
+
+
+def _next_paced_start(slots: list[dict[str, Any]], index: int) -> float | None:
+    for nxt in slots[index + 1 :]:
+        if nxt["wait_word"] is not None and nxt["word_start"] is not None:
+            return float(nxt["word_start"])
+    return None
+
+
+def _shrink_page_fade(page_fade_out: float, budget: float) -> float:
+    if page_fade_out > 0 and page_fade_out > max(0.0, budget - MIN_REVEAL_RUN_TIME):
+        return max(0.05, budget - MIN_REVEAL_RUN_TIME)
+    return page_fade_out
+
+
+def _clamp_slot_durations(
+    rt: float,
+    page_fade_out: float,
+    clock: float,
+    next_target: float | None,
+    clamp_run_times: bool,
+) -> tuple[float, float]:
+    if not clamp_run_times or next_target is None:
+        return rt, page_fade_out
+    budget = next_target - clock
+    if page_fade_out + rt > budget and budget > 0:
+        # Prefer keeping a short FadeIn; shrink page fade first.
+        page_fade_out = _shrink_page_fade(page_fade_out, budget)
+        remain = next_target - (clock + page_fade_out)
+        if remain < rt:
+            rt = max(MIN_REVEAL_RUN_TIME, remain)
+        return rt, page_fade_out
+    if budget <= 0:
+        page_fade_out = 0.05 if page_fade_out > 0 else 0.0
+        rt = MIN_REVEAL_RUN_TIME
+    return rt, page_fade_out
+
+
+def _slot_hold(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]],
+    slot: dict[str, Any],
+    clock_after_reveal: float,
+    next_target: float | None,
+) -> tuple[tuple[HoldPulse, ...], float, str]:
+    requested = str(slot.get("emphasis") or "none")
+    default_dwell = float(
+        (spec.get("layout") or {}).get("dwell_run_time", DEFAULT_DWELL_RUN_TIME)
+    )
+    deadline = next_target
+    if deadline is None:
+        tail = audio_end_from_words(words)
+        if tail is not None and tail > clock_after_reveal:
+            deadline = tail
+    pulses = plan_hold_pulses(
+        clock_after_reveal,
+        deadline,
+        requested=requested,
+        default_rt=default_dwell,
+    )
+    dwell_rt = float(pulses[0].run_time) if pulses else 0.0
+    emphasis = requested if dwell_rt > 0 else "none"
+    return pulses, dwell_rt, emphasis
+
+
+def _reveal_event(
+    slot: dict[str, Any],
+    *,
+    clock: float,
+    wait_skipped: bool,
+    rt: float,
+    page_fade_out: float,
+    emphasis: str,
+    dwell_rt: float,
+    pulses: tuple[HoldPulse, ...],
+) -> RevealEvent:
+    return RevealEvent(
+        label=str(slot["label"]),
+        page=int(slot["page"]),
+        row=int(slot["row"]),
+        box=int(slot["box"]),
+        wait_word=slot["wait_word"],
+        word_start=slot["word_start"],
+        effective_at=float(clock),
+        wait_skipped=wait_skipped,
+        run_time=float(rt),
+        page_fade_out=float(page_fade_out),
+        emphasis=emphasis,
+        dwell_run_time=float(dwell_rt),
+        reveal=str(slot.get("reveal") or "fade"),
+        hold_pulses=pulses,
+    )
 
 
 def simulate_reveal_timeline(
@@ -946,92 +1283,81 @@ def simulate_reveal_timeline(
     events: list[RevealEvent] = []
 
     for i, slot in enumerate(slots):
-        word_start = slot["word_start"]
-        ww = slot["wait_word"]
-        wait_skipped = False
-        if ww is not None and word_start is not None:
-            target = float(word_start)
-            if target > clock + 0.05:
-                clock = target
-            elif clock > target + 0.05:
-                # Truly late: prior FadeIn/title already passed this spoken start.
-                wait_skipped = True
-            else:
-                # On-time within tolerance (clamp landed on the beat).
-                clock = max(clock, target)
-
-        page_fade_out = 0.0
-        if (
-            int(slot["page"]) > 0
-            and int(slot["row"]) == 0
-            and int(slot["box"]) == 0
-            and str(slot["page_transition"]) in ANIMATED_PAGE_TRANSITIONS
-        ):
-            page_fade_out = float(slot["page_transition_run_time"])
-
-        next_target: float | None = None
-        for nxt in slots[i + 1 :]:
-            if nxt["wait_word"] is not None and nxt["word_start"] is not None:
-                next_target = float(nxt["word_start"])
-                break
-
-        rt = float(slot["run_time"])
-        if clamp_run_times and next_target is not None:
-            budget = next_target - clock
-            if page_fade_out + rt > budget and budget > 0:
-                # Prefer keeping a short FadeIn; shrink page fade first.
-                if page_fade_out > 0 and page_fade_out > max(0.0, budget - MIN_REVEAL_RUN_TIME):
-                    page_fade_out = max(0.05, budget - MIN_REVEAL_RUN_TIME)
-                remain = next_target - (clock + page_fade_out)
-                if remain < rt:
-                    rt = max(MIN_REVEAL_RUN_TIME, remain)
-            elif budget <= 0:
-                page_fade_out = 0.05 if page_fade_out > 0 else 0.0
-                rt = MIN_REVEAL_RUN_TIME
-
+        clock, wait_skipped = _clock_after_wait(clock, slot["wait_word"], slot["word_start"])
+        page_fade_out = _opening_page_fade(slot)
+        next_target = _next_paced_start(slots, i)
+        rt, page_fade_out = _clamp_slot_durations(
+            float(slot["run_time"]), page_fade_out, clock, next_target, clamp_run_times
+        )
         if page_fade_out > 0:
             clock += page_fade_out
-
         clock_after_reveal = clock + rt
-        requested = str(slot.get("emphasis") or "none")
-        default_dwell = float(
-            (spec.get("layout") or {}).get("dwell_run_time", DEFAULT_DWELL_RUN_TIME)
+        pulses, dwell_rt, emphasis = _slot_hold(
+            spec, words, slot, clock_after_reveal, next_target
         )
-        deadline = next_target
-        if deadline is None:
-            tail = audio_end_from_words(words)
-            if tail is not None and tail > clock_after_reveal:
-                deadline = tail
-        pulses = plan_hold_pulses(
-            clock_after_reveal,
-            deadline,
-            requested=requested,
-            default_rt=default_dwell,
-        )
-        dwell_rt = float(pulses[0].run_time) if pulses else 0.0
-        emphasis = requested if dwell_rt > 0 else "none"
-
         events.append(
-            RevealEvent(
-                label=str(slot["label"]),
-                page=int(slot["page"]),
-                row=int(slot["row"]),
-                box=int(slot["box"]),
-                wait_word=ww,
-                word_start=word_start,
-                effective_at=float(clock),
+            _reveal_event(
+                slot,
+                clock=clock,
                 wait_skipped=wait_skipped,
-                run_time=float(rt),
-                page_fade_out=float(page_fade_out),
+                rt=rt,
+                page_fade_out=page_fade_out,
                 emphasis=emphasis,
-                dwell_run_time=float(dwell_rt),
-                reveal=str(slot.get("reveal") or "fade"),
-                hold_pulses=pulses,
+                dwell_rt=dwell_rt,
+                pulses=pulses,
             )
         )
         clock = clock_after_reveal + hold_span_seconds(pulses)
 
     return events
+
+
+def _skip_ratio_issue(
+    paced: list[RevealEvent], max_skip_ratio: float
+) -> str | None:
+    skipped = sum(1 for event in paced if event.wait_skipped)
+    skip_ratio = skipped / len(paced)
+    if skip_ratio > max_skip_ratio and skipped >= 2:
+        return (
+            f"wait_until_word no-op ratio {skip_ratio:.0%} ({skipped}/{len(paced)}) "
+            f"exceeds max_skip_ratio={max_skip_ratio:.0%} — FadeIn/title run_time "
+            "pushed _clock past spoken word starts (first board dumps, then freezes)"
+        )
+    return None
+
+
+def _skip_streak(paced: list[RevealEvent]) -> int:
+    streak = 0
+    best = 0
+    for event in paced:
+        if event.wait_skipped:
+            streak += 1
+            best = max(best, streak)
+        else:
+            streak = 0
+    return best
+
+
+def _early_idle_issue(
+    events: list[RevealEvent],
+    audio_end: float,
+    max_early_sec: float,
+    max_early_ratio: float,
+) -> str | None:
+    last_effective = max(
+        event.effective_at + event.run_time + hold_span_seconds(event.hold_pulses or ())
+        for event in events
+    )
+    early_idle = audio_end - last_effective
+    early_ratio = early_idle / audio_end if audio_end > 0 else 0.0
+    if early_idle > max_early_sec and early_ratio > max_early_ratio:
+        return (
+            f"effective last reveal at {last_effective:.2f}s leaves "
+            f"early_idle={early_idle:.2f}s ({early_ratio:.0%} of audio_end="
+            f"{audio_end:.2f}s) — visual story finished on the Manim clock long "
+            "before narration ends"
+        )
+    return None
 
 
 def reveal_cadence_violations(
@@ -1056,44 +1382,38 @@ def reveal_cadence_violations(
         return []
 
     issues: list[str] = []
-    paced = [e for e in events if e.wait_word is not None]
+    paced = [event for event in events if event.wait_word is not None]
     if paced:
-        skipped = sum(1 for e in paced if e.wait_skipped)
-        skip_ratio = skipped / len(paced)
-        if skip_ratio > max_skip_ratio and skipped >= 2:
-            issues.append(
-                f"wait_until_word no-op ratio {skip_ratio:.0%} ({skipped}/{len(paced)}) "
-                f"exceeds max_skip_ratio={max_skip_ratio:.0%} — FadeIn/title run_time "
-                "pushed _clock past spoken word starts (first board dumps, then freezes)"
-            )
-        streak = 0
-        best = 0
-        for e in paced:
-            if e.wait_skipped:
-                streak += 1
-                best = max(best, streak)
-            else:
-                streak = 0
+        ratio_issue = _skip_ratio_issue(paced, max_skip_ratio)
+        if ratio_issue is not None:
+            issues.append(ratio_issue)
+        best = _skip_streak(paced)
         if best > max_consecutive_skips:
             issues.append(
                 f"{best} consecutive skipped waits (max_consecutive_skips="
                 f"{max_consecutive_skips}) — boxes cascade with only FadeIn gaps"
             )
-
-    last_effective = max(
-        e.effective_at + e.run_time + hold_span_seconds(e.hold_pulses or ())
-        for e in events
-    )
-    early_idle = audio_end - last_effective
-    early_ratio = early_idle / audio_end if audio_end > 0 else 0.0
-    if early_idle > max_early_sec and early_ratio > max_early_ratio:
-        issues.append(
-            f"effective last reveal at {last_effective:.2f}s leaves "
-            f"early_idle={early_idle:.2f}s ({early_ratio:.0%} of audio_end="
-            f"{audio_end:.2f}s) — visual story finished on the Manim clock long "
-            "before narration ends"
-        )
+    early = _early_idle_issue(events, audio_end, max_early_sec, max_early_ratio)
+    if early is not None:
+        issues.append(early)
     return issues
+
+
+def _upgrade_row_wait_segment(
+    row: Any, words: list[dict[str, Any]], segments: list[dict[str, Any]]
+) -> None:
+    if not isinstance(row, dict):
+        return
+    ws = row.get("wait_segment")
+    if ws is None:
+        return
+    boxes = row.get("boxes")
+    if not isinstance(boxes, list) or not boxes or not isinstance(boxes[0], dict):
+        row.pop("wait_segment", None)
+        return
+    if boxes[0].get("wait_word") is None:
+        boxes[0]["wait_word"] = wait_word_index_at_segment_start(segments, words, int(ws))
+    row.pop("wait_segment", None)
 
 
 def upgrade_wait_segments_to_wait_words(
@@ -1107,35 +1427,9 @@ def upgrade_wait_segments_to_wait_words(
 
     def _rows(rs: list[Any]) -> None:
         for row in rs:
-            if not isinstance(row, dict):
-                continue
-            ws = row.get("wait_segment")
-            if ws is None:
-                continue
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list) or not boxes or not isinstance(boxes[0], dict):
-                row.pop("wait_segment", None)
-                continue
-            if boxes[0].get("wait_word") is None:
-                boxes[0]["wait_word"] = wait_word_index_at_segment_start(
-                    segments, words, int(ws)
-                )
-            row.pop("wait_segment", None)
+            _upgrade_row_wait_segment(row, words, segments)
 
-    out = dict(spec)
-    if out.get("pages") is not None:
-        new_pages: list[Any] = []
-        for page in out["pages"]:
-            p = dict(page) if isinstance(page, dict) else page
-            if isinstance(p, dict) and isinstance(p.get("rows"), list):
-                p["rows"] = [dict(r) if isinstance(r, dict) else r for r in p["rows"]]
-                _rows(p["rows"])
-            new_pages.append(p)
-        out["pages"] = new_pages
-    elif isinstance(out.get("rows"), list):
-        out["rows"] = [dict(r) if isinstance(r, dict) else r for r in out["rows"]]
-        _rows(out["rows"])
-    return out
+    return _copy_spec_rows(spec, _rows)
 
 
 def spec_has_wait_segment(spec: dict[str, Any]) -> bool:
@@ -1194,20 +1488,37 @@ def disk_spec_with_merged_wait_words(
     return out
 
 
+def _row_references_whisper_wait(row: Any) -> bool:
+    if not isinstance(row, dict):
+        return False
+    if row.get("wait_word") is not None or row.get("wait_segment") is not None:
+        return True
+    for box in row.get("boxes") or []:
+        if isinstance(box, dict) and (
+            box.get("wait_word") is not None or box.get("wait_segment") is not None
+        ):
+            return True
+    return False
+
+
 def spec_rows_reference_whisper_waits(spec: dict[str, Any]) -> bool:
     """True if any row or box references Whisper pacing (needs timing enrichment)."""
     for rows in _spec_pages_rows(spec):
         for row in rows:
-            if not isinstance(row, dict):
-                continue
-            if row.get("wait_word") is not None or row.get("wait_segment") is not None:
+            if _row_references_whisper_wait(row):
                 return True
-            for box in row.get("boxes") or []:
-                if isinstance(box, dict) and (
-                    box.get("wait_word") is not None or box.get("wait_segment") is not None
-                ):
-                    return True
     return False
+
+
+def _coerce_row_wait_at(row: Any, words: list[dict[str, Any]]) -> None:
+    if not isinstance(row, dict) or row.get("wait_at") is None:
+        return
+    t = float(row["wait_at"])
+    boxes = row.get("boxes")
+    if isinstance(words, list) and words and isinstance(boxes, list) and boxes:
+        if isinstance(boxes[0], dict):
+            boxes[0]["wait_word"] = wait_word_index_for_time(words, t)
+    row.pop("wait_at", None)
 
 
 def coerce_legacy_wait_at_to_whisper_rows(
@@ -1220,31 +1531,9 @@ def coerce_legacy_wait_at_to_whisper_rows(
 
     def _apply_rows(rs: list[Any]) -> None:
         for row in rs:
-            if not isinstance(row, dict):
-                continue
-            if row.get("wait_at") is None:
-                continue
-            t = float(row["wait_at"])
-            if isinstance(words, list) and words:
-                boxes = row.get("boxes")
-                if isinstance(boxes, list) and boxes and isinstance(boxes[0], dict):
-                    boxes[0]["wait_word"] = wait_word_index_for_time(words, t)
-            row.pop("wait_at", None)
+            _coerce_row_wait_at(row, words)
 
-    out = dict(spec)
-    if out.get("pages") is not None:
-        new_pages: list[Any] = []
-        for page in out["pages"]:
-            p = dict(page) if isinstance(page, dict) else page
-            if isinstance(p, dict) and isinstance(p.get("rows"), list):
-                p["rows"] = [dict(r) if isinstance(r, dict) else r for r in p["rows"]]
-                _apply_rows(p["rows"])
-            new_pages.append(p)
-        out["pages"] = new_pages
-    elif isinstance(out.get("rows"), list):
-        out["rows"] = [dict(r) if isinstance(r, dict) else r for r in out["rows"]]
-        _apply_rows(out["rows"])
-    return out
+    return _copy_spec_rows(spec, _apply_rows)
 
 
 def sanitize_pacing_conflicts(spec: dict[str, Any]) -> dict[str, Any]:
@@ -1357,6 +1646,30 @@ def content_tokens(text: str) -> set[str]:
     return {w for w in words if len(w) > 2 and w not in _CONTENT_STOPWORDS}
 
 
+def _glue_tokens(per_sent: list[set[str]]) -> set[str]:
+    """Document-frequent tokens are weak merge signals (appear in many sentences)."""
+    df: dict[str, int] = {}
+    for toks in per_sent:
+        for word in toks:
+            df[word] = df.get(word, 0) + 1
+    n = len(per_sent)
+    return {word for word, count in df.items() if count >= max(3, (n + 1) // 2)}
+
+
+def _continues_subject(
+    toks: set[str],
+    prev_toks: set[str],
+    glue: set[str],
+    jaccard_threshold: float,
+) -> bool:
+    if not toks or not prev_toks:
+        return False
+    shared = (toks & prev_toks) - glue
+    union = (toks | prev_toks) - glue
+    jacc = (len(shared) / len(union)) if union else 0.0
+    return bool(shared or jacc >= jaccard_threshold)
+
+
 def cluster_subject_beats(
     sentences: list[str],
     *,
@@ -1371,29 +1684,14 @@ def cluster_subject_beats(
     """
     if not sentences:
         return []
-    # Document-frequent tokens are weak merge signals (appear in many sentences).
     per_sent = [content_tokens(s) for s in sentences]
-    df: dict[str, int] = {}
-    for toks in per_sent:
-        for w in toks:
-            df[w] = df.get(w, 0) + 1
-    n = len(sentences)
-    glue = {w for w, c in df.items() if c >= max(3, (n + 1) // 2)}
-
+    glue = _glue_tokens(per_sent)
     beats: list[list[str]] = []
     for i, sent in enumerate(sentences):
-        toks = per_sent[i]
-        if not beats:
-            beats.append([sent])
-            continue
-        prev_toks = per_sent[i - 1]
-        if not toks or not prev_toks:
-            beats.append([sent])
-            continue
-        shared = (toks & prev_toks) - glue
-        union = (toks | prev_toks) - glue
-        jacc = (len(shared) / len(union)) if union else 0.0
-        if shared or jacc >= jaccard_threshold:
+        continues = bool(beats) and _continues_subject(
+            per_sent[i], per_sent[i - 1] if i else set(), glue, jaccard_threshold
+        )
+        if continues:
             beats[-1].append(sent)
         else:
             beats.append([sent])
@@ -1424,6 +1722,48 @@ def min_labels_for_narration(narration_text: str, *, word_count: int = 0) -> int
     return len(beats)
 
 
+def _uncovered_beat_lines(beats: list[str], labels: list[str]) -> list[str]:
+    uncovered: list[str] = []
+    for i, beat in enumerate(beats, start=1):
+        if any(label_covers_beat(lab, beat) for lab in labels):
+            continue
+        preview = beat if len(beat) <= 72 else beat[:69] + "..."
+        uncovered.append(f"beat {i}: {preview}")
+    return uncovered
+
+
+def _coverage_issue(uncovered: list[str], beats: list[str], slack: int) -> str | None:
+    allowed_uncovered = max(0, slack)
+    if len(uncovered) <= allowed_uncovered:
+        return None
+    shown = "; ".join(uncovered[:5])
+    more = f" (+{len(uncovered) - 5} more)" if len(uncovered) > 5 else ""
+    note = (
+        f" ({len(uncovered)} uncovered; allow ≤{allowed_uncovered} after retry)"
+        if slack
+        else f" ({len(uncovered)} of {len(beats)} beats uncovered)"
+    )
+    return (
+        f"subject-beat coverage failed{note}: {shown}{more}. "
+        "Add a spoken-phrase label for each new topic; keep the same board while "
+        "sentences elaborate the same subject."
+    )
+
+
+def _invented_label_issue(labels: list[str], narration_text: str) -> str | None:
+    narr_toks = content_tokens(narration_text)
+    invented = [
+        lab
+        for lab in labels
+        if content_tokens(lab) and not (content_tokens(lab) & narr_toks)
+    ]
+    if not invented:
+        return None
+    sample = ", ".join(repr(x) for x in invented[:6])
+    more = f" (+{len(invented) - 6} more)" if len(invented) > 6 else ""
+    return f"labels not spoken in narration (invented diagram terms): {sample}{more}"
+
+
 def layout_density_violations(
     spec: dict[str, Any],
     *,
@@ -1445,41 +1785,73 @@ def layout_density_violations(
     beats = cluster_subject_beats(sentences)
     labels = list_spec_labels(spec)
     issues: list[str] = []
+    coverage = _coverage_issue(_uncovered_beat_lines(beats, labels), beats, slack)
+    if coverage is not None:
+        issues.append(coverage)
+    invented = _invented_label_issue(labels, narration_text)
+    if invented is not None:
+        issues.append(invented)
+    return issues
 
-    uncovered: list[str] = []
-    for i, beat in enumerate(beats, start=1):
-        if not any(label_covers_beat(lab, beat) for lab in labels):
-            preview = beat if len(beat) <= 72 else beat[:69] + "..."
-            uncovered.append(f"beat {i}: {preview}")
 
-    allowed_uncovered = max(0, slack)
-    if len(uncovered) > allowed_uncovered:
-        shown = "; ".join(uncovered[:5])
-        more = f" (+{len(uncovered) - 5} more)" if len(uncovered) > 5 else ""
-        note = (
-            f" ({len(uncovered)} uncovered; allow ≤{allowed_uncovered} after retry)"
-            if slack
-            else f" ({len(uncovered)} of {len(beats)} beats uncovered)"
-        )
+def _positive_dims(boxes: list[Any], key: str) -> list[float] | None:
+    try:
+        vals = [float(box[key]) for box in boxes if isinstance(box, dict)]
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not vals:
+        return None
+    return vals
+
+
+def _row_extents(row: Any, col_gap: float) -> tuple[float, float] | None:
+    if not isinstance(row, dict):
+        return None
+    boxes = row.get("boxes")
+    if not isinstance(boxes, list) or not boxes:
+        return None
+    heights = _positive_dims(boxes, "height")
+    widths = _positive_dims(boxes, "width")
+    if not heights or not widths:
+        return None
+    width = sum(widths)
+    if len(widths) > 1:
+        width += col_gap * (len(widths) - 1)
+    return max(heights), width
+
+
+def _page_budget_issues(
+    pi: int,
+    rows: list[Any],
+    *,
+    budget: float,
+    row_gap: float,
+    col_gap: float,
+) -> list[str]:
+    row_heights: list[float] = []
+    row_widths: list[float] = []
+    for row in rows:
+        extents = _row_extents(row, col_gap)
+        if extents is None:
+            continue
+        height, width = extents
+        row_heights.append(height)
+        row_widths.append(width)
+    stack_h = (
+        sum(row_heights) + (len(row_heights) - 1) * row_gap if row_heights else 0.0
+    )
+    max_rw = max(row_widths) if row_widths else 0.0
+    issues: list[str] = []
+    if stack_h > budget + 0.02:
         issues.append(
-            f"subject-beat coverage failed{note}: {shown}{more}. "
-            "Add a spoken-phrase label for each new topic; keep the same board while "
-            "sentences elaborate the same subject."
+            f"pages[{pi}] vertical stack ~{stack_h:.2f} exceeds frame budget ~{budget:.2f} "
+            f"(split into more pages, reduce box height, or lower row_gap)"
         )
-
-    narr_toks = content_tokens(narration_text)
-    invented = [
-        lab
-        for lab in labels
-        if content_tokens(lab) and not (content_tokens(lab) & narr_toks)
-    ]
-    if invented:
-        sample = ", ".join(repr(x) for x in invented[:6])
-        more = f" (+{len(invented) - 6} more)" if len(invented) > 6 else ""
+    if max_rw > _LAYOUT_HORIZONTAL_SAFE + 0.05:
         issues.append(
-            f"labels not spoken in narration (invented diagram terms): {sample}{more}"
+            f"pages[{pi}] widest row ~{max_rw:.2f} exceeds safe width ~{_LAYOUT_HORIZONTAL_SAFE:.2f} "
+            f"(narrow boxes or use more rows)"
         )
-
     return issues
 
 
@@ -1493,74 +1865,25 @@ def layout_budget_violations(spec: dict[str, Any]) -> list[str]:
     if not isinstance(title, dict):
         return []
     layout = spec.get("layout")
-    if layout is not None and not isinstance(layout, dict):
+    if not isinstance(layout, dict):
         layout = {}
-    elif layout is None:
-        layout = {}
-
     try:
         budget = layout_stack_budget(title, layout)
     except (TypeError, ValueError):
         return []
     row_gap = float(layout.get("row_gap", 0.6))
     col_gap = float(layout.get("column_gap", 0.8))
-
     issues: list[str] = []
-    pages = _spec_pages_rows(spec)
-    for pi, rows in enumerate(pages):
-        row_heights: list[float] = []
-        row_widths: list[float] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            boxes = row.get("boxes")
-            if not isinstance(boxes, list) or not boxes:
-                continue
-            try:
-                hs = [float(b["height"]) for b in boxes if isinstance(b, dict)]
-                ws = [float(b["width"]) for b in boxes if isinstance(b, dict)]
-                if not hs or not ws:
-                    continue
-                row_heights.append(max(hs))
-                rw = sum(ws)
-                if len(ws) > 1:
-                    rw += col_gap * (len(ws) - 1)
-                row_widths.append(rw)
-            except (KeyError, TypeError, ValueError):
-                continue
-        stack_h = (
-            sum(row_heights) + (len(row_heights) - 1) * row_gap if row_heights else 0.0
+    for pi, rows in enumerate(_spec_pages_rows(spec)):
+        issues.extend(
+            _page_budget_issues(pi, rows, budget=budget, row_gap=row_gap, col_gap=col_gap)
         )
-        max_rw = max(row_widths) if row_widths else 0.0
-        if stack_h > budget + 0.02:
-            issues.append(
-                f"pages[{pi}] vertical stack ~{stack_h:.2f} exceeds frame budget ~{budget:.2f} "
-                f"(split into more pages, reduce box height, or lower row_gap)"
-            )
-        if max_rw > _LAYOUT_HORIZONTAL_SAFE + 0.05:
-            issues.append(
-                f"pages[{pi}] widest row ~{max_rw:.2f} exceeds safe width ~{_LAYOUT_HORIZONTAL_SAFE:.2f} "
-                f"(narrow boxes or use more rows)"
-            )
     issues.extend(layout_overlap_violations(spec))
     return issues
 
 
-def layout_overlap_violations(spec: dict[str, Any]) -> list[str]:
-    """Offline geometry: title collision, tight gaps, and boxes that clip the frame.
-
-    Uses the same stack math as compile (no Manim). Catches the overlap cases
-    OCR layout checks only see after a wasted render.
-    """
-    title = spec.get("title") if isinstance(spec.get("title"), dict) else {}
-    layout = spec.get("layout") if isinstance(spec.get("layout"), dict) else {}
+def _layout_gap_issues(row_gap: float, col_gap: float, title_buff: float) -> list[str]:
     issues: list[str] = []
-    try:
-        row_gap = float(layout.get("row_gap", 0.6))
-        col_gap = float(layout.get("column_gap", 0.8))
-        title_buff = float(layout.get("first_row_title_buff", 0.5))
-    except (TypeError, ValueError):
-        return []
     if title_buff + 1e-9 < MIN_TITLE_ROW_BUFF:
         issues.append(
             f"overlap: first_row_title_buff={title_buff:.2f} < {MIN_TITLE_ROW_BUFF} "
@@ -1574,66 +1897,196 @@ def layout_overlap_violations(spec: dict[str, Any]) -> list[str]:
         issues.append(
             f"overlap: column_gap={col_gap:.2f} < {MIN_COLUMN_GAP} (boxes in a row will collide)"
         )
+    return issues
 
+
+def _dict_boxes(row: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(row, dict):
+        return None
+    boxes = [box for box in (row.get("boxes") or []) if isinstance(box, dict)]
+    if not boxes:
+        return None
+    return boxes
+
+
+def _row_boxes_dims(
+    row: Any,
+) -> tuple[list[dict[str, Any]], list[float], list[float]] | None:
+    boxes = _dict_boxes(row)
+    if boxes is None:
+        return None
+    try:
+        heights = [float(box.get("height", 0)) for box in boxes]
+        widths = [float(box.get("width", 0)) for box in boxes]
+    except (TypeError, ValueError):
+        return None
+    if not heights or not widths:
+        return None
+    return boxes, heights, widths
+
+
+def _box_clip_issues(
+    lab: str,
+    pi: int,
+    *,
+    left: float,
+    right: float,
+    bottom: float,
+    top: float,
+    title_bottom: float,
+    frame_left: float,
+    frame_right: float,
+    frame_bottom: float,
+) -> list[str]:
+    issues: list[str] = []
+    if top > title_bottom + 0.02:
+        issues.append(f"overlap: {lab!r} on pages[{pi}] intersects the title band")
+    if left < frame_left - 0.05 or right > frame_right + 0.05:
+        issues.append(f"overlap: {lab!r} on pages[{pi}] clips the horizontal safe frame")
+    if bottom < frame_bottom - 0.05:
+        issues.append(f"overlap: {lab!r} on pages[{pi}] clips below the safe bottom")
+    return issues
+
+
+def _place_row_boxes(
+    boxes: list[dict[str, Any]],
+    heights: list[float],
+    widths: list[float],
+    *,
+    pi: int,
+    ri: int,
+    y_top: float,
+    col_gap: float,
+    title_bottom: float,
+    frame_left: float,
+    frame_right: float,
+    frame_bottom: float,
+) -> tuple[list[str], list[tuple[float, float, float, float, str]]]:
+    row_h = max(heights)
+    row_w = sum(widths) + max(0, len(widths) - 1) * col_gap
+    x = -row_w / 2.0
+    issues: list[str] = []
+    rects: list[tuple[float, float, float, float, str]] = []
+    for bi, box in enumerate(boxes):
+        w = widths[bi]
+        h = heights[bi]
+        # VGroup.arrange(RIGHT) centers on the row's vertical mid-line.
+        mid_y = y_top - row_h / 2.0
+        left, right = x, x + w
+        bottom, top = mid_y - h / 2.0, mid_y + h / 2.0
+        lab = str(box.get("label") or f"pages[{pi}].rows[{ri}].boxes[{bi}]")
+        issues.extend(
+            _box_clip_issues(
+                lab,
+                pi,
+                left=left,
+                right=right,
+                bottom=bottom,
+                top=top,
+                title_bottom=title_bottom,
+                frame_left=frame_left,
+                frame_right=frame_right,
+                frame_bottom=frame_bottom,
+            )
+        )
+        rects.append((left, bottom, right, top, lab))
+        x += w + col_gap
+    return issues, rects
+
+
+def _rect_pair_issues(
+    rects: list[tuple[float, float, float, float, str]], pi: int
+) -> list[str]:
+    issues: list[str] = []
+    for i in range(len(rects)):
+        for j in range(i + 1, len(rects)):
+            a, b = rects[i], rects[j]
+            overlaps = (
+                a[0] < b[2] - 0.02
+                and b[0] < a[2] - 0.02
+                and a[1] < b[3] - 0.02
+                and b[1] < a[3] - 0.02
+            )
+            if overlaps:
+                issues.append(f"overlap: {a[4]!r} intersects {b[4]!r} on pages[{pi}]")
+    return issues
+
+
+def _scan_overlap_page(
+    pi: int,
+    rows: list[Any],
+    *,
+    y_start: float,
+    row_gap: float,
+    col_gap: float,
+    title_bottom: float,
+    frame_left: float,
+    frame_right: float,
+    frame_bottom: float,
+) -> list[str]:
+    issues: list[str] = []
+    y_top = y_start
+    rects: list[tuple[float, float, float, float, str]] = []
+    for ri, row in enumerate(rows):
+        dims = _row_boxes_dims(row)
+        if dims is None:
+            continue
+        boxes, heights, widths = dims
+        row_issues, row_rects = _place_row_boxes(
+            boxes,
+            heights,
+            widths,
+            pi=pi,
+            ri=ri,
+            y_top=y_top,
+            col_gap=col_gap,
+            title_bottom=title_bottom,
+            frame_left=frame_left,
+            frame_right=frame_right,
+            frame_bottom=frame_bottom,
+        )
+        issues.extend(row_issues)
+        rects.extend(row_rects)
+        y_top -= max(heights) + row_gap
+    issues.extend(_rect_pair_issues(rects, pi))
+    return issues
+
+
+def layout_overlap_violations(spec: dict[str, Any]) -> list[str]:
+    """Offline geometry: title collision, tight gaps, and boxes that clip the frame.
+
+    Uses the same stack math as compile (no Manim). Catches the overlap cases
+    OCR layout checks only see after a wasted render.
+    """
+    title = spec.get("title") if isinstance(spec.get("title"), dict) else {}
+    layout = spec.get("layout") if isinstance(spec.get("layout"), dict) else {}
+    try:
+        row_gap = float(layout.get("row_gap", 0.6))
+        col_gap = float(layout.get("column_gap", 0.8))
+        title_buff = float(layout.get("first_row_title_buff", 0.5))
+    except (TypeError, ValueError):
+        return []
+    issues = _layout_gap_issues(row_gap, col_gap, title_buff)
     fs = title.get("font_size")
     if not _is_yaml_number(fs):
         fs = 36
     has_sub = bool(str(title.get("subtitle") or "").strip())
     band = _title_band_estimate(int(fs), has_subtitle=has_sub)
     title_bottom = FRAME_HEIGHT / 2.0 - band
-    frame_left = -_LAYOUT_HORIZONTAL_SAFE / 2.0
-    frame_right = _LAYOUT_HORIZONTAL_SAFE / 2.0
-    frame_bottom = -FRAME_HEIGHT / 2.0 + _LAYOUT_BOTTOM_MARGIN
-
     for pi, rows in enumerate(_spec_pages_rows(spec)):
-        y_top = title_bottom - title_buff
-        rects: list[tuple[float, float, float, float, str]] = []
-        for ri, row in enumerate(rows):
-            if not isinstance(row, dict):
-                continue
-            boxes = [b for b in (row.get("boxes") or []) if isinstance(b, dict)]
-            if not boxes:
-                continue
-            try:
-                heights = [float(b.get("height", 0)) for b in boxes]
-                widths = [float(b.get("width", 0)) for b in boxes]
-            except (TypeError, ValueError):
-                continue
-            if not heights or not widths:
-                continue
-            row_h = max(heights)
-            row_w = sum(widths) + max(0, len(widths) - 1) * col_gap
-            x = -row_w / 2.0
-            for bi, box in enumerate(boxes):
-                w = widths[bi]
-                h = heights[bi]
-                # VGroup.arrange(RIGHT) centers on the row's vertical mid-line.
-                mid_y = y_top - row_h / 2.0
-                left, right = x, x + w
-                bottom, top = mid_y - h / 2.0, mid_y + h / 2.0
-                lab = str(box.get("label") or f"pages[{pi}].rows[{ri}].boxes[{bi}]")
-                if top > title_bottom + 0.02:
-                    issues.append(
-                        f"overlap: {lab!r} on pages[{pi}] intersects the title band"
-                    )
-                if left < frame_left - 0.05 or right > frame_right + 0.05:
-                    issues.append(
-                        f"overlap: {lab!r} on pages[{pi}] clips the horizontal safe frame"
-                    )
-                if bottom < frame_bottom - 0.05:
-                    issues.append(
-                        f"overlap: {lab!r} on pages[{pi}] clips below the safe bottom"
-                    )
-                rects.append((left, bottom, right, top, lab))
-                x += w + col_gap
-            y_top -= row_h + row_gap
-        for i in range(len(rects)):
-            for j in range(i + 1, len(rects)):
-                a, b = rects[i], rects[j]
-                if a[0] < b[2] - 0.02 and b[0] < a[2] - 0.02 and a[1] < b[3] - 0.02 and b[1] < a[3] - 0.02:
-                    issues.append(
-                        f"overlap: {a[4]!r} intersects {b[4]!r} on pages[{pi}]"
-                    )
+        issues.extend(
+            _scan_overlap_page(
+                pi,
+                rows,
+                y_start=title_bottom - title_buff,
+                row_gap=row_gap,
+                col_gap=col_gap,
+                title_bottom=title_bottom,
+                frame_left=-_LAYOUT_HORIZONTAL_SAFE / 2.0,
+                frame_right=_LAYOUT_HORIZONTAL_SAFE / 2.0,
+                frame_bottom=-FRAME_HEIGHT / 2.0 + _LAYOUT_BOTTOM_MARGIN,
+            )
+        )
     return issues
 
 
@@ -1656,32 +2109,47 @@ def _is_image_element(box: Any) -> bool:
     return isinstance(box, dict) and box.get("image") is not None
 
 
-def _validate_image_element(box: dict[str, Any], *, bp: str) -> None:
-    img = box.get("image")
+def _require_positive_number(box: dict[str, Any], fld: str, bp: str) -> None:
+    if fld not in box:
+        raise SceneSpecError(f"{bp}: missing {fld}")
+    value = box[fld]
+    if not _is_yaml_number(value) or value <= 0:
+        raise SceneSpecError(f"{bp}: {fld} must be a positive number")
+
+
+def _validate_image_path(img: Any, bp: str) -> None:
     if not isinstance(img, str) or not img.strip():
         raise SceneSpecError(f"{bp}: image must be a non-empty bundle-relative path string")
-    p = Path(img.strip())
-    if p.is_absolute() or ".." in p.parts:
+    path = Path(img.strip())
+    if path.is_absolute() or ".." in path.parts:
         raise SceneSpecError(
             f"{bp}: image path must be relative to the bundle directory (no absolute paths or '..')"
         )
-    for fld in ("width", "height"):
-        if fld not in box:
-            raise SceneSpecError(f"{bp}: missing {fld}")
-        v = box[fld]
-        if not _is_yaml_number(v) or v <= 0:
-            raise SceneSpecError(f"{bp}: {fld} must be a positive number")
+
+
+def _reject_image_label_fields(box: dict[str, Any], bp: str) -> None:
     for fld in ("color", "font_size"):
         if fld in box:
             raise SceneSpecError(
                 f"{bp}: {fld} is not allowed on an image element (only label boxes take {fld})"
             )
+
+
+def _validate_image_prompt_and_label(box: dict[str, Any], bp: str) -> None:
     prompt = box.get("prompt")
     if prompt is not None and (not isinstance(prompt, str) or not prompt.strip()):
         raise SceneSpecError(f"{bp}: prompt must be a non-empty string if set")
     lab = box.get("label")
     if lab is not None and not isinstance(lab, str):
         raise SceneSpecError(f"{bp}: label must be a string if set (used as timing anchor only)")
+
+
+def _validate_image_element(box: dict[str, Any], *, bp: str) -> None:
+    _validate_image_path(box.get("image"), bp)
+    for fld in ("width", "height"):
+        _require_positive_number(box, fld, bp)
+    _reject_image_label_fields(box, bp)
+    _validate_image_prompt_and_label(box, bp)
 
 
 def _validate_pace_field(obj: dict[str, Any], *, path: str) -> None:
@@ -1692,96 +2160,122 @@ def _validate_pace_field(obj: dict[str, Any], *, path: str) -> None:
         raise SceneSpecError(f"{path}: pace must be 'none' if set (opt out of beat sync)")
 
 
+def _require_nonneg_int(value: Any, rp: str, fld: str) -> None:
+    if value is None:
+        return
+    if not _is_yaml_int(value) or value < 0:
+        raise SceneSpecError(f"{rp}: {fld} must be a non-negative int or null")
+
+
+def _validate_row_run_time(row: dict[str, Any], rp: str) -> None:
+    if "run_time" not in row:
+        raise SceneSpecError(f"{rp}: run_time is required")
+    rt = row["run_time"]
+    if not _is_yaml_number(rt) or rt <= 0:
+        raise SceneSpecError(f"{rp}: run_time must be a positive number")
+
+
+def _validate_row_waits(row: dict[str, Any], rp: str) -> None:
+    ws = row.get("wait_segment")
+    ww = row.get("wait_word")
+    _require_nonneg_int(ws, rp, "wait_segment")
+    _require_nonneg_int(ww, rp, "wait_word")
+    if ws is not None and ww is not None:
+        raise SceneSpecError(
+            f"{rp}: set at most one of wait_segment and wait_word (prefer wait_word for word timestamps)"
+        )
+    if row.get("wait_at") is not None:
+        raise SceneSpecError(
+            f"{rp}: wait_at is not allowed — use wait_word (``timing.json`` ``words`` index); "
+            f"re-run `docgen scene-compile` after `docgen timestamps`."
+        )
+
+
+def _validate_box_wait(box: dict[str, Any], bp: str) -> bool:
+    _validate_pace_field(box, path=bp)
+    if box.get("wait_segment") is not None:
+        raise SceneSpecError(
+            f"{bp}: wait_segment on a box is not supported — use ``wait_word`` on the box, "
+            f"or ``wait_segment`` on the row for legacy upgrade."
+        )
+    bww = box.get("wait_word")
+    _require_nonneg_int(bww, bp, "wait_word")
+    return bww is not None
+
+
+def _validate_label_box_fields(box: dict[str, Any], bp: str) -> None:
+    for fld in ("label", "color", "width", "height", "font_size"):
+        if fld not in box:
+            raise SceneSpecError(f"{bp}: missing {fld}")
+    if str(box["color"]) not in ALLOWED_COLORS:
+        raise SceneSpecError(f"{bp}: color must be one of {sorted(ALLOWED_COLORS)}")
+    for num_f in ("width", "height", "font_size"):
+        value = box[num_f]
+        if not _is_yaml_number(value) or value <= 0:
+            raise SceneSpecError(f"{bp}: {num_f} must be a positive number")
+
+
+def _validate_box_subtitle(box: dict[str, Any], bp: str) -> None:
+    bsub = box.get("subtitle")
+    if bsub is None:
+        return
+    if not isinstance(bsub, str):
+        raise SceneSpecError(f"{bp}: subtitle must be a string if set")
+    if len(bsub.strip()) > 60:
+        raise SceneSpecError(f"{bp}: subtitle must be at most 60 characters")
+
+
+def _validate_choice(box: dict[str, Any], key: str, allowed: frozenset[str] | set[str], bp: str) -> None:
+    value = box.get(key)
+    if value is not None and str(value).strip().lower() not in allowed:
+        raise SceneSpecError(f"{bp}: {key} must be one of {sorted(allowed)} if set")
+
+
+def _validate_story_box(box: dict[str, Any], bp: str) -> None:
+    _validate_label_box_fields(box, bp)
+    _validate_box_subtitle(box, bp)
+    _validate_choice(box, "shape", ALLOWED_SHAPES, bp)
+    _validate_choice(box, "reveal", ALLOWED_REVEALS, bp)
+    _validate_choice(box, "emphasis", ALLOWED_EMPHASIS, bp)
+
+
+def _validate_one_box(box: Any, bp: str) -> bool:
+    if not isinstance(box, dict):
+        raise SceneSpecError(f"{bp}: box must be a mapping")
+    paced = _validate_box_wait(box, bp)
+    if _is_image_element(box):
+        _validate_image_element(box, bp=bp)
+        return paced
+    _validate_story_box(box, bp)
+    return paced
+
+
+def _validate_one_row(row: Any, rp: str) -> None:
+    if not isinstance(row, dict):
+        raise SceneSpecError(f"{rp}: row must be a mapping")
+    if "boxes" not in row:
+        raise SceneSpecError(f"{rp}: missing boxes")
+    boxes = row["boxes"]
+    if not isinstance(boxes, list) or not boxes:
+        raise SceneSpecError(f"{rp}: boxes must be a non-empty list")
+    _validate_row_run_time(row, rp)
+    _validate_pace_field(row, path=rp)
+    _validate_row_waits(row, rp)
+    box_pacing = False
+    for j, box in enumerate(boxes):
+        if _validate_one_box(box, f"{rp}: boxes[{j}]"):
+            box_pacing = True
+    has_row_pacing = row.get("wait_word") is not None or row.get("wait_segment") is not None
+    if has_row_pacing and box_pacing:
+        raise SceneSpecError(
+            f"{rp}: set pacing on the row (``wait_word`` / ``wait_segment``) "
+            f"**or** on boxes (``wait_word`` per box), not both"
+        )
+
+
 def _validate_row_list(rows: list[Any], *, path_label: str, prefix: str) -> None:
     for i, row in enumerate(rows):
-        rp = f"{path_label}: {prefix}[{i}]"
-        if not isinstance(row, dict):
-            raise SceneSpecError(f"{rp}: row must be a mapping")
-        if "boxes" not in row:
-            raise SceneSpecError(f"{rp}: missing boxes")
-        boxes = row["boxes"]
-        if not isinstance(boxes, list) or not boxes:
-            raise SceneSpecError(f"{rp}: boxes must be a non-empty list")
-        if "run_time" not in row:
-            raise SceneSpecError(f"{rp}: run_time is required")
-        rt = row["run_time"]
-        if not _is_yaml_number(rt) or rt <= 0:
-            raise SceneSpecError(f"{rp}: run_time must be a positive number")
-        _validate_pace_field(row, path=rp)
-        ws = row.get("wait_segment")
-        if ws is not None and (not _is_yaml_int(ws) or ws < 0):
-            raise SceneSpecError(f"{rp}: wait_segment must be a non-negative int or null")
-        ww = row.get("wait_word")
-        if ww is not None and (not _is_yaml_int(ww) or ww < 0):
-            raise SceneSpecError(f"{rp}: wait_word must be a non-negative int or null")
-        if ws is not None and ww is not None:
-            raise SceneSpecError(
-                f"{rp}: set at most one of wait_segment and wait_word (prefer wait_word for word timestamps)"
-            )
-        if row.get("wait_at") is not None:
-            raise SceneSpecError(
-                f"{rp}: wait_at is not allowed — use wait_word (``timing.json`` ``words`` index); "
-                f"re-run `docgen scene-compile` after `docgen timestamps`."
-            )
-
-        box_pacing = False
-        for j, box in enumerate(boxes):
-            bp = f"{rp}: boxes[{j}]"
-            if not isinstance(box, dict):
-                raise SceneSpecError(f"{bp}: box must be a mapping")
-            _validate_pace_field(box, path=bp)
-            if box.get("wait_segment") is not None:
-                raise SceneSpecError(
-                    f"{bp}: wait_segment on a box is not supported — use ``wait_word`` on the box, "
-                    f"or ``wait_segment`` on the row for legacy upgrade."
-                )
-            bww = box.get("wait_word")
-            if bww is not None and (not _is_yaml_int(bww) or bww < 0):
-                raise SceneSpecError(f"{bp}: wait_word must be a non-negative int or null")
-            if bww is not None:
-                box_pacing = True
-            if _is_image_element(box):
-                _validate_image_element(box, bp=bp)
-                continue
-            for fld in ("label", "color", "width", "height", "font_size"):
-                if fld not in box:
-                    raise SceneSpecError(f"{bp}: missing {fld}")
-            if str(box["color"]) not in ALLOWED_COLORS:
-                raise SceneSpecError(
-                    f"{bp}: color must be one of {sorted(ALLOWED_COLORS)}"
-                )
-            for num_f in ("width", "height", "font_size"):
-                v = box[num_f]
-                if not _is_yaml_number(v) or v <= 0:
-                    raise SceneSpecError(f"{bp}: {num_f} must be a positive number")
-            bsub = box.get("subtitle")
-            if bsub is not None:
-                if not isinstance(bsub, str):
-                    raise SceneSpecError(f"{bp}: subtitle must be a string if set")
-                if len(bsub.strip()) > 60:
-                    raise SceneSpecError(f"{bp}: subtitle must be at most 60 characters")
-            shape = box.get("shape")
-            if shape is not None and str(shape).strip().lower() not in ALLOWED_SHAPES:
-                raise SceneSpecError(
-                    f"{bp}: shape must be one of {sorted(ALLOWED_SHAPES)} if set"
-                )
-            reveal = box.get("reveal")
-            if reveal is not None and str(reveal).strip().lower() not in ALLOWED_REVEALS:
-                raise SceneSpecError(
-                    f"{bp}: reveal must be one of {sorted(ALLOWED_REVEALS)} if set"
-                )
-            emphasis = box.get("emphasis")
-            if emphasis is not None and str(emphasis).strip().lower() not in ALLOWED_EMPHASIS:
-                raise SceneSpecError(
-                    f"{bp}: emphasis must be one of {sorted(ALLOWED_EMPHASIS)} if set"
-                )
-
-        has_row_pacing = row.get("wait_word") is not None or row.get("wait_segment") is not None
-        if has_row_pacing and box_pacing:
-            raise SceneSpecError(
-                f"{rp}: set pacing on the row (``wait_word`` / ``wait_segment``) "
-                f"**or** on boxes (``wait_word`` per box), not both"
-            )
+        _validate_one_row(row, f"{path_label}: {prefix}[{i}]")
 
 
 def _page_box_labels(rows: list[Any]) -> dict[str, int]:
@@ -1799,6 +2293,42 @@ def _page_box_labels(rows: list[Any]) -> dict[str, int]:
     return counts
 
 
+def _validate_edge_ends(edge: dict[str, Any], ep: str, labels: dict[str, int]) -> None:
+    for fld in ("from", "to"):
+        if fld not in edge or not str(edge[fld]).strip():
+            raise SceneSpecError(f"{ep}: {fld} is required (box label on this page)")
+    src = str(edge["from"]).strip()
+    dst = str(edge["to"]).strip()
+    if src not in labels:
+        raise SceneSpecError(f"{ep}: from={src!r} is not a box label on this page")
+    if dst not in labels:
+        raise SceneSpecError(f"{ep}: to={dst!r} is not a box label on this page")
+    if labels[src] > 1:
+        raise SceneSpecError(f"{ep}: from={src!r} is ambiguous (duplicate labels on this page)")
+    if labels[dst] > 1:
+        raise SceneSpecError(f"{ep}: to={dst!r} is ambiguous (duplicate labels on this page)")
+    if src == dst:
+        raise SceneSpecError(f"{ep}: from and to must differ")
+
+
+def _validate_edge_decor(edge: dict[str, Any], ep: str) -> None:
+    col = edge.get("color")
+    if col is not None and str(col) not in ALLOWED_COLORS:
+        raise SceneSpecError(f"{ep}: color must be one of {sorted(ALLOWED_COLORS)} if set")
+    style = edge.get("style")
+    if style is not None and str(style).strip().lower() not in ALLOWED_EDGE_STYLES:
+        raise SceneSpecError(
+            f"{ep}: style must be one of {sorted(ALLOWED_EDGE_STYLES)} if set"
+        )
+    label = edge.get("label")
+    if label is None:
+        return
+    if not isinstance(label, str):
+        raise SceneSpecError(f"{ep}: label must be a string if set")
+    if len(label.strip()) > 40:
+        raise SceneSpecError(f"{ep}: label must be at most 40 characters")
+
+
 def _validate_edges(
     edges: Any,
     *,
@@ -1813,59 +2343,37 @@ def _validate_edges(
         ep = f"{path_label}: edges[{i}]"
         if not isinstance(edge, dict):
             raise SceneSpecError(f"{ep}: edge must be a mapping")
-        for fld in ("from", "to"):
-            if fld not in edge or not str(edge[fld]).strip():
-                raise SceneSpecError(f"{ep}: {fld} is required (box label on this page)")
-        src = str(edge["from"]).strip()
-        dst = str(edge["to"]).strip()
-        if src not in labels:
-            raise SceneSpecError(f"{ep}: from={src!r} is not a box label on this page")
-        if dst not in labels:
-            raise SceneSpecError(f"{ep}: to={dst!r} is not a box label on this page")
-        if labels[src] > 1:
-            raise SceneSpecError(
-                f"{ep}: from={src!r} is ambiguous (duplicate labels on this page)"
-            )
-        if labels[dst] > 1:
-            raise SceneSpecError(
-                f"{ep}: to={dst!r} is ambiguous (duplicate labels on this page)"
-            )
-        if src == dst:
-            raise SceneSpecError(f"{ep}: from and to must differ")
-        col = edge.get("color")
-        if col is not None and str(col) not in ALLOWED_COLORS:
-            raise SceneSpecError(
-                f"{ep}: color must be one of {sorted(ALLOWED_COLORS)} if set"
-            )
-        style = edge.get("style")
-        if style is not None and str(style).strip().lower() not in ALLOWED_EDGE_STYLES:
-            raise SceneSpecError(
-                f"{ep}: style must be one of {sorted(ALLOWED_EDGE_STYLES)} if set"
-            )
-        label = edge.get("label")
-        if label is not None:
-            if not isinstance(label, str):
-                raise SceneSpecError(f"{ep}: label must be a string if set")
-            if len(label.strip()) > 40:
-                raise SceneSpecError(f"{ep}: label must be at most 40 characters")
+        _validate_edge_ends(edge, ep, labels)
+        _validate_edge_decor(edge, ep)
 
 
-def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
-    for k in SPEC_REQUIRED_TOP:
-        if k not in data:
-            raise SceneSpecError(f"{path_label}: missing required key {k!r}")
-    sid = data["segment_id"]
-    if not isinstance(sid, str) or not sid.strip():
-        raise SceneSpecError(f"{path_label}: segment_id must be a non-empty string")
-    cname = data["class_name"]
-    if not isinstance(cname, str) or not cname.strip():
-        raise SceneSpecError(f"{path_label}: class_name must be a non-empty string")
+def _require_nonempty_str(value: Any, path_label: str, key: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise SceneSpecError(f"{path_label}: {key} must be a non-empty string")
 
-    tk = data.get("timing_key")
-    if tk is not None and (not isinstance(tk, str) or not tk.strip()):
+
+def _validate_required_keys(data: dict[str, Any], path_label: str) -> None:
+    for key in SPEC_REQUIRED_TOP:
+        if key not in data:
+            raise SceneSpecError(f"{path_label}: missing required key {key!r}")
+    _require_nonempty_str(data["segment_id"], path_label, "segment_id")
+    _require_nonempty_str(data["class_name"], path_label, "class_name")
+    timing_key = data.get("timing_key")
+    if timing_key is not None and (not isinstance(timing_key, str) or not timing_key.strip()):
         raise SceneSpecError(f"{path_label}: timing_key must be a non-empty string if set")
 
-    title = data["title"]
+
+def _validate_title_subtitle(title: dict[str, Any], path_label: str) -> None:
+    subtitle = title.get("subtitle")
+    if subtitle is None:
+        return
+    if not isinstance(subtitle, str):
+        raise SceneSpecError(f"{path_label}: title.subtitle must be a string if set")
+    if len(subtitle.strip()) > 80:
+        raise SceneSpecError(f"{path_label}: title.subtitle must be at most 80 characters")
+
+
+def _validate_title_block(title: Any, path_label: str) -> None:
     if not isinstance(title, dict):
         raise SceneSpecError(f"{path_label}: title must be a mapping")
     for fld in ("text", "font_size", "color"):
@@ -1875,49 +2383,43 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
         raise SceneSpecError(
             f"{path_label}: title.color must be one of {sorted(ALLOWED_COLORS)}"
         )
-    tfs = title["font_size"]
-    if not _is_yaml_number(tfs) or tfs <= 0:
+    font_size = title["font_size"]
+    if not _is_yaml_number(font_size) or font_size <= 0:
         raise SceneSpecError(f"{path_label}: title.font_size must be a positive number")
-    tsub = title.get("subtitle")
-    if tsub is not None:
-        if not isinstance(tsub, str):
-            raise SceneSpecError(f"{path_label}: title.subtitle must be a string if set")
-        if len(tsub.strip()) > 80:
-            raise SceneSpecError(f"{path_label}: title.subtitle must be at most 80 characters")
+    _validate_title_subtitle(title, path_label)
 
-    has_pages = data.get("pages") is not None
-    has_rows = data.get("rows") is not None
-    if has_pages == has_rows:
-        raise SceneSpecError(
-            f"{path_label}: set exactly one of 'rows' (single page) or 'pages' (multi-page)"
-        )
 
-    layout = data.get("layout") or {}
-    if layout and not isinstance(layout, dict):
-        raise SceneSpecError(f"{path_label}: layout must be a mapping if present")
-
-    pt = layout.get("page_transition", "fade")
-    if str(pt) not in ALLOWED_PAGE_TRANSITIONS:
+def _validate_page_transition_fields(layout: dict[str, Any], path_label: str) -> Any:
+    transition = layout.get("page_transition", "fade")
+    if str(transition) not in ALLOWED_PAGE_TRANSITIONS:
         raise SceneSpecError(
             f"{path_label}: layout.page_transition must be one of {sorted(ALLOWED_PAGE_TRANSITIONS)}"
         )
-    ptrt = layout.get("page_transition_run_time", 0.45)
-    if not _is_yaml_number(ptrt) or not (0 < float(ptrt) <= 5.0):
+    run_time = layout.get("page_transition_run_time", 0.45)
+    if not _is_yaml_number(run_time) or not (0 < float(run_time) <= 5.0):
         raise SceneSpecError(
             f"{path_label}: layout.page_transition_run_time must be a number in (0, 5] if set"
         )
+    return transition
+
+
+def _validate_dwell_fields(layout: dict[str, Any], path_label: str) -> None:
     dwell_mode = layout.get("dwell_emphasis", "auto")
     if str(dwell_mode).strip().lower() not in ALLOWED_DWELL_EMPHASIS:
         raise SceneSpecError(
             f"{path_label}: layout.dwell_emphasis must be one of "
             f"{sorted(ALLOWED_DWELL_EMPHASIS)} if set"
         )
-    if "dwell_run_time" in layout:
-        drt = layout.get("dwell_run_time")
-        if not _is_yaml_number(drt) or not (0 < float(drt) <= 3.0):
-            raise SceneSpecError(
-                f"{path_label}: layout.dwell_run_time must be a number in (0, 3] if set"
-            )
+    if "dwell_run_time" not in layout:
+        return
+    dwell_rt = layout.get("dwell_run_time")
+    if not _is_yaml_number(dwell_rt) or not (0 < float(dwell_rt) <= 3.0):
+        raise SceneSpecError(
+            f"{path_label}: layout.dwell_run_time must be a number in (0, 3] if set"
+        )
+
+
+def _validate_layout_gaps(layout: dict[str, Any], path_label: str) -> None:
     for gap_key in ("first_row_title_buff", "row_gap", "column_gap"):
         if gap_key not in layout or layout.get(gap_key) is None:
             continue
@@ -1928,48 +2430,74 @@ def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> No
                 f"{type(gap_val).__name__} ({gap_val!r})"
             )
 
-    if has_rows:
-        rows = data["rows"]
-        if not isinstance(rows, list) or not rows:
-            raise SceneSpecError(f"{path_label}: rows must be a non-empty list")
-        _validate_row_list(rows, path_label=path_label, prefix="rows")
-        _validate_edges(
-            data.get("edges"),
-            labels=_page_box_labels(rows),
-            path_label=path_label,
-        )
-        return
 
+def _validate_layout_block(data: dict[str, Any], path_label: str) -> Any:
+    layout = data.get("layout") or {}
+    if layout and not isinstance(layout, dict):
+        raise SceneSpecError(f"{path_label}: layout must be a mapping if present")
+    transition = _validate_page_transition_fields(layout, path_label)
+    _validate_dwell_fields(layout, path_label)
+    _validate_layout_gaps(layout, path_label)
+    return transition
+
+
+def _validate_single_page_rows(data: dict[str, Any], path_label: str) -> None:
+    rows = data["rows"]
+    if not isinstance(rows, list) or not rows:
+        raise SceneSpecError(f"{path_label}: rows must be a non-empty list")
+    _validate_row_list(rows, path_label=path_label, prefix="rows")
+    _validate_edges(data.get("edges"), labels=_page_box_labels(rows), path_label=path_label)
+
+
+def _validate_page_entry(
+    page: Any, pi: int, path_label: str, transition: Any
+) -> None:
+    pp = f"{path_label}: pages[{pi}]"
+    if not isinstance(page, dict):
+        raise SceneSpecError(f"{pp}: page must be a mapping")
+    if "rows" not in page:
+        raise SceneSpecError(f"{pp}: missing rows")
+    rows = page["rows"]
+    if not isinstance(rows, list) or not rows:
+        raise SceneSpecError(f"{pp}: rows must be a non-empty list")
+    _validate_row_list(rows, path_label=path_label, prefix=f"pages[{pi}].rows")
+    _validate_edges(page.get("edges"), labels=_page_box_labels(rows), path_label=pp)
+    if pi <= 0:
+        return
+    page_transition = page.get("transition", transition)
+    if str(page_transition) not in ALLOWED_PAGE_TRANSITIONS:
+        raise SceneSpecError(
+            f"{pp}: transition must be one of {sorted(ALLOWED_PAGE_TRANSITIONS)} if set"
+        )
+
+
+def _validate_pages_block(data: dict[str, Any], path_label: str, transition: Any) -> None:
     if data.get("edges") is not None:
         raise SceneSpecError(
             f"{path_label}: top-level edges are only valid with rows; "
             f"put edges on each page for multi-page specs"
         )
-
     pages = data["pages"]
     if not isinstance(pages, list) or not pages:
         raise SceneSpecError(f"{path_label}: pages must be a non-empty list")
     for pi, page in enumerate(pages):
-        pp = f"{path_label}: pages[{pi}]"
-        if not isinstance(page, dict):
-            raise SceneSpecError(f"{pp}: page must be a mapping")
-        if "rows" not in page:
-            raise SceneSpecError(f"{pp}: missing rows")
-        pr = page["rows"]
-        if not isinstance(pr, list) or not pr:
-            raise SceneSpecError(f"{pp}: rows must be a non-empty list")
-        _validate_row_list(pr, path_label=path_label, prefix=f"pages[{pi}].rows")
-        _validate_edges(
-            page.get("edges"),
-            labels=_page_box_labels(pr),
-            path_label=pp,
+        _validate_page_entry(page, pi, path_label, transition)
+
+
+def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
+    _validate_required_keys(data, path_label)
+    _validate_title_block(data["title"], path_label)
+    has_pages = data.get("pages") is not None
+    has_rows = data.get("rows") is not None
+    if has_pages == has_rows:
+        raise SceneSpecError(
+            f"{path_label}: set exactly one of 'rows' (single page) or 'pages' (multi-page)"
         )
-        if pi > 0:
-            ptx = page.get("transition", pt)
-            if str(ptx) not in ALLOWED_PAGE_TRANSITIONS:
-                raise SceneSpecError(
-                    f"{pp}: transition must be one of {sorted(ALLOWED_PAGE_TRANSITIONS)} if set"
-                )
+    transition = _validate_layout_block(data, path_label)
+    if has_rows:
+        _validate_single_page_rows(data, path_label)
+        return
+    _validate_pages_block(data, path_label, transition)
 
 
 def _normalized_pages(spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2088,312 +2616,543 @@ def _emphasis_anim(bx: str, emphasis: str) -> str | None:
     return None
 
 
-def compile_scene_class(
-    spec: dict[str, Any],
-    *,
-    words: list[dict[str, Any]] | None = None,
-) -> str:
-    """Return a full ``class Name(_TimedScene): ...`` definition (no imports).
+def _reject_nonfinite_compile_words(words: list[dict[str, Any]] | None) -> None:
+    if not words:
+        return
+    from docgen.timestamps import TimestampError, require_finite_word_times
 
-    ``spec`` must include ``timing_key`` (narration audio stem for ``timing.json``),
-    either in the mapping or merged by the caller from ``Config.resolve_segment_name``.
+    try:
+        require_finite_word_times(words, label="timing words")
+    except TimestampError as exc:
+        raise SceneSpecError(str(exc)) from exc
 
-    When ``words`` is provided (normal ``scene-compile`` / retime path), FadeIn and
-    page-transition durations are **clamped** so ``_TimedScene._clock`` cannot race
-    past the next ``wait_word`` start — otherwise the first board dumps and freezes
-    while narration continues (issue #66).
-    """
-    validate_scene_spec(spec, path_label="spec")
-    if words:
-        from docgen.timestamps import TimestampError, require_finite_word_times
 
-        try:
-            require_finite_word_times(words, label="timing words")
-        except TimestampError as exc:
-            raise SceneSpecError(str(exc)) from exc
-
-    class_name = str(spec["class_name"]).strip()
+def _require_timing_key(spec: dict[str, Any]) -> str:
     timing_key = spec.get("timing_key")
     if not timing_key or not str(timing_key).strip():
         raise SceneSpecError(
             "timing_key is required (narration stem, e.g. 01-overview) — "
             "set in YAML or pass after resolving segment_names in docgen.yaml"
         )
-    timing_key = str(timing_key).strip()
+    return str(timing_key).strip()
 
-    title = spec["title"]
-    title_text: str = str(title["text"])
+
+def _compile_reveal_index(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]] | None,
+) -> dict[tuple[int, int, int], RevealEvent]:
+    reveal_by_key: dict[tuple[int, int, int], RevealEvent] = {}
+    if not words:
+        return reveal_by_key
+    for ev in simulate_reveal_timeline(spec, words, clamp_run_times=True):
+        reveal_by_key[(ev.page, ev.row, ev.box)] = ev
+    return reveal_by_key
+
+
+def _compile_title_run_time(
+    spec: dict[str, Any],
+    words: list[dict[str, Any]] | None,
+) -> float:
+    if not words:
+        return TITLE_WRITE_RUN_TIME
+    first_start = next(
+        (
+            float(s["word_start"])
+            for s in iter_reveal_slots(spec, words)
+            if s["word_start"] is not None
+        ),
+        None,
+    )
+    return clamp_title_run_time(TITLE_WRITE_RUN_TIME, first_start)
+
+
+def _compile_title_lines(
+    title: dict[str, Any],
+    title_rt: float,
+) -> list[str]:
+    title_text = str(title["text"])
     title_fs = int(title["font_size"])
     title_color = str(title["color"])
     title_subtitle = str(title.get("subtitle") or "").strip()
-
-    layout = spec.get("layout") or {}
-    first_row_title_buff = float(layout.get("first_row_title_buff", 0.5))
-    row_gap = float(layout.get("row_gap", 0.6))
-    column_gap = float(layout.get("column_gap", 0.8))
-    page_tr_run = float(layout.get("page_transition_run_time", 0.45))
-
-    pages = _normalized_pages(spec)
-    if _any_wait_segment_in_pages(pages):
-        raise SceneSpecError(
-            "wait_segment is not supported in compiled scenes — use wait_word (timing.json "
-            "`words` index) only. Run `docgen scene-compile` so rows are upgraded from Whisper "
-            "words, or edit the YAML to use wait_word."
-        )
-
-    # Per-box clamped run_time / page fade when Whisper words are available.
-    reveal_by_key: dict[tuple[int, int, int], RevealEvent] = {}
-    if words:
-        for ev in simulate_reveal_timeline(spec, words, clamp_run_times=True):
-            reveal_by_key[(ev.page, ev.row, ev.box)] = ev
-
-    title_rt = TITLE_WRITE_RUN_TIME
-    if words:
-        first_start = next(
-            (
-                float(s["word_start"])
-                for s in iter_reveal_slots(spec, words)
-                if s["word_start"] is not None
-            ),
-            None,
-        )
-        title_rt = clamp_title_run_time(TITLE_WRITE_RUN_TIME, first_start)
-    lines: list[str] = [
-        f"class {class_name}(_TimedScene):",
-        "    def construct(self):",
-        "        self.camera.background_color = C_BG",
-        f"        timing_words = _load_timing_words({timing_key!r})",
+    if not title_subtitle:
+        return [
+            f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT).to_edge(UP)",
+            f"        self.timed_play(Write(title), run_time={title_rt})",
+            "",
+        ]
+    sub_fs = max(14, title_fs - 10)
+    return [
+        f"        _title_main = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT)",
+        f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color}, font=MANIM_FONT)",
+        "        _title_sub.set_opacity(0.85)",
+        "        title = VGroup(_title_main, _title_sub).arrange(DOWN, buff=0.12).to_edge(UP)",
+        f"        self.timed_play(Write(title), run_time={title_rt})",
         "",
     ]
-    if title_subtitle:
-        sub_fs = max(14, title_fs - 10)
-        lines.extend(
-            [
-                f"        _title_main = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT)",
-                f"        _title_sub = Text({title_subtitle!r}, font_size={sub_fs}, color={title_color}, font=MANIM_FONT)",
-                "        _title_sub.set_opacity(0.85)",
-                "        title = VGroup(_title_main, _title_sub).arrange(DOWN, buff=0.12).to_edge(UP)",
-                f"        self.timed_play(Write(title), run_time={title_rt})",
-                "",
-            ]
-        )
-    else:
-        lines.extend(
-            [
-                f"        title = Text({title_text!r}, font_size={title_fs}, color={title_color}, font=MANIM_FONT).to_edge(UP)",
-                f"        self.timed_play(Write(title), run_time={title_rt})",
-                "",
-            ]
-        )
 
-    # Map (page, later-box-var) → list of (edge_var, anim) where anim is grow|fade.
-    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]] = {}
-    page_edge_vars: dict[int, list[str]] = {}
 
-    for p, page in enumerate(pages):
-        rows = page["rows"]
-        page_has_image = any(
-            _is_image_element(box)
-            for row in rows
-            for box in (row.get("boxes") or [])
-        )
-        for r, row in enumerate(rows):
-            boxes_raw = row["boxes"]
-            for b, box in enumerate(boxes_raw):
-                var = f"_bx_{p}_{r}_{b}"
-                w = float(box["width"])
-                h = float(box["height"])
-                if _is_image_element(box):
-                    rel = str(box["image"]).strip()
-                    lines.append(
-                        f"        {var} = _image({rel!r}, {w}, {h})"
-                    )
-                    continue
+def _page_contains_image(rows: list[Any]) -> bool:
+    for row in rows:
+        for box in row.get("boxes") or []:
+            if _is_image_element(box):
+                return True
+    return False
+
+
+def _append_page_boxes(lines: list[str], page_index: int, rows: list[Any]) -> None:
+    for r, row in enumerate(rows):
+        boxes_raw = row["boxes"]
+        for b, box in enumerate(boxes_raw):
+            var = f"_bx_{page_index}_{r}_{b}"
+            w = float(box["width"])
+            h = float(box["height"])
+            if _is_image_element(box):
+                rel = str(box["image"]).strip()
+                lines.append(f"        {var} = _image({rel!r}, {w}, {h})")
+            else:
                 lines.append(_box_ctor_line(var, box))
 
-        for r, row in enumerate(rows):
-            boxes_raw = row["boxes"]
-            box_names = [f"_bx_{p}_{r}_{b}" for b in range(len(boxes_raw))]
-            row_var = f"_row_{p}_{r}"
-            # ImageMobject is not a VMobject, so any row (and its page stack)
-            # containing an image element must use Group instead of VGroup.
-            container = "Group" if page_has_image else "VGroup"
-            if len(box_names) == 1:
-                lines.append(f"        {row_var} = {container}({box_names[0]})")
-            else:
-                joined = ", ".join(box_names)
-                lines.append(
-                    f"        {row_var} = {container}({joined}).arrange(RIGHT, buff={column_gap})"
-                )
 
-        row_refs = ", ".join(f"_row_{p}_{r}" for r in range(len(rows)))
-        stack_var = f"_p{p}_stack"
-        stack_container = "Group" if page_has_image else "VGroup"
-        lines.append(
-            f"        {stack_var} = {stack_container}({row_refs}).arrange(DOWN, buff={row_gap}, center=True)"
-        )
-        lines.append(
-            f"        {stack_var}.next_to(title, DOWN, buff={first_row_title_buff})"
-        )
-
-        # Build edge arrows after layout so endpoints use final positions.
-        label_vars = _box_var_by_label(p, rows)
-        for ei, edge in enumerate(page.get("edges") or []):
-            if not isinstance(edge, dict):
-                continue
-            src = str(edge["from"]).strip()
-            dst = str(edge["to"]).strip()
-            src_var = label_vars.get(src)
-            dst_var = label_vars.get(dst)
-            if not src_var or not dst_var:
-                continue
-            evar = f"_ar_{p}_{ei}"
-            ecol = str(edge.get("color") or "C_ACCENT")
-            estyle = str(edge.get("style") or "solid").strip().lower() or "solid"
-            elabel = str(edge.get("label") or "").strip()
+def _append_page_rows(
+    lines: list[str],
+    page_index: int,
+    rows: list[Any],
+    *,
+    page_has_image: bool,
+    column_gap: float,
+) -> None:
+    container = "Group" if page_has_image else "VGroup"
+    for r, row in enumerate(rows):
+        boxes_raw = row["boxes"]
+        box_names = [f"_bx_{page_index}_{r}_{b}" for b in range(len(boxes_raw))]
+        row_var = f"_row_{page_index}_{r}"
+        if len(box_names) == 1:
+            lines.append(f"        {row_var} = {container}({box_names[0]})")
+        else:
+            joined = ", ".join(box_names)
             lines.append(
-                f"        {evar} = _arrow({src_var}, {dst_var}, {ecol}, style={estyle!r})"
+                f"        {row_var} = {container}({joined}).arrange(RIGHT, buff={column_gap})"
             )
-            page_edge_vars.setdefault(p, []).append(evar)
-            # Reveal with the later endpoint (second in box creation order).
-            order = {v: i for i, v in enumerate(label_vars.values())}
-            later = dst_var if order.get(dst_var, 0) >= order.get(src_var, 0) else src_var
-            # GrowArrow only works on solid Arrow; dashed / labeled edges FadeIn.
-            anim = "grow" if estyle == "solid" and not elabel else "fade"
-            edges_with_target.setdefault((p, later), []).append((evar, anim))
-            if elabel:
-                lvar = f"{evar}_lbl"
-                lines.append(
-                    f"        {lvar} = Text({elabel!r}, font_size=16, color={ecol}, font=MANIM_FONT)"
-                )
-                lines.append(
-                    f"        {lvar}.move_to({evar}.get_center()).shift(UP * 0.22)"
-                )
-                page_edge_vars.setdefault(p, []).append(lvar)
-                edges_with_target.setdefault((p, later), []).append((lvar, "fade"))
 
-    lines.append("")
 
-    # Box vars per page — page transitions FadeOut these individually. Fading the
-    # parent VGroup can re-add unrevealed siblings at full opacity (flash dump).
-    page_box_vars: dict[int, list[str]] = {}
+def _append_page_stack(
+    lines: list[str],
+    page_index: int,
+    row_count: int,
+    *,
+    page_has_image: bool,
+    row_gap: float,
+    first_row_title_buff: float,
+) -> None:
+    row_refs = ", ".join(f"_row_{page_index}_{r}" for r in range(row_count))
+    stack_var = f"_p{page_index}_stack"
+    container = "Group" if page_has_image else "VGroup"
+    lines.append(
+        f"        {stack_var} = {container}({row_refs}).arrange(DOWN, buff={row_gap}, center=True)"
+    )
+    lines.append(f"        {stack_var}.next_to(title, DOWN, buff={first_row_title_buff})")
+
+
+def _edge_anim_kind(style: str, label: str) -> str:
+    if style == "solid" and not label:
+        return "grow"
+    return "fade"
+
+
+def _append_page_edges(
+    lines: list[str],
+    page_index: int,
+    rows: list[Any],
+    edges: list[Any],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+    page_edge_vars: dict[int, list[str]],
+) -> None:
+    label_vars = _box_var_by_label(page_index, rows)
+    for ei, edge in enumerate(edges):
+        if isinstance(edge, dict):
+            _append_one_edge(
+                lines,
+                page_index,
+                ei,
+                edge,
+                label_vars,
+                edges_with_target,
+                page_edge_vars,
+            )
+
+
+def _append_one_edge(
+    lines: list[str],
+    page_index: int,
+    edge_index: int,
+    edge: dict[str, Any],
+    label_vars: dict[str, str],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+    page_edge_vars: dict[int, list[str]],
+) -> None:
+    src = str(edge["from"]).strip()
+    dst = str(edge["to"]).strip()
+    src_var = label_vars.get(src)
+    dst_var = label_vars.get(dst)
+    if not src_var or not dst_var:
+        return
+    evar = f"_ar_{page_index}_{edge_index}"
+    ecol = str(edge.get("color") or "C_ACCENT")
+    estyle = str(edge.get("style") or "solid").strip().lower() or "solid"
+    elabel = str(edge.get("label") or "").strip()
+    lines.append(f"        {evar} = _arrow({src_var}, {dst_var}, {ecol}, style={estyle!r})")
+    page_edge_vars.setdefault(page_index, []).append(evar)
+    order = {v: i for i, v in enumerate(label_vars.values())}
+    later = dst_var if order.get(dst_var, 0) >= order.get(src_var, 0) else src_var
+    anim = _edge_anim_kind(estyle, elabel)
+    edges_with_target.setdefault((page_index, later), []).append((evar, anim))
+    if not elabel:
+        return
+    lvar = f"{evar}_lbl"
+    lines.append(f"        {lvar} = Text({elabel!r}, font_size=16, color={ecol}, font=MANIM_FONT)")
+    lines.append(f"        {lvar}.move_to({evar}.get_center()).shift(UP * 0.22)")
+    page_edge_vars.setdefault(page_index, []).append(lvar)
+    edges_with_target.setdefault((page_index, later), []).append((lvar, "fade"))
+
+
+def _append_page_geometry(
+    lines: list[str],
+    page_index: int,
+    page: dict[str, Any],
+    *,
+    column_gap: float,
+    row_gap: float,
+    first_row_title_buff: float,
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+    page_edge_vars: dict[int, list[str]],
+) -> None:
+    rows = page["rows"]
+    page_has_image = _page_contains_image(rows)
+    _append_page_boxes(lines, page_index, rows)
+    _append_page_rows(
+        lines,
+        page_index,
+        rows,
+        page_has_image=page_has_image,
+        column_gap=column_gap,
+    )
+    _append_page_stack(
+        lines,
+        page_index,
+        len(rows),
+        page_has_image=page_has_image,
+        row_gap=row_gap,
+        first_row_title_buff=first_row_title_buff,
+    )
+    _append_page_edges(
+        lines,
+        page_index,
+        rows,
+        list(page.get("edges") or []),
+        edges_with_target,
+        page_edge_vars,
+    )
+
+
+def _reject_wait_segments(pages: list[dict[str, Any]]) -> None:
+    if not _any_wait_segment_in_pages(pages):
+        return
+    raise SceneSpecError(
+        "wait_segment is not supported in compiled scenes — use wait_word (timing.json "
+        "`words` index) only. Run `docgen scene-compile` so rows are upgraded from Whisper "
+        "words, or edit the YAML to use wait_word."
+    )
+
+
+def _page_box_vars(pages: list[dict[str, Any]]) -> dict[int, list[str]]:
+    """Revealed box names. Page exits fade these, not the parent group."""
+    out: dict[int, list[str]] = {}
     for p, page in enumerate(pages):
         for r, row in enumerate(page["rows"]):
             boxes_raw = row.get("boxes") or []
-            if not isinstance(boxes_raw, list):
-                continue
-            for b_idx, box in enumerate(boxes_raw):
-                if isinstance(box, dict):
-                    page_box_vars.setdefault(p, []).append(f"_bx_{p}_{r}_{b_idx}")
+            if isinstance(boxes_raw, list):
+                _collect_page_boxes(out, p, r, boxes_raw)
+    return out
 
-    for p, page in enumerate(pages):
-        page_has_edges = bool(page.get("edges"))
-        first_box_seen = False
-        for r, row in enumerate(page["rows"]):
-            boxes_raw = row["boxes"]
-            if not isinstance(boxes_raw, list):
-                continue
-            row_run_time = float(row["run_time"])
-            row_ww = row.get("wait_word")
-            for b_idx, box in enumerate(boxes_raw):
-                if not isinstance(box, dict):
-                    continue
-                ev = reveal_by_key.get((p, r, b_idx))
-                run_time = (
-                    round(float(ev.run_time), 3) if ev is not None else row_run_time
-                )
-                page_fade_rt = (
-                    round(float(ev.page_fade_out), 3)
-                    if ev is not None
-                    else page_tr_run
-                )
-                ww = box.get("wait_word")
-                if ww is None and b_idx == 0 and row_ww is not None:
-                    ww = row_ww
-                if ww is not None:
-                    lines.append(
-                        f"        self.wait_until_word(timing_words, {int(ww)})"
-                    )
-                page_enter_trans: str | None = None
-                if p > 0 and r == 0 and b_idx == 0:
-                    trans = str(page.get("transition") or "fade")
-                    prev_boxes = page_box_vars.get(p - 1) or []
-                    prev_edges = page_edge_vars.get(p - 1) or []
-                    fade_targets = prev_boxes + prev_edges
-                    if trans == "none":
-                        for t in fade_targets:
-                            lines.append(f"        self.remove({t})")
-                        lines.append("        self.timed_wait(0.05)")
-                    else:
-                        if trans not in ANIMATED_PAGE_TRANSITIONS:
-                            trans = "fade"
-                        page_enter_trans = trans
-                        if fade_targets:
-                            fade_args = ", ".join(
-                                _page_exit_call(t, trans) for t in fade_targets
-                            )
-                            lines.append(
-                                f"        self.timed_play({fade_args}, "
-                                f"run_time={page_fade_rt})"
-                            )
-                        else:
-                            lines.append(f"        self.timed_wait({page_fade_rt})")
-                bx = f"_bx_{p}_{r}_{b_idx}"
-                author_reveal = _author_reveal(box)
-                # Slide / rise / zoom hand the first incoming node in with the
-                # exit. An explicit box ``reveal`` still wins. Later boxes stay
-                # on their own paced entrance so the rest of the page does not dump.
-                use_page_enter = (
-                    page_enter_trans in {"slide", "rise", "zoom"} and author_reveal is None
-                )
-                if use_page_enter:
-                    reveal_part = _page_enter_call(bx, str(page_enter_trans))
-                else:
-                    reveal = (
-                        str(ev.reveal)
-                        if ev is not None
-                        else default_box_reveal(
-                            box,
-                            page_has_edges=page_has_edges,
-                            is_first_on_page=not first_box_seen,
-                        )
-                    )
-                    reveal_part = _reveal_anim(bx, reveal)
-                first_box_seen = True
-                edge_anims = edges_with_target.get((p, bx), [])
-                parts = [reveal_part]
-                # Arrows stay with the later endpoint. Sliding them in with the
-                # first node would point at a box that has not been revealed yet.
-                for evar, kind in edge_anims:
-                    if kind == "grow":
-                        parts.append(f"GrowArrow({evar})")
-                    else:
-                        parts.append(f"FadeIn({evar})")
-                anims = ", ".join(parts)
-                lines.append(
-                    f"        self.timed_play({anims}, run_time={run_time})"
-                )
-                pulses = ev.hold_pulses if ev is not None else ()
-                if not pulses and ev is not None and float(ev.dwell_run_time) >= MIN_DWELL_RUN_TIME:
-                    pulses = (
-                        HoldPulse(
-                            wait_before=0.0,
-                            run_time=float(ev.dwell_run_time),
-                            emphasis=str(ev.emphasis),
-                        ),
-                    )
-                for pulse in pulses:
-                    if float(pulse.wait_before) > 0:
-                        lines.append(
-                            f"        self.timed_wait({round(float(pulse.wait_before), 3)})"
-                        )
-                    emph = _emphasis_anim(bx, str(pulse.emphasis))
-                    if emph and float(pulse.run_time) >= MIN_DWELL_RUN_TIME:
-                        lines.append(
-                            f"        self.timed_play({emph}, "
-                            f"run_time={round(float(pulse.run_time), 3)})"
-                        )
 
+def _collect_page_boxes(
+    out: dict[int, list[str]],
+    page_index: int,
+    row_index: int,
+    boxes_raw: list[Any],
+) -> None:
+    for b_idx, box in enumerate(boxes_raw):
+        if isinstance(box, dict):
+            out.setdefault(page_index, []).append(f"_bx_{page_index}_{row_index}_{b_idx}")
+
+
+def _resolved_wait_word(box: dict[str, Any], box_index: int, row_wait: Any) -> Any:
+    ww = box.get("wait_word")
+    if ww is None and box_index == 0 and row_wait is not None:
+        return row_wait
+    return ww
+
+
+def _scheduled_run_time(ev: RevealEvent | None, row_run_time: float) -> float:
+    if ev is None:
+        return row_run_time
+    return round(float(ev.run_time), 3)
+
+
+def _scheduled_page_fade(ev: RevealEvent | None, default_rt: float) -> float:
+    if ev is None:
+        return default_rt
+    return round(float(ev.page_fade_out), 3)
+
+
+def _append_page_exit(
+    lines: list[str],
+    transition: str,
+    fade_targets: list[str],
+    page_fade_rt: float,
+) -> str | None:
+    if transition == "none":
+        for target in fade_targets:
+            lines.append(f"        self.remove({target})")
+        lines.append("        self.timed_wait(0.05)")
+        return None
+    kind = transition if transition in ANIMATED_PAGE_TRANSITIONS else "fade"
+    if fade_targets:
+        fade_args = ", ".join(_page_exit_call(target, kind) for target in fade_targets)
+        lines.append(f"        self.timed_play({fade_args}, run_time={page_fade_rt})")
+    else:
+        lines.append(f"        self.timed_wait({page_fade_rt})")
+    return kind
+
+
+def _opening_page_transition(page: dict[str, Any]) -> str:
+    return str(page.get("transition") or "fade")
+
+
+def _append_incoming_exit(
+    lines: list[str],
+    *,
+    page_index: int,
+    row_index: int,
+    box_index: int,
+    page: dict[str, Any],
+    page_box_vars: dict[int, list[str]],
+    page_edge_vars: dict[int, list[str]],
+    page_fade_rt: float,
+) -> str | None:
+    if page_index <= 0 or row_index != 0 or box_index != 0:
+        return None
+    targets = list(page_box_vars.get(page_index - 1) or [])
+    targets.extend(page_edge_vars.get(page_index - 1) or [])
+    return _append_page_exit(
+        lines,
+        _opening_page_transition(page),
+        targets,
+        page_fade_rt,
+    )
+
+
+def _reveal_statement(
+    bx: str,
+    box: dict[str, Any],
+    ev: RevealEvent | None,
+    *,
+    page_has_edges: bool,
+    first_box_seen: bool,
+    page_enter_trans: str | None,
+) -> str:
+    author_reveal = _author_reveal(box)
+    use_page_enter = page_enter_trans in {"slide", "rise", "zoom"} and author_reveal is None
+    if use_page_enter:
+        return _page_enter_call(bx, str(page_enter_trans))
+    if ev is not None:
+        reveal = str(ev.reveal)
+    else:
+        reveal = default_box_reveal(
+            box,
+            page_has_edges=page_has_edges,
+            is_first_on_page=not first_box_seen,
+        )
+    return _reveal_anim(bx, reveal)
+
+
+def _edge_play_part(evar: str, kind: str) -> str:
+    if kind == "grow":
+        return f"GrowArrow({evar})"
+    return f"FadeIn({evar})"
+
+
+def _append_reveal_play(
+    lines: list[str],
+    bx: str,
+    reveal_part: str,
+    edge_anims: list[tuple[str, str]],
+    run_time: float,
+) -> None:
+    parts = [reveal_part]
+    for evar, kind in edge_anims:
+        parts.append(_edge_play_part(evar, kind))
+    anims = ", ".join(parts)
+    lines.append(f"        self.timed_play({anims}, run_time={run_time})")
+
+
+def _hold_pulses_for(ev: RevealEvent | None) -> tuple[HoldPulse, ...]:
+    if ev is None:
+        return ()
+    if ev.hold_pulses:
+        return ev.hold_pulses
+    if float(ev.dwell_run_time) < MIN_DWELL_RUN_TIME:
+        return ()
+    return (
+        HoldPulse(
+            wait_before=0.0,
+            run_time=float(ev.dwell_run_time),
+            emphasis=str(ev.emphasis),
+        ),
+    )
+
+
+def _append_hold_pulses(lines: list[str], bx: str, ev: RevealEvent | None) -> None:
+    for pulse in _hold_pulses_for(ev):
+        _append_one_pulse(lines, bx, pulse)
+
+
+def _append_one_pulse(lines: list[str], bx: str, pulse: HoldPulse) -> None:
+    if float(pulse.wait_before) > 0:
+        lines.append(f"        self.timed_wait({round(float(pulse.wait_before), 3)})")
+    emph = _emphasis_anim(bx, str(pulse.emphasis))
+    if emph and float(pulse.run_time) >= MIN_DWELL_RUN_TIME:
+        lines.append(
+            f"        self.timed_play({emph}, run_time={round(float(pulse.run_time), 3)})"
+        )
+
+
+def _append_one_box_playback(
+    lines: list[str],
+    *,
+    page_index: int,
+    row_index: int,
+    box_index: int,
+    box: dict[str, Any],
+    row_run_time: float,
+    row_wait: Any,
+    page: dict[str, Any],
+    page_has_edges: bool,
+    first_box_seen: bool,
+    ev: RevealEvent | None,
+    page_tr_run: float,
+    page_box_vars: dict[int, list[str]],
+    page_edge_vars: dict[int, list[str]],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+) -> None:
+    run_time = _scheduled_run_time(ev, row_run_time)
+    page_fade_rt = _scheduled_page_fade(ev, page_tr_run)
+    ww = _resolved_wait_word(box, box_index, row_wait)
+    if ww is not None:
+        lines.append(f"        self.wait_until_word(timing_words, {int(ww)})")
+    page_enter_trans = _append_incoming_exit(
+        lines,
+        page_index=page_index,
+        row_index=row_index,
+        box_index=box_index,
+        page=page,
+        page_box_vars=page_box_vars,
+        page_edge_vars=page_edge_vars,
+        page_fade_rt=page_fade_rt,
+    )
+    bx = f"_bx_{page_index}_{row_index}_{box_index}"
+    reveal_part = _reveal_statement(
+        bx,
+        box,
+        ev,
+        page_has_edges=page_has_edges,
+        first_box_seen=first_box_seen,
+        page_enter_trans=page_enter_trans,
+    )
+    _append_reveal_play(
+        lines,
+        bx,
+        reveal_part,
+        edges_with_target.get((page_index, bx), []),
+        run_time,
+    )
+    _append_hold_pulses(lines, bx, ev)
+
+
+def _append_page_playback(
+    lines: list[str],
+    page_index: int,
+    page: dict[str, Any],
+    *,
+    reveal_by_key: dict[tuple[int, int, int], RevealEvent],
+    page_tr_run: float,
+    page_box_vars: dict[int, list[str]],
+    page_edge_vars: dict[int, list[str]],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+) -> None:
+    page_has_edges = bool(page.get("edges"))
+    first_box_seen = False
+    for row_index, row in enumerate(page["rows"]):
+        first_box_seen = _append_row_playback(
+            lines,
+            page_index=page_index,
+            row_index=row_index,
+            row=row,
+            page=page,
+            page_has_edges=page_has_edges,
+            first_box_seen=first_box_seen,
+            reveal_by_key=reveal_by_key,
+            page_tr_run=page_tr_run,
+            page_box_vars=page_box_vars,
+            page_edge_vars=page_edge_vars,
+            edges_with_target=edges_with_target,
+        )
+
+
+def _append_row_playback(
+    lines: list[str],
+    *,
+    page_index: int,
+    row_index: int,
+    row: dict[str, Any],
+    page: dict[str, Any],
+    page_has_edges: bool,
+    first_box_seen: bool,
+    reveal_by_key: dict[tuple[int, int, int], RevealEvent],
+    page_tr_run: float,
+    page_box_vars: dict[int, list[str]],
+    page_edge_vars: dict[int, list[str]],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+) -> bool:
+    boxes_raw = row["boxes"]
+    if not isinstance(boxes_raw, list):
+        return first_box_seen
+    row_run_time = float(row["run_time"])
+    row_wait = row.get("wait_word")
+    for box_index, box in enumerate(boxes_raw):
+        if isinstance(box, dict):
+            _append_one_box_playback(
+                lines,
+                page_index=page_index,
+                row_index=row_index,
+                box_index=box_index,
+                box=box,
+                row_run_time=row_run_time,
+                row_wait=row_wait,
+                page=page,
+                page_has_edges=page_has_edges,
+                first_box_seen=first_box_seen,
+                ev=reveal_by_key.get((page_index, row_index, box_index)),
+                page_tr_run=page_tr_run,
+                page_box_vars=page_box_vars,
+                page_edge_vars=page_edge_vars,
+                edges_with_target=edges_with_target,
+            )
+            first_box_seen = True
+    return first_box_seen
+
+
+def _append_audio_tail(lines: list[str], timing_key: str) -> None:
     lines.extend(
         [
             "",
@@ -2413,4 +3172,68 @@ def compile_scene_class(
         ]
     )
 
+
+def compile_scene_class(
+    spec: dict[str, Any],
+    *,
+    words: list[dict[str, Any]] | None = None,
+) -> str:
+    """Return a full ``class Name(_TimedScene): ...`` definition (no imports).
+
+    ``spec`` must include ``timing_key`` (narration audio stem for ``timing.json``),
+    either in the mapping or merged by the caller from ``Config.resolve_segment_name``.
+
+    When ``words`` is provided (normal ``scene-compile`` / retime path), FadeIn and
+    page-transition durations are **clamped** so ``_TimedScene._clock`` cannot race
+    past the next ``wait_word`` start — otherwise the first board dumps and freezes
+    while narration continues (issue #66).
+    """
+    validate_scene_spec(spec, path_label="spec")
+    _reject_nonfinite_compile_words(words)
+    class_name = str(spec["class_name"]).strip()
+    timing_key = _require_timing_key(spec)
+    layout = spec.get("layout") or {}
+    first_row_title_buff = float(layout.get("first_row_title_buff", 0.5))
+    row_gap = float(layout.get("row_gap", 0.6))
+    column_gap = float(layout.get("column_gap", 0.8))
+    page_tr_run = float(layout.get("page_transition_run_time", 0.45))
+    pages = _normalized_pages(spec)
+    _reject_wait_segments(pages)
+    reveal_by_key = _compile_reveal_index(spec, words)
+    title_rt = _compile_title_run_time(spec, words)
+    lines: list[str] = [
+        f"class {class_name}(_TimedScene):",
+        "    def construct(self):",
+        "        self.camera.background_color = C_BG",
+        f"        timing_words = _load_timing_words({timing_key!r})",
+        "",
+    ]
+    lines.extend(_compile_title_lines(spec["title"], title_rt))
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]] = {}
+    page_edge_vars: dict[int, list[str]] = {}
+    for page_index, page in enumerate(pages):
+        _append_page_geometry(
+            lines,
+            page_index,
+            page,
+            column_gap=column_gap,
+            row_gap=row_gap,
+            first_row_title_buff=first_row_title_buff,
+            edges_with_target=edges_with_target,
+            page_edge_vars=page_edge_vars,
+        )
+    lines.append("")
+    revealed = _page_box_vars(pages)
+    for page_index, page in enumerate(pages):
+        _append_page_playback(
+            lines,
+            page_index,
+            page,
+            reveal_by_key=reveal_by_key,
+            page_tr_run=page_tr_run,
+            page_box_vars=revealed,
+            page_edge_vars=page_edge_vars,
+            edges_with_target=edges_with_target,
+        )
+    _append_audio_tail(lines, timing_key)
     return "\n".join(lines) + "\n"
