@@ -931,6 +931,15 @@ def test_fetch_url_bytes_retries_503() -> None:
     assert calls["n"] == 2
 
 
+def test_fetch_url_bytes_refuses_file_scheme() -> None:
+    from docgen.ai_client import fetch_url_bytes
+
+    with patch("docgen.ai_client.urllib.request.urlopen") as urlopen:
+        with pytest.raises(AIError, match="http or https"):
+            fetch_url_bytes("file:///etc/passwd")
+    urlopen.assert_not_called()
+
+
 def test_chat_retries_rate_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_ai_env: None
 ) -> None:
