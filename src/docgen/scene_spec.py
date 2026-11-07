@@ -12,13 +12,14 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
 * Lays out each **page** as a vertical stack of rows (``VGroup`` per row,
   then ``arrange(DOWN)``), positioned under the title — **no scaling** to cram
   content; use multiple **pages** when the story needs more boxes than fit.
-* Between pages, runs a **page transition** so the next page appears on a
-  clear canvas. ``fade`` (default) dissolves the previous board. ``slide``
-  travels it off to the left and brings the next page's first node in from
-  the right. ``rise`` drops the board and settles the next node from above.
-  ``zoom`` shrinks the board away and scales the next node up. ``none``
-  removes the previous board instantly. Later boxes on the incoming page
-  stay paced — the handoff does not dump the whole next board.
+* Between pages, the previous board and the next page's first node move in
+  **one** play, so the canvas does not go empty between them. ``fade``
+  (default) crossfades. ``slide`` travels the board left while the next node
+  enters from the right. ``rise`` drops the board while the next node settles
+  from just under the title. ``zoom`` shrinks the board while the next node
+  scales up. ``none`` removes the previous board instantly, then reveals.
+  Later boxes on the incoming page stay paced — the handoff does not dump
+  the whole next board.
 * Uses the shared ``_box`` helper (text centered in the node; optional
   ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
   slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
@@ -2929,26 +2930,121 @@ def _opening_page_transition(page: dict[str, Any]) -> str:
     return str(page.get("transition") or "fade")
 
 
-def _append_incoming_exit(
-    lines: list[str],
-    *,
+def _page_exit_targets(
     page_index: int,
     row_index: int,
     box_index: int,
     page: dict[str, Any],
     page_box_vars: dict[int, list[str]],
     page_edge_vars: dict[int, list[str]],
-    page_fade_rt: float,
-) -> str | None:
+) -> tuple[str, list[str]] | None:
+    """Exit kind and revealed names for the first box of a later page."""
     if page_index <= 0 or row_index != 0 or box_index != 0:
         return None
+    transition = _opening_page_transition(page)
     targets = list(page_box_vars.get(page_index - 1) or [])
     targets.extend(page_edge_vars.get(page_index - 1) or [])
-    return _append_page_exit(
+    if transition == "none":
+        return "none", targets
+    kind = transition if transition in ANIMATED_PAGE_TRANSITIONS else "fade"
+    return kind, targets
+
+
+def _cross_handoff(kind: str, targets: list[str], box: dict[str, Any]) -> bool:
+    """True when the exit and the first incoming node should share one play."""
+    if kind == "none" or not targets or _author_reveal(box) is not None:
+        return False
+    return True
+
+
+def _append_cross_handoff(
+    lines: list[str],
+    targets: list[str],
+    kind: str,
+    enter_call: str,
+    edge_anims: list[tuple[str, str]],
+    run_time: float,
+) -> None:
+    """Previous board leaves while the next node arrives. One clock step."""
+    parts = [_page_exit_call(target, kind) for target in targets]
+    parts.append(enter_call)
+    for evar, edge_kind in edge_anims:
+        parts.append(_edge_play_part(evar, edge_kind))
+    anims = ", ".join(parts)
+    lines.append(f"        self.timed_play({anims}, run_time={run_time})")
+
+
+def _append_plain_reveal(
+    lines: list[str],
+    bx: str,
+    box: dict[str, Any],
+    ev: RevealEvent | None,
+    *,
+    page_has_edges: bool,
+    first_box_seen: bool,
+    edge_anims: list[tuple[str, str]],
+    run_time: float,
+) -> None:
+    reveal_part = _reveal_statement(
+        bx,
+        box,
+        ev,
+        page_has_edges=page_has_edges,
+        first_box_seen=first_box_seen,
+        page_enter_trans=None,
+    )
+    _append_reveal_play(lines, bx, reveal_part, edge_anims, run_time)
+
+
+def _append_box_entrance(
+    lines: list[str],
+    *,
+    page_index: int,
+    row_index: int,
+    box_index: int,
+    box: dict[str, Any],
+    page: dict[str, Any],
+    page_has_edges: bool,
+    first_box_seen: bool,
+    ev: RevealEvent | None,
+    run_time: float,
+    page_fade_rt: float,
+    page_box_vars: dict[int, list[str]],
+    page_edge_vars: dict[int, list[str]],
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+) -> None:
+    bx = f"_bx_{page_index}_{row_index}_{box_index}"
+    edges = edges_with_target.get((page_index, bx), [])
+    exit_info = _page_exit_targets(
+        page_index,
+        row_index,
+        box_index,
+        page,
+        page_box_vars,
+        page_edge_vars,
+    )
+    if exit_info is not None:
+        kind, targets = exit_info
+        if _cross_handoff(kind, targets, box):
+            _append_cross_handoff(
+                lines,
+                targets,
+                kind,
+                _page_enter_call(bx, kind),
+                edges,
+                round(page_fade_rt + run_time, 3),
+            )
+            return
+        _append_page_exit(lines, kind, targets, page_fade_rt)
+    _append_plain_reveal(
         lines,
-        _opening_page_transition(page),
-        targets,
-        page_fade_rt,
+        bx,
+        box,
+        ev,
+        page_has_edges=page_has_edges,
+        first_box_seen=first_box_seen,
+        edge_anims=edges,
+        run_time=run_time,
     )
 
 
@@ -3050,32 +3146,23 @@ def _append_one_box_playback(
     ww = _resolved_wait_word(box, box_index, row_wait)
     if ww is not None:
         lines.append(f"        self.wait_until_word(timing_words, {int(ww)})")
-    page_enter_trans = _append_incoming_exit(
+    _append_box_entrance(
         lines,
         page_index=page_index,
         row_index=row_index,
         box_index=box_index,
+        box=box,
         page=page,
-        page_box_vars=page_box_vars,
-        page_edge_vars=page_edge_vars,
-        page_fade_rt=page_fade_rt,
-    )
-    bx = f"_bx_{page_index}_{row_index}_{box_index}"
-    reveal_part = _reveal_statement(
-        bx,
-        box,
-        ev,
         page_has_edges=page_has_edges,
         first_box_seen=first_box_seen,
-        page_enter_trans=page_enter_trans,
+        ev=ev,
+        run_time=run_time,
+        page_fade_rt=page_fade_rt,
+        page_box_vars=page_box_vars,
+        page_edge_vars=page_edge_vars,
+        edges_with_target=edges_with_target,
     )
-    _append_reveal_play(
-        lines,
-        bx,
-        reveal_part,
-        edges_with_target.get((page_index, bx), []),
-        run_time,
-    )
+    bx = f"_bx_{page_index}_{row_index}_{box_index}"
     _append_hold_pulses(lines, bx, ev)
 
 
