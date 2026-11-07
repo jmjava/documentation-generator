@@ -57,7 +57,7 @@ class ClockTrace:
         ]
 
     def reveal_plays(self) -> list[ClockEvent]:
-        reveal_kinds = {"FadeIn", "GrowFromCenter"}
+        reveal_kinds = {"FadeIn", "GrowFromCenter", "GrowFromEdge"}
         return [
             e
             for e in self.play_events()
@@ -74,6 +74,10 @@ class _Dummy:
         self._role = kwargs.pop("_role", None)
         self._target = args[0] if args else None
         self._label = kwargs.get("label")
+        # Compiled charts compare Text.width before scaling. A short stand-in
+        # skips that branch; real Manim still measures the glyph run.
+        self.width = 1.0
+        self.height = 1.0
 
     def __getattr__(self, name: str) -> Any:
         def _method(*_a: Any, **_k: Any) -> _Dummy:
@@ -172,7 +176,12 @@ def _exec_namespace(
         "FadeIn": _anim("FadeIn"),
         "FadeOut": _anim("FadeOut"),
         "GrowFromCenter": _anim("GrowFromCenter"),
+        "GrowFromEdge": _anim("GrowFromEdge"),
         "GrowArrow": _anim("GrowArrow"),
+        "Create": _anim("Create"),
+        "Rectangle": _anim("Rectangle"),
+        "Dot": _anim("Dot"),
+        "Line": _anim("Line"),
         "Indicate": _anim("Indicate"),
         "Circumscribe": _anim("Circumscribe"),
         "VGroup": _anim("VGroup"),

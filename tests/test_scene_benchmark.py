@@ -38,6 +38,7 @@ def test_corpus_ids_are_stable() -> None:
         "flow_edges",
         "audio_tail",
         "legacy_wait_segment",
+        "chart_bars",
     ]
 
 
