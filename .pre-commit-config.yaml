@@ -1,10 +1,17 @@
 # Pre-commit hooks. Install: pip install pre-commit && pre-commit install
+# ggshield (id: ggshield) runs `secret scan pre-commit`. Credentials stay
+# outside this repo (environment or a local ggshield login). Do not commit a key.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=1000']
+
+  - repo: https://github.com/GitGuardian/ggshield
+    rev: v1.56.1
+    hooks:
+      - id: ggshield
 
   - repo: local
     hooks:
