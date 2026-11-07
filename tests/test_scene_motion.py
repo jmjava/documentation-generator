@@ -360,18 +360,26 @@ def _paged_spec(transition: str, *, second_reveal: str | None = None) -> dict:
     }
 
 
+def _shared_handoff_line(source: str, outgoing: str, incoming: str) -> str:
+    for line in source.splitlines():
+        if "timed_play" in line and outgoing in line and incoming in line:
+            return line
+    raise AssertionError("exit and entrance are not in the same timed_play")
+
+
 def test_compile_slide_page_transition() -> None:
     spec = _paged_spec("slide")
     validate_scene_spec(spec)
     out = compile_scene_class(spec)
-    assert f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
-    assert f"FadeOut(_ar_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
-    # FadeIn(shift=LEFT) starts on the right and travels left into place.
-    assert f"FadeIn(_bx_1_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    outgoing = f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})"
+    incoming = f"FadeIn(_bx_1_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})"
+    handoff = _shared_handoff_line(out, outgoing, incoming)
+    assert f"FadeOut(_ar_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in handoff
     # The next box and its arrow stay paced; they do not ride the page handoff.
     assert "FadeIn(_bx_1_0_1)" in out
     assert f"FadeIn(_bx_1_0_1, shift=LEFT * {PAGE_SLIDE_SHIFT})" not in out
     assert "GrowArrow(_ar_1_0)" in out
+    assert "GrowArrow(_ar_1_0)" not in handoff
     plan = motion_plan_from_source(out)
     assert "page_slide" in plan
     assert "reveal:slide:_bx_1_0_0" in plan
@@ -380,14 +388,20 @@ def test_compile_slide_page_transition() -> None:
 
 def test_compile_rise_and_zoom_page_transitions() -> None:
     rise = compile_scene_class(_paged_spec("rise"))
-    assert f"FadeOut(_bx_0_0_0, shift=DOWN * {PAGE_RISE_SHIFT})" in rise
-    assert f"FadeIn(_bx_1_0_0, shift=DOWN * {PAGE_RISE_ENTER})" in rise
+    _shared_handoff_line(
+        rise,
+        f"FadeOut(_bx_0_0_0, shift=DOWN * {PAGE_RISE_SHIFT})",
+        f"FadeIn(_bx_1_0_0, shift=DOWN * {PAGE_RISE_ENTER})",
+    )
     assert "page_rise" in motion_plan_from_source(rise)
     assert "reveal:rise:_bx_1_0_0" in motion_plan_from_source(rise)
 
     zoom = compile_scene_class(_paged_spec("zoom"))
-    assert f"FadeOut(_bx_0_0_0, scale={PAGE_ZOOM_SCALE})" in zoom
-    assert f"FadeIn(_bx_1_0_0, scale={PAGE_ZOOM_SCALE})" in zoom
+    _shared_handoff_line(
+        zoom,
+        f"FadeOut(_bx_0_0_0, scale={PAGE_ZOOM_SCALE})",
+        f"FadeIn(_bx_1_0_0, scale={PAGE_ZOOM_SCALE})",
+    )
     assert "GrowArrow(_ar_1_0)" in zoom
     assert "page_zoom" in motion_plan_from_source(zoom)
     assert "reveal:zoom:_bx_1_0_0" in motion_plan_from_source(zoom)
@@ -395,9 +409,13 @@ def test_compile_rise_and_zoom_page_transitions() -> None:
 
 def test_explicit_reveal_wins_over_page_entrance() -> None:
     out = compile_scene_class(_paged_spec("slide", second_reveal="grow"))
-    assert f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" in out
+    outgoing = f"FadeOut(_bx_0_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})"
+    assert outgoing in out
     assert "GrowFromCenter(_bx_1_0_0)" in out
     assert f"FadeIn(_bx_1_0_0, shift=LEFT * {PAGE_SLIDE_SHIFT})" not in out
+    for line in out.splitlines():
+        if outgoing in line:
+            assert "GrowFromCenter" not in line
 
 
 def test_animated_page_transitions_stay_on_the_clock() -> None:
@@ -445,7 +463,11 @@ def test_animated_page_transitions_stay_on_the_clock() -> None:
         events = simulate_reveal_timeline(spec, words)
         assert events[1].page_fade_out > 0
         assert events[1].page_fade_out < 0.45
-        assert f"run_time={round(events[1].page_fade_out, 3)}" in out
+        # Exit and entrance share one play whose duration is the old two steps.
+        handoff_rt = round(
+            round(events[1].page_fade_out, 3) + round(events[1].run_time, 3), 3
+        )
+        assert f"run_time={handoff_rt}" in out
         trace = run_compiled_scene_clock(out, words)
         assert trace.skipped_waits() == []
         assert simulator_exec_drift_violations(events, trace) == []
