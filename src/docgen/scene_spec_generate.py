@@ -99,12 +99,12 @@ Optional per-page (when using ``pages``):
   Prefer edges for pipeline / flow diagrams (A → B → C); omit when boxes are unrelated topics.
 
 Use either **rows** (single page) OR **pages** (list of {{ rows: [...], transition?: {_PAGE_TRANSITION_CHOICES}, edges?: [...] }} — transition on pages after the first overrides layout.page_transition for exiting the previous page; first page has no transition in).
-Between pages, pick a handoff (only the **first** node of the next page plays it; later boxes stay paced):
-- ``slide`` — previous board travels left, first node enters from the right. Use when the next page continues the same pipeline.
-- ``rise`` — previous board drops away, first node settles down from above. Use for a deeper step.
-- ``zoom`` — previous board shrinks out, first node scales up. Use when the next page focuses a detail.
-- ``fade`` — dissolve (default). Use for a hard topic change.
-- ``none`` — instant remove. Rare.
+Between pages, pick a handoff. The previous board and the **first** node of the next page move in the same play (the frame does not go empty). Later boxes stay paced:
+- ``slide`` — previous board travels left while the first node enters from the right. Use when the next page continues the same pipeline.
+- ``rise`` — previous board drops while the first node settles down from just under the title. Use for a deeper step.
+- ``zoom`` — previous board shrinks while the first node scales up. Use when the next page focuses a detail.
+- ``fade`` — crossfade (default). Use for a hard topic change.
+- ``none`` — instant remove, then the next reveal. Rare.
 
 Palette tokens (exact spelling): {", ".join(sorted(ALLOWED_COLORS))}
 
