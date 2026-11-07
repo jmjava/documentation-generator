@@ -20,6 +20,10 @@ still list legacy ``wait_segment``; ``docgen scene-compile`` upgrades those to t
   scales up. ``none`` removes the previous board instantly, then reveals.
   Later boxes on the incoming page stay paced — the handoff does not dump
   the whole next board.
+* A page may set ``chart`` (``kind: bar`` or ``line``) instead of ``rows``.
+  Each series item is one paced reveal: a bar grows from the left, or a line
+  point fades in while the segment from the previous point is drawn. The
+  value's digits must appear in the narration (``12`` matches; "twelve" does not).
 * Uses the shared ``_box`` helper (text centered in the node; optional
   ``shape`` / ``reveal`` / ``emphasis``). After each paced reveal, a **dwell**
   slot may play ``Indicate`` / ``Circumscribe`` when the gap to the next
@@ -68,6 +72,13 @@ from docgen.manim_primitives import (
     hold_span_seconds,
     plan_hold_pulses,
     resolve_box_emphasis,
+)
+from docgen.scene_chart import (
+    append_chart_page,
+    chart_value_violations,
+    materialize_charts,
+    page_has_chart,
+    uses_chart,
 )
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
@@ -424,10 +435,117 @@ def auto_paginate(spec: dict[str, Any]) -> dict[str, Any]:
         return spec
     row_gap = float(layout.get("row_gap", 0.6))
     transition_default = str(layout.get("page_transition", "fade"))
+    new_pages = _paginated_pages(
+        spec,
+        budget=budget,
+        row_gap=row_gap,
+        transition_default=transition_default,
+    )
+    if new_pages is None:
+        return spec
+    return _finish_paginated_spec(spec, new_pages)
+
+
+def _paginated_pages(
+    spec: dict[str, Any],
+    *,
+    budget: float,
+    row_gap: float,
+    transition_default: str,
+) -> list[dict[str, Any]] | None:
+    """Split overflowing row pages. Chart pages stay one page, authoring intact."""
+    if spec.get("pages") is None:
+        return _paginated_flat_rows(
+            spec,
+            budget=budget,
+            row_gap=row_gap,
+            transition_default=transition_default,
+        )
+    return _paginated_explicit_pages(
+        spec,
+        budget=budget,
+        row_gap=row_gap,
+        transition_default=transition_default,
+    )
+
+
+def _paginated_flat_rows(
+    spec: dict[str, Any],
+    *,
+    budget: float,
+    row_gap: float,
+    transition_default: str,
+) -> list[dict[str, Any]] | None:
     src_pages = _paginate_source_pages(spec, transition_default)
     if src_pages is None:
-        return spec
-    new_pages = [
+        return None
+    return _chunks_to_pages(
+        src_pages,
+        budget=budget,
+        row_gap=row_gap,
+        transition_default=transition_default,
+    )
+
+
+def _paginated_explicit_pages(
+    spec: dict[str, Any],
+    *,
+    budget: float,
+    row_gap: float,
+    transition_default: str,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for page_idx, page in enumerate(spec["pages"]):
+        _append_budget_page(
+            out,
+            page,
+            page_idx,
+            budget=budget,
+            row_gap=row_gap,
+            transition_default=transition_default,
+        )
+    return out
+
+
+def _append_budget_page(
+    out: list[dict[str, Any]],
+    page: Any,
+    page_idx: int,
+    *,
+    budget: float,
+    row_gap: float,
+    transition_default: str,
+) -> None:
+    if not isinstance(page, dict):
+        return
+    if page_has_chart(page):
+        out.append(dict(page))
+        return
+    rows = page.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return
+    tr = None if page_idx == 0 else str(page.get("transition", transition_default))
+    chunks = _split_rows_to_pages(rows, budget=budget, row_gap=row_gap)
+    for chunk_idx, chunk in enumerate(chunks):
+        out.append(
+            _paginate_page_entry(
+                page_idx=page_idx,
+                chunk_idx=chunk_idx,
+                chunk=chunk,
+                tr=tr,
+                transition_default=transition_default,
+            )
+        )
+
+
+def _chunks_to_pages(
+    src_pages: list[tuple[list[dict[str, Any]], str | None]],
+    *,
+    budget: float,
+    row_gap: float,
+    transition_default: str,
+) -> list[dict[str, Any]]:
+    return [
         _paginate_page_entry(
             page_idx=page_idx,
             chunk_idx=chunk_idx,
@@ -440,7 +558,6 @@ def auto_paginate(spec: dict[str, Any]) -> dict[str, Any]:
             _split_rows_to_pages(rows, budget=budget, row_gap=row_gap)
         )
     ]
-    return _finish_paginated_spec(spec, new_pages)
 
 
 def _normalize_word(s: str) -> str:
@@ -776,6 +893,7 @@ def sync_row_labels_to_whisper_words(
     """
     if not isinstance(words, list) or not words:
         return spec
+    spec = materialize_charts(spec)
     word_stream = _whisper_word_stream(words)
     if not word_stream:
         return spec
@@ -865,6 +983,7 @@ def pacing_violations(spec: dict[str, Any], *, words_present: bool) -> list[str]
     ``words`` list (run ``docgen timestamps``). Missing words is not an implicit
     opt-out.
     """
+    spec = materialize_charts(spec)
     issues: list[str] = []
     paced_anchors: list[str] = []
     for pi, rows in enumerate(_spec_pages_rows(spec)):
@@ -1116,7 +1235,7 @@ def iter_reveal_slots(
     working = (
         sync_row_labels_to_whisper_words(spec, words, overwrite=True)
         if words
-        else spec
+        else materialize_charts(spec)
     )
     layout = working.get("layout") or {}
     default_tr = str(layout.get("page_transition", "fade"))
@@ -1597,6 +1716,7 @@ def count_spec_labels(spec: dict[str, Any]) -> int:
 
 def list_spec_labels(spec: dict[str, Any]) -> list[str]:
     """Return non-empty box/image labels in page order."""
+    spec = materialize_charts(spec)
     out: list[str] = []
     pages = _spec_pages_rows(spec)
     for rows in pages:
@@ -1792,6 +1912,7 @@ def layout_density_violations(
     invented = _invented_label_issue(labels, narration_text)
     if invented is not None:
         issues.append(invented)
+    issues.extend(chart_value_violations(spec, narration_text))
     return issues
 
 
@@ -2486,6 +2607,7 @@ def _validate_pages_block(data: dict[str, Any], path_label: str, transition: Any
 
 
 def validate_scene_spec(data: dict[str, Any], *, path_label: str = "spec") -> None:
+    data = materialize_charts(data)
     _validate_required_keys(data, path_label)
     _validate_title_block(data["title"], path_label)
     has_pages = data.get("pages") is not None
@@ -2827,6 +2949,38 @@ def _append_page_geometry(
     edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
     page_edge_vars: dict[int, list[str]],
 ) -> None:
+    _layout_page_or_chart(
+        lines,
+        page_index,
+        page,
+        column_gap=column_gap,
+        row_gap=row_gap,
+        first_row_title_buff=first_row_title_buff,
+        edges_with_target=edges_with_target,
+        page_edge_vars=page_edge_vars,
+    )
+
+
+def _layout_page_or_chart(
+    lines: list[str],
+    page_index: int,
+    page: dict[str, Any],
+    *,
+    column_gap: float,
+    row_gap: float,
+    first_row_title_buff: float,
+    edges_with_target: dict[tuple[int, str], list[tuple[str, str]]],
+    page_edge_vars: dict[int, list[str]],
+) -> None:
+    if append_chart_page(
+        lines,
+        page_index,
+        page,
+        first_row_title_buff=first_row_title_buff,
+        edges_with_target=edges_with_target,
+        page_edge_vars=page_edge_vars,
+    ):
+        return
     rows = page["rows"]
     page_has_image = _page_contains_image(rows)
     _append_page_boxes(lines, page_index, rows)
@@ -3069,12 +3223,28 @@ def _reveal_statement(
             page_has_edges=page_has_edges,
             is_first_on_page=not first_box_seen,
         )
+    return _chart_reveal_call(bx, box, reveal)
+
+
+def _chart_reveal_call(bx: str, box: dict[str, Any], reveal: str) -> str:
+    """Bars grow from the left. Line points fade in. Diagram boxes keep ``reveal``."""
+    kind = str(box.get("chart_kind") or "")
+    if kind == "bar":
+        return f"GrowFromEdge({bx}, LEFT)"
+    if kind == "line":
+        return f"FadeIn({bx})"
     return _reveal_anim(bx, reveal)
 
 
 def _edge_play_part(evar: str, kind: str) -> str:
+    return _connector_play_call(evar, kind)
+
+
+def _connector_play_call(evar: str, kind: str) -> str:
     if kind == "grow":
         return f"GrowArrow({evar})"
+    if kind == "draw":
+        return f"Create({evar})"
     return f"FadeIn({evar})"
 
 
@@ -3260,6 +3430,16 @@ def _append_audio_tail(lines: list[str], timing_key: str) -> None:
     )
 
 
+def _prepare_compile_spec(
+    spec: dict[str, Any], words: list[dict[str, Any]] | None
+) -> dict[str, Any]:
+    """Expand chart pages. Bind series labels to spoken words when timing exists."""
+    spec = materialize_charts(spec)
+    if words and uses_chart(spec):
+        return sync_row_labels_to_whisper_words(spec, words, overwrite=True)
+    return spec
+
+
 def compile_scene_class(
     spec: dict[str, Any],
     *,
@@ -3275,6 +3455,7 @@ def compile_scene_class(
     past the next ``wait_word`` start — otherwise the first board dumps and freezes
     while narration continues (issue #66).
     """
+    spec = _prepare_compile_spec(spec, words)
     validate_scene_spec(spec, path_label="spec")
     _reject_nonfinite_compile_words(words)
     class_name = str(spec["class_name"]).strip()

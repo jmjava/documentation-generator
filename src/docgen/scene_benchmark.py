@@ -280,6 +280,32 @@ def standard_cases() -> list[BenchmarkCase]:
                 {"word": "tail", "start": 18.0, "end": 18.5},
             ],
         ),
+        BenchmarkCase(
+            id="chart_bars",
+            title="Bar chart: each bar grows on its own word, no first-board dump",
+            spec=_spec(
+                "chart_bars",
+                [],
+                pages=[
+                    {
+                        "chart": {
+                            "kind": "bar",
+                            "series": [
+                                {"label": "Alpha", "value": 12},
+                                {"label": "Beta", "value": 4},
+                                {"label": "Gamma", "value": 9},
+                            ],
+                        }
+                    }
+                ],
+            ),
+            words=[
+                {"word": "Alpha", "start": 1.2, "end": 1.5},
+                {"word": "Beta", "start": 8.0, "end": 8.3},
+                {"word": "Gamma", "start": 16.0, "end": 16.3},
+                {"word": "tail", "start": 24.0, "end": 24.4},
+            ],
+        ),
     ]
 
 

@@ -278,7 +278,23 @@ def motion_plan_from_source(source: str) -> list[str]:
                 plan.append(f"edge:grow:{target}")
             elif name == "FadeOut":
                 plan.append(_fade_out_token(arg))
+        plan.extend(_chart_play_tokens(call))
     return plan
+
+
+def _chart_play_tokens(call: ast.Call) -> list[str]:
+    """Bar growth and line segments. Diagram FadeIn / GrowArrow stay in the caller."""
+    tokens: list[str] = []
+    for arg in call.args:
+        if not isinstance(arg, ast.Call):
+            continue
+        name = _call_name(arg)
+        target = _first_arg_id(arg)
+        if name == "GrowFromEdge" and target:
+            tokens.append(f"reveal:bar:{target}")
+        elif name == "Create" and target:
+            tokens.append(f"edge:draw:{target}")
+    return tokens
 
 
 def extract_class_source(scenes_text: str, class_name: str) -> str | None:
